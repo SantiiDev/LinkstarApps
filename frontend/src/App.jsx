@@ -9,6 +9,7 @@ import DeviceGrid from './components/DeviceGrid/DeviceGrid';
 import DevicesPage from './pages/Devices/Devices';
 import EmployeesPage from './pages/Employees/Employees';
 import LocationsPage from './pages/Locations/Locations';
+import LandingPage from './pages/Landing/LandingPage';
 
 /* ─── Dashboard view (inline, same as before) ─────────────── */
 function DashboardView() {
@@ -77,7 +78,12 @@ function DashboardView() {
 
 /* ─── App root ─────────────────────────────────────────────── */
 export default function App() {
-  const [activeSection, setActiveSection] = useState('dashboard');
+  const [activeSection, setActiveSection] = useState('landing');
+
+  /* Landing page (no TopBar) */
+  if (activeSection === 'landing') {
+    return <LandingPage onEnterDashboard={() => setActiveSection('dashboard')} />;
+  }
 
   return (
     <div className="app">
