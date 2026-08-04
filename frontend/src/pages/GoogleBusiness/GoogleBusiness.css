@@ -16,18 +16,30 @@
   margin-bottom: 1.75rem;
 }
 
+/* align-items left at its default (stretch) so both columns of a row
+   match height — a shorter column (e.g. a single card next to a
+   stacked side-col) fills out instead of leaving a jagged bottom edge. */
 .gb-two-col {
   display: grid;
   grid-template-columns: 1.3fr 1fr;
   gap: 1.25rem;
   margin-bottom: 1.75rem;
-  align-items: start;
+}
+
+/* Narrow-first variant for layouts that lead with a compact score card
+   (e.g. SEO Local) followed by a wider supporting list. */
+.gb-two-col--narrow-first {
+  grid-template-columns: 1fr 1.2fr;
 }
 
 .gb-side-col {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+}
+
+.gb-side-col .gb-card {
+  flex: 1;
 }
 
 .gb-card {
@@ -417,6 +429,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
 }
 

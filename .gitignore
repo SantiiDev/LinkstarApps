@@ -1,12 +1,12 @@
 # OS
-.DS_Store
-Thumbs.db
+#.DS_Store
+#Thumbs.db
 
 # Editor
 .vscode/*
 !.vscode/extensions.json
-.idea
-*.swp
+#.idea
+#*.swp
 
 # Cada subproyecto (frontend/, backend/, supabase/) tiene su propio .gitignore
 # para node_modules, dist, .env, etc.

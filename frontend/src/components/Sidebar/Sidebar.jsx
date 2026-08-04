@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import './Sidebar.css';
@@ -67,6 +67,22 @@ function Icon({ name, className }) {
         <polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
       </svg>
     ),
+    'chevron-down': (
+      <svg {...props} width={16} height={16}>
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    ),
+    globe: (
+      <svg {...props}>
+        <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+      </svg>
+    ),
+    user: (
+      <svg {...props}>
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+      </svg>
+    ),
   };
   return icons[name] || null;
 }
@@ -122,6 +138,8 @@ export default function Sidebar({ activeSection, onNavigate, onLogout }) {
   const displayName = fullName || user?.email || 'Usuario';
   const secondaryLine = fullName ? user?.email : 'Mi cuenta';
   const [confirmingLogout, setConfirmingLogout] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
   const [openGroups, setOpenGroups] = useState(() => {
     const initial = {};
     GROUPS.forEach((g) => {
@@ -131,6 +149,27 @@ export default function Sidebar({ activeSection, onNavigate, onLogout }) {
   });
 
   const toggleGroup = (id) => setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClickOutside(e) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
+
+  function goToProfile() {
+    setMenuOpen(false);
+    onNavigate('profile');
+  }
+
+  function handleLogoutClick() {
+    setMenuOpen(false);
+    setConfirmingLogout(true);
+  }
 
   return (
     <>
@@ -198,14 +237,40 @@ export default function Sidebar({ activeSection, onNavigate, onLogout }) {
           ))}
         </nav>
 
-        <button className="sidebar__user" onClick={() => setConfirmingLogout(true)}>
-          <div className="sidebar__avatar">{initialsFor(fullName, user?.email)}</div>
-          <div className="sidebar__user-info">
-            <span className="sidebar__user-name">{displayName}</span>
-            <span className="sidebar__user-role">{secondaryLine}</span>
-          </div>
-          <Icon name="logout" className="sidebar__logout-icon" />
-        </button>
+        <div className="sidebar__user-wrap" ref={userMenuRef}>
+          {menuOpen && (
+            <div className="sidebar__user-menu">
+              <label className="sidebar__lang-select">
+                <Icon name="globe" className="sidebar__lang-icon" />
+                <select defaultValue="es">
+                  <option value="es">Español</option>
+                  <option value="en" disabled>English (próximamente)</option>
+                </select>
+                <Icon name="chevron-down" className="sidebar__lang-chevron" />
+              </label>
+
+              <div className="sidebar__user-menu-divider" />
+
+              <button className="sidebar__user-menu-item" onClick={goToProfile}>
+                <Icon name="user" width={16} height={16} />
+                Mi Perfil
+              </button>
+              <button className="sidebar__user-menu-item sidebar__user-menu-item--danger" onClick={handleLogoutClick}>
+                <Icon name="logout" width={16} height={16} />
+                Cerrar Sesión
+              </button>
+            </div>
+          )}
+
+          <button className="sidebar__user" onClick={() => setMenuOpen((prev) => !prev)}>
+            <div className="sidebar__avatar">{initialsFor(fullName, user?.email)}</div>
+            <div className="sidebar__user-info">
+              <span className="sidebar__user-name">{displayName}</span>
+              <span className="sidebar__user-role">{secondaryLine}</span>
+            </div>
+            <Icon name="chevron-down" className={`sidebar__user-chevron ${menuOpen ? 'sidebar__user-chevron--open' : ''}`} />
+          </button>
+        </div>
       </aside>
 
       {confirmingLogout && createPortal(

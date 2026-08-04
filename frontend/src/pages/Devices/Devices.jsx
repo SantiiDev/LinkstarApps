@@ -1,5 +1,8 @@
 import { useState, useMemo } from 'react';
 import { ALL_DEVICES } from '../../data/devices';
+import { ALL_LOCATIONS } from '../../data/locations';
+import GoogleConnectBanner from '../../components/GoogleConnectBanner/GoogleConnectBanner';
+import TrendChart from '../../components/TrendChart/TrendChart';
 import './Devices.css';
 
 /* ─── Shared icons ─────────────────────────────────────────── */
@@ -317,6 +320,63 @@ function DeviceTable({ devices, onSelect }) {
   );
 }
 
+/* ─── Claim device modal (Escanear QR) ───────────────────────── */
+function ClaimDeviceModal({ onClose }) {
+  const [code, setCode] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setSuccess(true);
+  }
+
+  return (
+    <div className="device-modal-overlay" onClick={onClose}>
+      <div className="claim-modal" onClick={(e) => e.stopPropagation()}>
+        <button className="claim-modal__close" onClick={onClose} aria-label="Cerrar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+
+        {!success ? (
+          <>
+            <div className="claim-modal__icon"><QrIcon size={26} /></div>
+            <h3 className="claim-modal__title">Vincular un dispositivo</h3>
+            <p className="claim-modal__text">
+              Escaneá el código QR o acercá el NFC impreso en tu dispositivo Linkstar, o ingresá el código manualmente.
+            </p>
+            <form className="claim-modal__form" onSubmit={handleSubmit}>
+              <input
+                type="text"
+                placeholder="Código de vinculación (ej. LNK-4F2A9C)"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                autoFocus
+              />
+              <button type="submit" className="claim-modal__submit" disabled={!code.trim()}>
+                Vincular dispositivo
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            <div className="claim-modal__icon claim-modal__icon--success">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <h3 className="claim-modal__title">¡Dispositivo vinculado!</h3>
+            <p className="claim-modal__text">En unos minutos vas a ver sus estadísticas acá mismo.</p>
+            <button className="claim-modal__submit" onClick={onClose}>Listo</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main Page ─────────────────────────────────────────────── */
 const FILTER_TABS = [
   { id: 'all',      label: 'Todos' },
@@ -326,16 +386,31 @@ const FILTER_TABS = [
   { id: 'inactive', label: 'Inactivos' },
 ];
 
-export default function DevicesPage() {
+/* Last 7 calendar days of aggregate scans across all devices, for the activity chart */
+function buildDailyScans() {
+  const days = ALL_DEVICES[0]?.weeklyScans.length ?? 7;
+  const totals = Array.from({ length: days }, (_, i) =>
+    ALL_DEVICES.reduce((sum, d) => sum + (d.weeklyScans[i] ?? 0), 0)
+  );
+  const today = new Date();
+  const labels = totals.map((_, i) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (days - 1 - i));
+    return date.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }).replace('.', '');
+  });
+  return { totals, labels };
+}
+
+export default function DevicesPage({ onNavigate, onNavigateSettings }) {
   const [search, setSearch]         = useState('');
   const [filter, setFilter]         = useState('all');
   const [viewMode, setViewMode]     = useState('grid');   // 'grid' | 'table'
   const [selected, setSelected]     = useState(null);
+  const [claiming, setClaiming]     = useState(false);
 
   /* Derived stats */
-  const totalActive   = ALL_DEVICES.filter(d => d.status === 'active').length;
-  const totalNfc      = ALL_DEVICES.filter(d => d.type === 'nfc').length;
-  const totalQr       = ALL_DEVICES.filter(d => d.type === 'qr').length;
+  const totalActive = ALL_DEVICES.filter(d => d.status === 'active').length;
+  const totalScans  = ALL_DEVICES.reduce((sum, d) => sum + d.scans, 0);
 
   /* Filtered list */
   const filtered = useMemo(() => {
@@ -357,120 +432,186 @@ export default function DevicesPage() {
     });
   }, [search, filter]);
 
+  const { totals: dailyScans, labels: dayLabels } = useMemo(buildDailyScans, []);
+
+  const topLocations = useMemo(
+    () => [...ALL_LOCATIONS].sort((a, b) => b.totalScans - a.totalScans).slice(0, 3),
+    []
+  );
+
   return (
     <div className="devices-page">
 
       {/* ── Header ── */}
       <div className="devices-page__header">
         <div className="devices-page__title-block">
-          <div className="devices-page__eyebrow">
-            <span className="devices-page__eyebrow-dot" />
-            Gestión de dispositivos
-          </div>
-          <h1 className="devices-page__title">Dispositivos NFC &amp; QR</h1>
-          <p className="devices-page__subtitle">
-            {ALL_DEVICES.length} dispositivos registrados · {totalActive} activos en este momento
-          </p>
+          <h1 className="devices-page__title">Dispositivos</h1>
+          <p className="devices-page__subtitle">Gestión de dispositivos NFC y QR de Linkstar</p>
         </div>
 
         <div className="devices-page__actions">
-          <button className="devices-page__btn-secondary">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+          <button className="devices-page__btn-icon" title="Cada dispositivo NFC o QR redirige a tu ficha de Google para sumar reseñas." aria-label="Información">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
-            Exportar
           </button>
-          <button className="devices-page__btn-primary">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Nuevo Dispositivo
+          <button className="devices-page__btn-primary" onClick={() => setClaiming(true)}>
+            <QrIcon size={15} />
+            Escanear QR
           </button>
         </div>
       </div>
 
-      {/* ── Stats Strip ── */}
-      <div className="devices-stats">
-        {[
-          { icon: 'total',  label: 'Total dispositivos', value: ALL_DEVICES.length, color: 'total' },
-          { icon: 'active', label: 'Activos ahora',       value: totalActive,        color: 'active' },
-          { icon: 'nfc',    label: 'Tarjetas NFC',        value: totalNfc,           color: 'nfc' },
-          { icon: 'qr',     label: 'Expositores QR',      value: totalQr,            color: 'qr' },
-        ].map((s, i) => (
-          <div key={s.icon} className="devices-stat-card" style={{ animationDelay: `${i * 0.08}s` }}>
-            <div className={`devices-stat-card__icon devices-stat-card__icon--${s.color}`}>
-              {s.icon === 'total'  && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>}
-              {s.icon === 'active' && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>}
-              {s.icon === 'nfc'    && <NfcIcon size={20} />}
-              {s.icon === 'qr'     && <QrIcon size={20} />}
+      <GoogleConnectBanner />
+
+      {/* ── Devices card ── */}
+      <div className="devices-card">
+        <div className="devices-card__header">
+          <div className="devices-card__header-left">
+            <span className="devices-card__header-icon">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36" /><path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58" />
+                <path d="M12.91 4.1a16.1 16.1 0 0 1 0 15.8" /><path d="M16.37 2a20.16 20.16 0 0 1 0 20" />
+              </svg>
+            </span>
+            Dispositivos
+          </div>
+          <div className="devices-card__header-stats">
+            <span>{totalActive} dispositivos activos</span>
+            <span className="devices-card__divider" />
+            <span>{totalScans.toLocaleString()} escaneos totales</span>
+          </div>
+        </div>
+
+        <div className="devices-card__body">
+          {/* Toolbar */}
+          <div className="devices-toolbar">
+            {/* Search */}
+            <div className="devices-search">
+              <svg className="devices-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                className="devices-search__input"
+                type="text"
+                placeholder="Buscar por nombre, ubicación, empleado…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
             </div>
-            <div className="devices-stat-card__body">
-              <span className="devices-stat-card__value">{s.value}</span>
-              <span className="devices-stat-card__label">{s.label}</span>
+
+            {/* Filter tabs */}
+            <div className="devices-filters">
+              {FILTER_TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  className={`devices-filter-tab ${filter === tab.id ? 'devices-filter-tab--active' : ''}`}
+                  onClick={() => setFilter(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* View toggle */}
+            <div className="devices-view-toggle">
+              <button
+                className={`devices-view-btn ${viewMode === 'grid' ? 'devices-view-btn--active' : ''}`}
+                onClick={() => setViewMode('grid')}
+                aria-label="Vista grilla"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                  <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+              </button>
+              <button
+                className={`devices-view-btn ${viewMode === 'table' ? 'devices-view-btn--active' : ''}`}
+                onClick={() => setViewMode('table')}
+                aria-label="Vista tabla"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+              </button>
             </div>
           </div>
-        ))}
+
+          {/* Content */}
+          {viewMode === 'grid'
+            ? <DeviceCardGrid devices={filtered} onSelect={setSelected} />
+            : <DeviceTable    devices={filtered} onSelect={setSelected} />
+          }
+        </div>
       </div>
 
-      {/* ── Toolbar ── */}
-      <div className="devices-toolbar">
-        {/* Search */}
-        <div className="devices-search">
-          <svg className="devices-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+      {/* ── Ranking de Empleados teaser ── */}
+      <button className="devices-teaser" onClick={() => onNavigateSettings ? onNavigateSettings('employees') : onNavigate?.('settings')}>
+        <span className="devices-teaser__icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
-          <input
-            className="devices-search__input"
-            type="text"
-            placeholder="Buscar por nombre, ubicación, empleado…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
+        </span>
+        <span className="devices-teaser__body">
+          <span className="devices-teaser__title">Ranking de Empleados</span>
+          <span className="devices-teaser__text">Controlá qué empleado consigue más reseñas en Google con cada dispositivo Linkstar.</span>
+        </span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+        </svg>
+      </button>
 
-        {/* Filter tabs */}
-        <div className="devices-filters">
-          {FILTER_TABS.map(tab => (
-            <button
-              key={tab.id}
-              className={`devices-filter-tab ${filter === tab.id ? 'devices-filter-tab--active' : ''}`}
-              onClick={() => setFilter(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
+      {/* ── Actividad de Dispositivos ── */}
+      <div className="devices-card devices-activity">
+        <div className="devices-activity__header">
+          <div>
+            <h3 className="devices-activity__title">Actividad de Dispositivos</h3>
+            <span className="devices-activity__subtitle">Escaneos únicos en el período seleccionado</span>
+          </div>
+          <select className="devices-period-select" defaultValue="7">
+            <option value="7">Últimos 7 días</option>
+            <option value="30">Últimos 30 días</option>
+          </select>
         </div>
-
-        {/* View toggle */}
-        <div className="devices-view-toggle">
-          <button
-            className={`devices-view-btn ${viewMode === 'grid' ? 'devices-view-btn--active' : ''}`}
-            onClick={() => setViewMode('grid')}
-            aria-label="Vista grilla"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-              <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-            </svg>
-          </button>
-          <button
-            className={`devices-view-btn ${viewMode === 'table' ? 'devices-view-btn--active' : ''}`}
-            onClick={() => setViewMode('table')}
-            aria-label="Vista tabla"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-            </svg>
-          </button>
-        </div>
+        <TrendChart data={dailyScans} labels={dayLabels} color="orange" />
       </div>
 
-      {/* ── Content ── */}
-      {viewMode === 'grid'
-        ? <DeviceCardGrid devices={filtered} onSelect={setSelected} />
-        : <DeviceTable    devices={filtered} onSelect={setSelected} />
-      }
+      {/* ── Ranking de ubicaciones ── */}
+      <div className="devices-card devices-locations">
+        <div className="devices-locations__header">
+          <h3 className="devices-activity__title">Ranking de ubicaciones</h3>
+          <button className="devices-locations__link" onClick={() => onNavigateSettings ? onNavigateSettings('locations') : onNavigate?.('settings')}>
+            Ver más
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+            </svg>
+          </button>
+        </div>
+        <table className="devices-locations-table">
+          <thead>
+            <tr>
+              <th>Nombre del local</th>
+              <th>Escaneos</th>
+              <th>Reseñas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {topLocations.map((loc) => (
+              <tr key={loc.id}>
+                <td>
+                  <div className="devices-locations-table__name">
+                    <span className="devices-locations-table__dot" style={{ background: loc.color }} />
+                    {loc.name}
+                  </div>
+                </td>
+                <td><span className="table-stat table-stat--orange">{loc.totalScans.toLocaleString()}</span></td>
+                <td><span className="table-stat table-stat--gold">{loc.totalReviews}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {/* ── Footer ── */}
       <div className="devices-page__footer">
@@ -481,6 +622,9 @@ export default function DevicesPage() {
 
       {/* ── Detail Modal ── */}
       {selected && <DeviceModal device={selected} onClose={() => setSelected(null)} />}
+
+      {/* ── Claim device modal ── */}
+      {claiming && <ClaimDeviceModal onClose={() => setClaiming(false)} />}
     </div>
   );
 }

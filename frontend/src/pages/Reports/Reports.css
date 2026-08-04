@@ -16,12 +16,21 @@
   margin-bottom: 1.75rem;
 }
 
+/* Default: wide-first (1.3fr/1fr), matching the chart-first convention
+   used by .company-two-col / .gb-two-col elsewhere in the app.
+   align-items left at its default (stretch) so both columns match
+   height instead of leaving a jagged bottom edge. */
 .reports-two-col {
   display: grid;
-  grid-template-columns: 1fr 1.2fr;
+  grid-template-columns: 1.3fr 1fr;
   gap: 1.25rem;
   margin-bottom: 1.75rem;
-  align-items: start;
+}
+
+/* Narrow-first variant for layouts that lead with a compact score card
+   (e.g. NPS) followed by a wider supporting chart. */
+.reports-two-col--narrow-first {
+  grid-template-columns: 1fr 1.2fr;
 }
 
 .reports-card {
@@ -55,6 +64,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
 }
 

@@ -114,8 +114,8 @@ function BillingTab() {
   );
 }
 
-export default function SettingsPage() {
-  const [tab, setTab] = useState('general');
+export default function SettingsPage({ initialTab }) {
+  const [tab, setTab] = useState(initialTab || 'general');
 
   return (
     <div className="settings-page">

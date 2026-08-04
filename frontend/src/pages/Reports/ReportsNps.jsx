@@ -36,7 +36,7 @@ export default function ReportsNps() {
         subtitle="Qué tan probable es que tus clientes te recomienden a otras personas"
       />
 
-      <div className="reports-two-col">
+      <div className="reports-two-col reports-two-col--narrow-first">
         <div className="reports-card reports-nps-card">
           <span className="reports-nps-card__level">{level}</span>
           <div className="reports-nps-card__score">

@@ -13,6 +13,7 @@ import ReportsKeywords from './pages/Reports/ReportsKeywords';
 import MonthlyReports from './pages/MonthlyReports/MonthlyReports';
 import Automations from './pages/Automations/Automations';
 import SettingsPage from './pages/Settings/Settings';
+import ProfilePage from './pages/Profile/Profile';
 import DevicesPage from './pages/Devices/Devices';
 import Landing from './pages/Landing/Landing';
 import Login from './pages/Login/Login';
@@ -23,13 +24,19 @@ const PROTECTED_SECTIONS = [
   'company', 'devices', 'reviews',
   'gb-metrics', 'gb-profile', 'gb-posts', 'gb-seo',
   'reports-nps', 'reports-sentiment', 'reports-keywords',
-  'monthly-reports', 'automations', 'settings',
+  'monthly-reports', 'automations', 'settings', 'profile',
 ];
 
 /* ─── App root ─────────────────────────────────────────────── */
 export default function App() {
   const [activeSection, setActiveSection] = useState('landing');
+  const [settingsTab, setSettingsTab] = useState('general');
   const { user, loading, signOut } = useAuth();
+
+  const goToSettings = (tab) => {
+    setSettingsTab(tab);
+    setActiveSection('settings');
+  };
 
   /* Restaurando la sesión guardada — evita el flash de Login antes de
      saber si ya hay una sesión activa. */
@@ -84,7 +91,7 @@ export default function App() {
   return (
     <AppShell activeSection={activeSection} onNavigate={setActiveSection} onLogout={handleLogout}>
       {activeSection === 'company' && <Company onNavigate={setActiveSection} />}
-      {activeSection === 'devices' && <DevicesPage />}
+      {activeSection === 'devices' && <DevicesPage onNavigate={setActiveSection} onNavigateSettings={goToSettings} />}
       {activeSection === 'reviews' && <ReviewsPage />}
 
       {activeSection === 'gb-metrics' && <GoogleMetrics />}
@@ -98,7 +105,8 @@ export default function App() {
 
       {activeSection === 'monthly-reports' && <MonthlyReports />}
       {activeSection === 'automations' && <Automations />}
-      {activeSection === 'settings' && <SettingsPage />}
+      {activeSection === 'settings' && <SettingsPage initialTab={settingsTab} />}
+      {activeSection === 'profile' && <ProfilePage />}
     </AppShell>
   );
 }

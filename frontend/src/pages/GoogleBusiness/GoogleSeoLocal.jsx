@@ -41,7 +41,7 @@ export default function GoogleSeoLocal() {
         subtitle="Qué tan bien posicionada está tu ficha frente a los negocios cercanos"
       />
 
-      <div className="gb-two-col">
+      <div className="gb-two-col gb-two-col--narrow-first">
         <div className="gb-card gb-score-card">
           <div
             className="gb-score-gauge"

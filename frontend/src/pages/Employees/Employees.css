@@ -331,14 +331,20 @@
 }
 
 /* ── Employee Card Grid ── */
+/* flex (not CSS grid) so an incomplete last row centers itself instead
+   of leaving stray empty tracks — grid-template-columns would keep the
+   same column count on every row and strand a lone trailing card. */
 .emp-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 1.25rem;
 }
 
 /* ── Employee Card ── */
 .emp-card {
+  flex: 1 1 300px;
+  max-width: 400px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -808,7 +814,7 @@
   max-width: 580px;
   max-height: 90vh;
   overflow-y: auto;
-  animation: scaleIn 0.3s var(--transition-bounce) both;
+  animation: scaleIn var(--transition-bounce) both;
   position: relative;
 }
 
@@ -1108,7 +1114,7 @@
 
 /* ── Empty state ── */
 .emp-empty {
-  grid-column: 1 / -1;
+  flex: 1 1 100%;
   text-align: center;
   padding: 4rem 2rem;
   animation: fadeIn 0.4s ease both;
@@ -1159,7 +1165,7 @@
   .emp-page__header { flex-direction: column; gap: 1rem; align-items: flex-start; }
   .emp-page__title  { font-size: 1.4rem; }
   .emp-stats { grid-template-columns: repeat(2, 1fr); }
-  .emp-grid  { grid-template-columns: 1fr; }
+  .emp-card { flex-basis: 100%; max-width: 100%; }
   .emp-modal__info-grid { grid-template-columns: 1fr; }
   .emp-modal__footer { flex-direction: column; }
 }

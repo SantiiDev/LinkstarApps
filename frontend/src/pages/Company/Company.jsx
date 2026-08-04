@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import StatCard from '../../components/StatCard/StatCard';
 import TrendChart from '../../components/TrendChart/TrendChart';
@@ -53,11 +52,6 @@ function Icon({ name, ...rest }) {
         <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
       </svg>
     ),
-    close: (
-      <svg {...props} width={16} height={16} strokeWidth={2.5}>
-        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-      </svg>
-    ),
     seo: (
       <svg {...props}>
         <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><path d="M11 8v3l2 2" />
@@ -103,8 +97,6 @@ const QUICK_LINKS = [
 ];
 
 export default function Company({ onNavigate }) {
-  const [bannerDismissed, setBannerDismissed] = useState(false);
-
   const negativeUnresponded = ALL_REVIEWS.filter((r) => r.sentiment === 'negative' && !r.responded);
   const recentReviews = ALL_REVIEWS.slice(0, 5);
   const totalDist = REVIEW_STATS.distribution.reduce((sum, d) => sum + d.count, 0);
@@ -137,27 +129,22 @@ export default function Company({ onNavigate }) {
         }
       />
 
-      {/* ── Connect Google banner (inline, dismissible — never blocks the view) ── */}
-      {!bannerDismissed && (
-        <div className="company-banner">
-          <div className="company-banner__icon"><Icon name="google" width={26} height={26} /></div>
-          <div className="company-banner__body">
-            <div className="company-banner__title">Gestioná todo tu perfil de Google Business</div>
-            <p className="company-banner__text">
-              Conectá tu ficha para responder reseñas con IA, ver cuántos clientes llegan desde Google Maps y tu puntuación de SEO local.
-            </p>
-          </div>
-          <div className="company-banner__actions">
-            <button className="company-banner__connect-btn">
-              <Icon name="google" width={16} height={16} />
-              Conectar mi ficha de Google
-            </button>
-            <button className="company-banner__dismiss" onClick={() => setBannerDismissed(true)} aria-label="Cerrar aviso">
-              <Icon name="close" />
-            </button>
-          </div>
+      {/* ── Connect Google banner (inline, never blocks the view, not dismissible) ── */}
+      <div className="company-banner">
+        <div className="company-banner__icon"><Icon name="google" width={26} height={26} /></div>
+        <div className="company-banner__body">
+          <div className="company-banner__title">Gestioná todo tu perfil de Google Business</div>
+          <p className="company-banner__text">
+            Conectá tu ficha para responder reseñas con IA, ver cuántos clientes llegan desde Google Maps y tu puntuación de SEO local.
+          </p>
         </div>
-      )}
+        <div className="company-banner__actions">
+          <button className="company-banner__connect-btn">
+            <Icon name="google" width={16} height={16} />
+            Conectar mi ficha de Google
+          </button>
+        </div>
+      </div>
 
       {/* ── Status chips ── */}
       <div className="company-chips">

@@ -115,23 +115,6 @@
   box-shadow: var(--glass-shadow-hover);
 }
 
-.company-banner__dismiss {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  color: var(--color-text-secondary);
-  transition: all var(--transition-base);
-  flex-shrink: 0;
-}
-
-.company-banner__dismiss:hover {
-  background: rgba(26, 38, 57, 0.08);
-  color: var(--color-navy);
-}
-
 /* ── Status chips ── */
 .company-chips {
   display: flex;
@@ -238,18 +221,24 @@
 }
 
 /* ── Two-column sections ── */
+/* align-items left at its default (stretch) so both columns of a row
+   match height — a shorter column (e.g. a single card next to a
+   stacked side-col) fills out instead of leaving a jagged bottom edge. */
 .company-two-col {
   display: grid;
   grid-template-columns: 1.3fr 1fr;
   gap: 1.25rem;
   margin-bottom: 1.75rem;
-  align-items: start;
 }
 
 .company-side-col {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+}
+
+.company-side-col .company-card {
+  flex: 1;
 }
 
 .company-card {
