@@ -1,0 +1,22 @@
+.trend-chart {
+  width: 100%;
+}
+
+.trend-chart__svg {
+  width: 100%;
+  height: 160px;
+  display: block;
+}
+
+.trend-chart__labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  padding: 0 4px;
+}
+
+.trend-chart__labels span {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}

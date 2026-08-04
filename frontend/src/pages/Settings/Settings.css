@@ -1,0 +1,278 @@
+/* ============================================
+   CONFIGURACIÓN PAGE
+   ============================================ */
+
+.settings-page {
+  padding: 2rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.75rem;
+  border-bottom: 1px solid rgba(26, 38, 57, 0.08);
+  padding-bottom: 0.75rem;
+}
+
+.settings-tab {
+  padding: 0.55rem 1.1rem;
+  border-radius: var(--radius-button);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-base);
+}
+
+.settings-tab:hover {
+  color: var(--color-navy);
+  background: var(--color-light);
+}
+
+.settings-tab--active {
+  color: white;
+  background: var(--color-navy);
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.settings-card {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  padding: 1.5rem;
+  box-shadow: var(--glass-shadow);
+  animation: fadeInUp 0.5s ease both;
+}
+
+.settings-card__title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-navy);
+}
+
+.settings-card__subtitle {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin-top: 0.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.settings-field--full {
+  grid-column: 1 / -1;
+}
+
+.settings-field span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.settings-field input {
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.7rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  font-size: 0.85rem;
+  color: var(--color-navy);
+  font-family: inherit;
+}
+
+.settings-field input:focus {
+  outline: none;
+  border-color: var(--color-orange);
+}
+
+.settings-save-btn {
+  margin-top: 1.5rem;
+  padding: 0.65rem 1.4rem;
+  border-radius: var(--radius-button);
+  background: var(--color-orange);
+  color: white;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-button);
+  transition: all var(--transition-base);
+}
+
+.settings-save-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-button-hover);
+}
+
+.settings-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--color-navy);
+  font-weight: 500;
+}
+
+.settings-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-orange);
+}
+
+/* ── Billing ── */
+.settings-plan-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.settings-plan-card__eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-orange);
+}
+
+.settings-plan-card__name {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  margin: 0.2rem 0 0.3rem;
+}
+
+.settings-invoices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.settings-invoice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  background: var(--color-light);
+}
+
+.settings-invoice-row__icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--color-white);
+  color: var(--color-navy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-invoice-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-invoice-row__period {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.settings-invoice-row__date {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+
+.settings-invoice-row__status {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-forest);
+  flex-shrink: 0;
+}
+
+.settings-invoice-row__amount {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  flex-shrink: 0;
+}
+
+.settings-invoice-row__download {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-base);
+}
+
+.settings-invoice-row__download:hover {
+  background: var(--color-white);
+  color: var(--color-orange);
+}
+
+/* ── Embedded Empleados / Ubicaciones pages ── */
+.settings-embedded-page {
+  margin: 0 -2rem -2rem;
+}
+
+@media (max-width: 1024px) {
+  .settings-page {
+    padding: 1.5rem;
+  }
+
+  .settings-embedded-page {
+    margin: 0 -1.5rem -1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .settings-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-page {
+    padding: 1rem;
+  }
+
+  .settings-embedded-page {
+    margin: 0 -1rem -1rem;
+  }
+
+  .settings-invoice-row {
+    flex-wrap: wrap;
+  }
+}
