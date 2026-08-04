@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import './LandingPage.css';
+import './Landing.css';
 
 /* ───────────────── FAQ DATA ───────────────── */
 const faqData = [
@@ -478,7 +478,7 @@ function Footer() {
 /* ═══════════════════════════════════════════
    LANDING PAGE COMPONENT
    ═══════════════════════════════════════════ */
-export default function LandingPage({ onEnterDashboard }) {
+export default function Landing({ onEnterDashboard }) {
   const [openFaq, setOpenFaq] = useState(null);
 
   return (

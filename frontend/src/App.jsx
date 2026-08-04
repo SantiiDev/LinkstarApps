@@ -9,7 +9,7 @@ import DeviceGrid from './components/DeviceGrid/DeviceGrid';
 import DevicesPage from './pages/Devices/Devices';
 import EmployeesPage from './pages/Employees/Employees';
 import LocationsPage from './pages/Locations/Locations';
-import LandingPage from './pages/Landing/LandingPage';
+import Landing from './pages/Landing/Landing';
 import Login from './pages/Login/Login';
 import Register from './pages/Register/Register';
 import { useAuth } from './context/AuthContext';
@@ -95,7 +95,7 @@ export default function App() {
   /* Landing page (no TopBar) */
   if (activeSection === 'landing') {
     return (
-      <LandingPage onEnterDashboard={() => setActiveSection(user ? 'dashboard' : 'login')} />
+      <Landing onEnterDashboard={() => setActiveSection(user ? 'dashboard' : 'login')} />
     );
   }
 
