@@ -25,6 +25,12 @@ const faqData = [
   },
 ];
 
+/* ───────────────── SCROLL HELPER ───────────────── */
+function scrollTo(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth' });
+}
+
 /* ───────────────── SCROLL REVEAL HOOK ───────────────── */
 function useReveal() {
   const ref = useRef(null);
@@ -46,28 +52,18 @@ function useReveal() {
   return ref;
 }
 
-function RevealSection({ children, className = '' }) {
+function RevealSection({ children, className = '', id }) {
   const ref = useReveal();
   return (
-    <div ref={ref} className={`landing-reveal ${className}`}>
+    <div ref={ref} id={id} className={`landing-reveal ${className}`}>
       {children}
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════
-   LANDING PAGE COMPONENT
-   ═══════════════════════════════════════════ */
-export default function LandingPage({ onEnterDashboard }) {
-  const [openFaq, setOpenFaq] = useState(null);
-
-  const scrollTo = (id) => {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  /* ─── Navbar ────────────────────────────── */
-  const Navbar = () => (
+/* ─── Navbar ────────────────────────────── */
+function Navbar({ onEnterDashboard }) {
+  return (
     <nav className="landing-nav">
       <div className="landing-nav__logo" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
         linkstar<span className="landing-nav__logo-dot">.</span>
@@ -99,9 +95,11 @@ export default function LandingPage({ onEnterDashboard }) {
       </div>
     </nav>
   );
+}
 
-  /* ─── Hero ──────────────────────────────── */
-  const Hero = () => (
+/* ─── Hero ──────────────────────────────── */
+function Hero({ onEnterDashboard }) {
+  return (
     <section className="landing-hero">
       <div className="landing-hero__content">
         <span className="landing-hero__badge">
@@ -184,9 +182,11 @@ export default function LandingPage({ onEnterDashboard }) {
       </div>
     </section>
   );
+}
 
-  /* ─── Stats ─────────────────────────────── */
-  const Stats = () => (
+/* ─── Stats ─────────────────────────────── */
+function Stats() {
+  return (
     <RevealSection className="landing-stats">
       <div className="landing-stats__grid">
         <div className="landing-stats__item">
@@ -208,9 +208,11 @@ export default function LandingPage({ onEnterDashboard }) {
       </div>
     </RevealSection>
   );
+}
 
-  /* ─── Features ──────────────────────────── */
-  const Features = () => (
+/* ─── Features ──────────────────────────── */
+function Features() {
+  return (
     <RevealSection className="landing-features" id="features">
       <span className="landing-section-tag">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
@@ -309,9 +311,11 @@ export default function LandingPage({ onEnterDashboard }) {
       </div>
     </RevealSection>
   );
+}
 
-  /* ─── How It Works ──────────────────────── */
-  const HowItWorks = () => (
+/* ─── How It Works ──────────────────────── */
+function HowItWorks() {
+  return (
     <RevealSection className="landing-how" id="how">
       <span className="landing-section-tag">Cómo funciona</span>
       <h2 className="landing-section-title">En marcha en 3 simples pasos</h2>
@@ -344,72 +348,76 @@ export default function LandingPage({ onEnterDashboard }) {
       </div>
     </RevealSection>
   );
+}
 
-  /* ─── Pricing ───────────────────────────── */
-  const Pricing = () => {
-    const CheckIcon = ({ variant = 'orange' }) => (
-      <span className={`landing-price-card__check landing-price-card__check--${variant}`}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-      </span>
-    );
+/* ─── Pricing ───────────────────────────── */
+function CheckIcon({ variant = 'orange' }) {
+  return (
+    <span className={`landing-price-card__check landing-price-card__check--${variant}`}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+    </span>
+  );
+}
 
-    return (
-      <RevealSection className="landing-pricing" id="pricing">
-        <span className="landing-section-tag">Planes</span>
-        <h2 className="landing-section-title">Elige el plan que mejor se adapte</h2>
-        <p className="landing-section-subtitle">
-          Sin permanencia, sin letra pequeña. Cambia o cancela cuando quieras.
-        </p>
+function Pricing({ onEnterDashboard }) {
+  return (
+    <RevealSection className="landing-pricing" id="pricing">
+      <span className="landing-section-tag">Planes</span>
+      <h2 className="landing-section-title">Elige el plan que mejor se adapte</h2>
+      <p className="landing-section-subtitle">
+        Sin permanencia, sin letra pequeña. Cambia o cancela cuando quieras.
+      </p>
 
-        <div className="landing-pricing__grid">
-          {/* Starter */}
-          <div className="landing-price-card">
-            <div className="landing-price-card__name">Starter</div>
-            <p className="landing-price-card__desc">Ideal para un solo local con pocos dispositivos.</p>
-            <div className="landing-price-card__price">
-              <span className="landing-price-card__amount">€29</span>
-              <span className="landing-price-card__period">/mes</span>
-            </div>
-            <div className="landing-price-card__features">
-              <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Hasta 5 dispositivos</div>
-              <div className="landing-price-card__feature"><CheckIcon variant="orange" /> 1 ubicación</div>
-              <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Dashboard en tiempo real</div>
-              <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Respuestas con IA básicas</div>
-              <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Soporte por email</div>
-            </div>
-            <button className="landing-price-card__btn landing-price-card__btn--outline" onClick={onEnterDashboard}>
-              Empieza gratis
-            </button>
+      <div className="landing-pricing__grid">
+        {/* Starter */}
+        <div className="landing-price-card">
+          <div className="landing-price-card__name">Starter</div>
+          <p className="landing-price-card__desc">Ideal para un solo local con pocos dispositivos.</p>
+          <div className="landing-price-card__price">
+            <span className="landing-price-card__amount">€29</span>
+            <span className="landing-price-card__period">/mes</span>
           </div>
-
-          {/* Pro */}
-          <div className="landing-price-card landing-price-card--featured">
-            <span className="landing-price-card__badge">Más popular</span>
-            <div className="landing-price-card__name">Pro</div>
-            <p className="landing-price-card__desc">Para negocios con múltiples locales y equipos.</p>
-            <div className="landing-price-card__price">
-              <span className="landing-price-card__amount">€79</span>
-              <span className="landing-price-card__period">/mes</span>
-            </div>
-            <div className="landing-price-card__features">
-              <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Dispositivos ilimitados</div>
-              <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Ubicaciones ilimitadas</div>
-              <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Ranking de empleados</div>
-              <div className="landing-price-card__feature"><CheckIcon variant="forest" /> IA con tono personalizado</div>
-              <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Automatizaciones 24/7</div>
-              <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Soporte prioritario</div>
-            </div>
-            <button className="landing-price-card__btn landing-price-card__btn--solid" onClick={onEnterDashboard}>
-              Empieza tu prueba gratis
-            </button>
+          <div className="landing-price-card__features">
+            <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Hasta 5 dispositivos</div>
+            <div className="landing-price-card__feature"><CheckIcon variant="orange" /> 1 ubicación</div>
+            <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Dashboard en tiempo real</div>
+            <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Respuestas con IA básicas</div>
+            <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Soporte por email</div>
           </div>
+          <button className="landing-price-card__btn landing-price-card__btn--outline" onClick={onEnterDashboard}>
+            Empieza gratis
+          </button>
         </div>
-      </RevealSection>
-    );
-  };
 
-  /* ─── FAQ ───────────────────────────────── */
-  const FAQ = () => (
+        {/* Pro */}
+        <div className="landing-price-card landing-price-card--featured">
+          <span className="landing-price-card__badge">Más popular</span>
+          <div className="landing-price-card__name">Pro</div>
+          <p className="landing-price-card__desc">Para negocios con múltiples locales y equipos.</p>
+          <div className="landing-price-card__price">
+            <span className="landing-price-card__amount">€79</span>
+            <span className="landing-price-card__period">/mes</span>
+          </div>
+          <div className="landing-price-card__features">
+            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Dispositivos ilimitados</div>
+            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Ubicaciones ilimitadas</div>
+            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Ranking de empleados</div>
+            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> IA con tono personalizado</div>
+            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Automatizaciones 24/7</div>
+            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Soporte prioritario</div>
+          </div>
+          <button className="landing-price-card__btn landing-price-card__btn--solid" onClick={onEnterDashboard}>
+            Empieza tu prueba gratis
+          </button>
+        </div>
+      </div>
+    </RevealSection>
+  );
+}
+
+/* ─── FAQ ───────────────────────────────── */
+function FAQ({ openFaq, setOpenFaq }) {
+  return (
     <RevealSection className="landing-faq" id="faq">
       <span className="landing-section-tag">Preguntas frecuentes</span>
       <h2 className="landing-section-title">Resolvemos tus dudas</h2>
@@ -431,9 +439,11 @@ export default function LandingPage({ onEnterDashboard }) {
       </div>
     </RevealSection>
   );
+}
 
-  /* ─── Footer CTA ────────────────────────── */
-  const FooterCTA = () => (
+/* ─── Footer CTA ────────────────────────── */
+function FooterCTA({ onEnterDashboard }) {
+  return (
     <RevealSection className="landing-footer-cta">
       <div className="landing-footer-cta__bg">
         <h2 className="landing-footer-cta__title">
@@ -451,9 +461,11 @@ export default function LandingPage({ onEnterDashboard }) {
       </div>
     </RevealSection>
   );
+}
 
-  /* ─── Footer ────────────────────────────── */
-  const Footer = () => (
+/* ─── Footer ────────────────────────────── */
+function Footer() {
+  return (
     <footer className="landing-footer">
       <div className="landing-footer__brand">
         linkstar<span className="landing-footer__brand-dot">.</span>
@@ -461,18 +473,24 @@ export default function LandingPage({ onEnterDashboard }) {
       <p className="landing-footer__copy">© 2026 linkstar — Panel de gestión de reseñas con NFC inteligente</p>
     </footer>
   );
+}
 
-  /* ─── Render ────────────────────────────── */
+/* ═══════════════════════════════════════════
+   LANDING PAGE COMPONENT
+   ═══════════════════════════════════════════ */
+export default function LandingPage({ onEnterDashboard }) {
+  const [openFaq, setOpenFaq] = useState(null);
+
   return (
     <div className="landing-page">
-      <Navbar />
-      <Hero />
+      <Navbar onEnterDashboard={onEnterDashboard} />
+      <Hero onEnterDashboard={onEnterDashboard} />
       <Stats />
       <Features />
       <HowItWorks />
-      <Pricing />
-      <FAQ />
-      <FooterCTA />
+      <Pricing onEnterDashboard={onEnterDashboard} />
+      <FAQ openFaq={openFaq} setOpenFaq={setOpenFaq} />
+      <FooterCTA onEnterDashboard={onEnterDashboard} />
       <Footer />
     </div>
   );

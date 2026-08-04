@@ -10,6 +10,11 @@ import DevicesPage from './pages/Devices/Devices';
 import EmployeesPage from './pages/Employees/Employees';
 import LocationsPage from './pages/Locations/Locations';
 import LandingPage from './pages/Landing/LandingPage';
+import Login from './pages/Login/Login';
+import Register from './pages/Register/Register';
+import { useAuth } from './context/AuthContext';
+
+const PROTECTED_SECTIONS = ['dashboard', 'devices', 'employees', 'locations'];
 
 /* ─── Dashboard view (inline, same as before) ─────────────── */
 function DashboardView() {
@@ -79,15 +84,61 @@ function DashboardView() {
 /* ─── App root ─────────────────────────────────────────────── */
 export default function App() {
   const [activeSection, setActiveSection] = useState('landing');
+  const { user, loading, signOut } = useAuth();
+
+  /* Restaurando la sesión guardada — evita el flash de Login antes de
+     saber si ya hay una sesión activa. */
+  if (loading) {
+    return <div className="app-loading">Cargando…</div>;
+  }
 
   /* Landing page (no TopBar) */
   if (activeSection === 'landing') {
-    return <LandingPage onEnterDashboard={() => setActiveSection('dashboard')} />;
+    return (
+      <LandingPage onEnterDashboard={() => setActiveSection(user ? 'dashboard' : 'login')} />
+    );
   }
+
+  if (activeSection === 'login') {
+    return (
+      <Login
+        onSuccess={() => setActiveSection('dashboard')}
+        onGoRegister={() => setActiveSection('register')}
+        onBack={() => setActiveSection('landing')}
+      />
+    );
+  }
+
+  if (activeSection === 'register') {
+    return (
+      <Register
+        onSuccess={() => setActiveSection('dashboard')}
+        onGoLogin={() => setActiveSection('login')}
+        onBack={() => setActiveSection('landing')}
+      />
+    );
+  }
+
+  /* Middleware de acceso: ninguna sección del dashboard se renderiza
+     sin sesión activa, sin importar cómo se haya llegado a este estado. */
+  if (PROTECTED_SECTIONS.includes(activeSection) && !user) {
+    return (
+      <Login
+        onSuccess={() => setActiveSection('dashboard')}
+        onGoRegister={() => setActiveSection('register')}
+        onBack={() => setActiveSection('landing')}
+      />
+    );
+  }
+
+  const handleLogout = async () => {
+    await signOut();
+    setActiveSection('landing');
+  };
 
   return (
     <div className="app">
-      <TopBar activeSection={activeSection} onNavigate={setActiveSection} />
+      <TopBar activeSection={activeSection} onNavigate={setActiveSection} onLogout={handleLogout} />
 
       {activeSection === 'dashboard' && <DashboardView />}
       {activeSection === 'devices' && <DevicesPage />}

@@ -6,9 +6,9 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   padding: 0 2rem;
   height: 72px;
   background: rgba(255, 255, 255, 0.65);
@@ -22,6 +22,7 @@
 .topbar__logo {
   display: flex;
   align-items: center;
+  justify-self: start;
   gap: 0.15rem;
   font-size: 1.5rem;
   font-weight: 800;
@@ -39,6 +40,7 @@
 .topbar__nav {
   display: flex;
   align-items: center;
+  justify-self: center;
   gap: 0.25rem;
 }
 
@@ -81,6 +83,7 @@
 .topbar__right {
   display: flex;
   align-items: center;
+  justify-self: end;
   gap: 1rem;
 }
 
@@ -156,6 +159,101 @@
   font-size: 0.7rem;
   color: var(--color-text-secondary);
   line-height: 1.2;
+}
+
+.topbar__logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-light);
+  color: var(--color-navy);
+  transition: all var(--transition-base);
+}
+
+.topbar__logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+}
+
+/* Logout confirmation */
+.topbar-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 38, 57, 0.3);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.25s ease both;
+}
+
+.topbar-confirm {
+  width: 100%;
+  max-width: 380px;
+  padding: 1.75rem;
+  border-radius: 1.25rem;
+  background: rgba(255, 255, 255, 0.85);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 30px 80px rgba(26, 38, 57, 0.2), inset 0 1.5px 0 rgba(255, 255, 255, 0.95);
+  animation: scaleIn 0.3s var(--transition-bounce) both;
+}
+
+.topbar-confirm__title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--color-navy);
+}
+
+.topbar-confirm__text {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.topbar-confirm__actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.topbar-confirm__btn {
+  flex: 1;
+  padding: 0.7rem 1rem;
+  border-radius: var(--radius-button);
+  font-size: 0.8rem;
+  font-weight: 700;
+  transition: all var(--transition-base);
+}
+
+.topbar-confirm__btn--cancel {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  color: var(--color-navy);
+}
+
+.topbar-confirm__btn--cancel:hover {
+  background: rgba(255, 255, 255, 0.75);
+  transform: translateY(-2px);
+}
+
+.topbar-confirm__btn--danger {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--color-danger);
+}
+
+.topbar-confirm__btn--danger:hover {
+  background: rgba(239, 68, 68, 0.18);
+  transform: translateY(-2px);
 }
 
 /* Mobile responsive */

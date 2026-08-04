@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useAuth } from '../../context/AuthContext';
 import './TopBar.css';
 
 const navItems = [
@@ -43,8 +45,23 @@ function NavIcon({ name, className }) {
   return icons[name] || null;
 }
 
-export default function TopBar({ activeSection, onNavigate }) {
+function initialsFor(name, email) {
+  const source = (name || email || '').trim();
+  if (!source) return '?';
+  const parts = source.split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+export default function TopBar({ activeSection, onNavigate, onLogout }) {
+  const { user } = useAuth();
+  const fullName = user?.user_metadata?.full_name;
+  const displayName = fullName || user?.email || 'Usuario';
+  const secondaryLine = fullName ? user?.email : 'Mi cuenta';
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
+
   return (
+    <>
     <header className="topbar">
       <div className="topbar__logo">
         linkstar<span className="topbar__logo-dot">.</span>
@@ -73,13 +90,51 @@ export default function TopBar({ activeSection, onNavigate }) {
         </button>
 
         <div className="topbar__user">
-          <div className="topbar__avatar">AL</div>
+          <div className="topbar__avatar">{initialsFor(fullName, user?.email)}</div>
           <div className="topbar__user-info">
-            <span className="topbar__user-name">Alejandro</span>
-            <span className="topbar__user-role">Administrador</span>
+            <span className="topbar__user-name">{displayName}</span>
+            <span className="topbar__user-role">{secondaryLine}</span>
           </div>
         </div>
+
+        <button
+          className="topbar__logout-btn"
+          onClick={() => setConfirmingLogout(true)}
+          aria-label="Cerrar sesión"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
       </div>
     </header>
+
+    {confirmingLogout && createPortal(
+      <div className="topbar-confirm-overlay" onClick={() => setConfirmingLogout(false)}>
+        <div className="topbar-confirm" onClick={(e) => e.stopPropagation()}>
+          <h3 className="topbar-confirm__title">¿Cerrar sesión?</h3>
+          <p className="topbar-confirm__text">
+            Vas a salir de tu cuenta y necesitarás volver a iniciar sesión para acceder al panel.
+          </p>
+          <div className="topbar-confirm__actions">
+            <button
+              className="topbar-confirm__btn topbar-confirm__btn--cancel"
+              onClick={() => setConfirmingLogout(false)}
+            >
+              Cancelar
+            </button>
+            <button
+              className="topbar-confirm__btn topbar-confirm__btn--danger"
+              onClick={onLogout}
+            >
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   );
 }
