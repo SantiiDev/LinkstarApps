@@ -1,10 +1,65 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ALL_LOCATIONS } from '../../data/locations';
+import {
+  fetchLocationPerformance,
+  fetchDevicePerformance,
+  fetchEmployeeLeaderboard,
+  formatRelativeTime,
+  colorForIndex,
+} from '../../lib/dashboardApi';
 import './Locations.css';
 
 /* ─── Helpers ──────────────────────────────────────────────── */
 function pct(current, goal) {
   return Math.min(Math.round((current / goal) * 100), 100);
+}
+
+// "—" para campos sin dato real (null) en vez de "null" o "%" solo.
+function stat(value, suffix = '') {
+  return value === null || value === undefined ? '—' : `${value}${suffix}`;
+}
+
+// v_location_performance (0008_dashboard_views.sql) no expone dirección,
+// encargado, teléfono, zonas ni meta mensual — esos campos no existen a ese
+// grano en el schema. Se cruza con v_device_performance/v_employee_leaderboard
+// para armar listas reales de dispositivos/empleados y la última actividad.
+function mapLocationRow(row, { devicesByLocation, employeesByLocation, index }) {
+  const myDevices = devicesByLocation.get(row.location_id) || [];
+  const myEmployees = employeesByLocation.get(row.location_id) || [];
+  const lastScanAt = myDevices.reduce((latest, d) => {
+    if (!d.last_scan_at) return latest;
+    return !latest || d.last_scan_at > latest ? d.last_scan_at : latest;
+  }, null);
+
+  return {
+    id: row.location_id,
+    name: row.name,
+    address: '—',
+    city: row.city || '—',
+    // La vista sólo excluye locations con deleted_at (soft-delete) — no hay
+    // un flag real de "operativa/cerrada" más allá de eso.
+    status: 'active',
+    manager: '—',
+    phone: '—',
+    email: '—',
+    openSince: '—',
+    lastActivity: formatRelativeTime(lastScanAt),
+    totalDevices: myDevices.length,
+    activeDevices: myDevices.filter(d => d.status === 'active').length,
+    totalEmployees: myEmployees.length,
+    totalScans: row.unique_scans_30d ?? 0,
+    totalReviews: row.new_reviews_30d ?? 0,
+    avgConversion: row.conversion_rate,
+    avgRating: row.average_rating,
+    monthlyGoal: 100,
+    weeklyScans: Array(7).fill(0),
+    weeklyReviews: Array(7).fill(0),
+    zones: [],
+    devices: myDevices.map(d => d.label),
+    employees: myEmployees.map(e => e.full_name),
+    coordinates: null,
+    color: colorForIndex(index),
+  };
 }
 
 /* ─── Location Detail Modal ────────────────────────────────── */
@@ -39,7 +94,7 @@ function LocationModal({ location, onClose }) {
                 <span className="loc-card__status-dot" />
                 {location.status === 'active' ? 'Operativa' : 'Cerrada'}
               </span>
-              <span className="loc-card__rating">⭐ {location.avgRating}</span>
+              <span className="loc-card__rating">⭐ {stat(location.avgRating)}</span>
             </div>
           </div>
 
@@ -65,11 +120,11 @@ function LocationModal({ location, onClose }) {
               <span className="loc-modal__stat-val" style={{ color: 'var(--color-gold)' }}>
                 {location.totalReviews.toLocaleString()}
               </span>
-              <span className="loc-modal__stat-lbl">Reseñas</span>
+              <span className="loc-modal__stat-lbl">Reseñas (estimado)</span>
             </div>
             <div className="loc-modal__stat-box">
               <span className="loc-modal__stat-val" style={{ color: 'var(--color-forest)' }}>
-                {location.avgConversion}%
+                {stat(location.avgConversion, '%')}
               </span>
               <span className="loc-modal__stat-lbl">Conversión</span>
             </div>
@@ -78,7 +133,7 @@ function LocationModal({ location, onClose }) {
           {/* Goal progress */}
           <div className="loc-modal__goal-section">
             <div className="loc-modal__goal-header">
-              <span className="loc-modal__goal-label">Meta mensual de reseñas</span>
+              <span className="loc-modal__goal-label">Meta mensual de reseñas (estimado)</span>
               <span className="loc-modal__goal-val">{location.totalReviews} / {location.monthlyGoal} · {progress}%</span>
             </div>
             <div className="loc-modal__goal-track">
@@ -102,7 +157,7 @@ function LocationModal({ location, onClose }) {
             </div>
             <div className="loc-modal__info-item">
               <div className="loc-modal__info-key">Rating promedio</div>
-              <div className="loc-modal__info-val">⭐ {location.avgRating} / 5</div>
+              <div className="loc-modal__info-val">⭐ {stat(location.avgRating)} / 5</div>
             </div>
             <div className="loc-modal__info-item">
               <div className="loc-modal__info-key">Abierta desde</div>
@@ -254,7 +309,7 @@ function LocationCardGrid({ locations, onSelect }) {
                     <span className="loc-card__status-dot" />
                     {loc.status === 'active' ? 'Operativa' : 'Cerrada'}
                   </span>
-                  <span className="loc-card__rating">⭐ {loc.avgRating}</span>
+                  <span className="loc-card__rating">⭐ {stat(loc.avgRating)}</span>
                 </div>
               </div>
 
@@ -332,11 +387,11 @@ function LocationCardGrid({ locations, onSelect }) {
                   <span className="loc-card__stat-value loc-card__stat-value--gold">
                     {loc.totalReviews.toLocaleString()}
                   </span>
-                  <span className="loc-card__stat-label">Reseñas</span>
+                  <span className="loc-card__stat-label">Reseñas (est.)</span>
                 </div>
                 <div className="loc-card__stat">
                   <span className="loc-card__stat-value loc-card__stat-value--forest">
-                    {loc.avgConversion}%
+                    {stat(loc.avgConversion, '%')}
                   </span>
                   <span className="loc-card__stat-label">Conversión</span>
                 </div>
@@ -380,7 +435,7 @@ function LocationTable({ locations, onSelect }) {
             <th>Encargado</th>
             <th>Dispositivos</th>
             <th>Escaneos</th>
-            <th>Reseñas</th>
+            <th>Reseñas (estimado)</th>
             <th>Conversión</th>
             <th>Rating</th>
           </tr>
@@ -416,8 +471,8 @@ function LocationTable({ locations, onSelect }) {
               </td>
               <td><span className="loc-table__stat--orange">{loc.totalScans.toLocaleString()}</span></td>
               <td><span className="loc-table__stat--gold">{loc.totalReviews.toLocaleString()}</span></td>
-              <td><span className="loc-table__stat--forest">{loc.avgConversion}%</span></td>
-              <td><span className="loc-table__rating-cell">⭐ {loc.avgRating}</span></td>
+              <td><span className="loc-table__stat--forest">{stat(loc.avgConversion, '%')}</span></td>
+              <td><span className="loc-table__rating-cell">⭐ {stat(loc.avgRating)}</span></td>
             </tr>
           ))}
         </tbody>
@@ -441,22 +496,66 @@ const SORT_OPTIONS = [
 ];
 
 export default function LocationsPage() {
+  const [locations, setLocations] = useState([]);
+  const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
   const [filter, setFilter]     = useState('all');
   const [sort, setSort]         = useState('totalReviews');
   const [viewMode, setViewMode] = useState('grid');
   const [selected, setSelected] = useState(null);
 
+  /* Carga real desde Supabase (v_location_performance, cruzada con
+     v_device_performance/v_employee_leaderboard para dispositivos/equipo
+     asignados y última actividad). Si falla, mock completo — un resultado
+     vacío (org sin ubicaciones todavía) no es una falla. */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [locationRows, deviceRows, employeeRows] = await Promise.all([
+          fetchLocationPerformance(),
+          fetchDevicePerformance(),
+          fetchEmployeeLeaderboard(),
+        ]);
+        if (cancelled) return;
+
+        const devicesByLocation = new Map();
+        deviceRows.forEach(d => {
+          if (!d.location_id) return;
+          if (!devicesByLocation.has(d.location_id)) devicesByLocation.set(d.location_id, []);
+          devicesByLocation.get(d.location_id).push(d);
+        });
+
+        const employeesByLocation = new Map();
+        employeeRows.forEach(e => {
+          if (!e.location_id) return;
+          if (!employeesByLocation.has(e.location_id)) employeesByLocation.set(e.location_id, []);
+          employeesByLocation.get(e.location_id).push(e);
+        });
+
+        setLocations(locationRows.map((row, index) =>
+          mapLocationRow(row, { devicesByLocation, employeesByLocation, index })
+        ));
+      } catch (err) {
+        console.error('No se pudieron cargar las ubicaciones reales, muestro datos de ejemplo:', err);
+        if (cancelled) return;
+        setLocations(ALL_LOCATIONS);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   /* Derived stats */
-  const totalActive    = ALL_LOCATIONS.filter(l => l.status === 'active').length;
-  const totalDevices   = ALL_LOCATIONS.reduce((s, l) => s + l.totalDevices, 0);
-  const totalReviews   = ALL_LOCATIONS.reduce((s, l) => s + l.totalReviews, 0);
-  const totalScans     = ALL_LOCATIONS.reduce((s, l) => s + l.totalScans, 0);
-  const avgConversion  = (ALL_LOCATIONS.reduce((s, l) => s + l.avgConversion, 0) / ALL_LOCATIONS.length).toFixed(1);
+  const totalActive    = locations.filter(l => l.status === 'active').length;
+  const totalDevices   = locations.reduce((s, l) => s + l.totalDevices, 0);
+  const totalReviews   = locations.reduce((s, l) => s + l.totalReviews, 0);
+  const totalScans     = locations.reduce((s, l) => s + l.totalScans, 0);
 
   /* Filtered + sorted list */
   const displayed = useMemo(() => {
-    let list = ALL_LOCATIONS.filter(l => {
+    let list = locations.filter(l => {
       const q = search.toLowerCase();
       const matchSearch =
         l.name.toLowerCase().includes(q) ||
@@ -472,9 +571,13 @@ export default function LocationsPage() {
       return matchSearch && matchFilter;
     });
 
-    list = [...list].sort((a, b) => b[sort] - a[sort]);
+    list = [...list].sort((a, b) => (b[sort] ?? 0) - (a[sort] ?? 0));
     return list;
-  }, [search, filter, sort]);
+  }, [locations, search, filter, sort]);
+
+  if (loading) {
+    return <div className="app-loading">Cargando…</div>;
+  }
 
   return (
     <div className="loc-page">
@@ -488,7 +591,7 @@ export default function LocationsPage() {
           </div>
           <h1 className="loc-page__title">Ubicaciones</h1>
           <p className="loc-page__subtitle">
-            {ALL_LOCATIONS.length} sucursales registradas · {totalActive} operativas · {totalDevices} dispositivos desplegados
+            {locations.length} sucursales registradas · {totalActive} operativas · {totalDevices} dispositivos desplegados
           </p>
         </div>
 
@@ -512,10 +615,10 @@ export default function LocationsPage() {
       {/* ── Stats Strip ── */}
       <div className="loc-stats">
         {[
-          { key: 'total',    icon: 'map',     label: 'Total sucursales',  value: ALL_LOCATIONS.length, color: 'navy' },
+          { key: 'total',    icon: 'map',     label: 'Total sucursales',  value: locations.length, color: 'navy' },
           { key: 'active',   icon: 'check',   label: 'Operativas',        value: totalActive,           color: 'forest' },
           { key: 'scans',    icon: 'scan',     label: 'Escaneos totales',  value: totalScans.toLocaleString(), color: 'orange' },
-          { key: 'reviews',  icon: 'star',     label: 'Reseñas totales',   value: totalReviews.toLocaleString(), color: 'gold' },
+          { key: 'reviews',  icon: 'star',     label: 'Reseñas totales (estimado)', value: totalReviews.toLocaleString(), color: 'gold' },
         ].map((s, i) => (
           <div key={s.key} className="loc-stat-card" style={{ animationDelay: `${i * 0.07}s` }}>
             <div className={`loc-stat-icon loc-stat-icon--${s.color}`}>

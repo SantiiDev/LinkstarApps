@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
+import Select from '../Select/Select';
 import './Sidebar.css';
+
+const LANG_OPTIONS = [
+  { value: 'es', label: 'Español' },
+  { value: 'en', label: 'English (próximamente)', disabled: true },
+];
 
 /* ─── Icons ────────────────────────────────────────────────── */
 function Icon({ name, className }) {
@@ -139,6 +145,7 @@ export default function Sidebar({ activeSection, onNavigate, onLogout }) {
   const secondaryLine = fullName ? user?.email : 'Mi cuenta';
   const [confirmingLogout, setConfirmingLogout] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [lang, setLang] = useState('es');
   const userMenuRef = useRef(null);
   const [openGroups, setOpenGroups] = useState(() => {
     const initial = {};
@@ -240,14 +247,15 @@ export default function Sidebar({ activeSection, onNavigate, onLogout }) {
         <div className="sidebar__user-wrap" ref={userMenuRef}>
           {menuOpen && (
             <div className="sidebar__user-menu">
-              <label className="sidebar__lang-select">
+              <div className="sidebar__lang-select">
                 <Icon name="globe" className="sidebar__lang-icon" />
-                <select defaultValue="es">
-                  <option value="es">Español</option>
-                  <option value="en" disabled>English (próximamente)</option>
-                </select>
-                <Icon name="chevron-down" className="sidebar__lang-chevron" />
-              </label>
+                <Select
+                  value={lang}
+                  onChange={setLang}
+                  options={LANG_OPTIONS}
+                  triggerClassName="sidebar__lang-trigger"
+                />
+              </div>
 
               <div className="sidebar__user-menu-divider" />
 

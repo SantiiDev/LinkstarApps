@@ -1,9 +1,79 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ALL_DEVICES } from '../../data/devices';
 import { ALL_LOCATIONS } from '../../data/locations';
 import GoogleConnectBanner from '../../components/GoogleConnectBanner/GoogleConnectBanner';
 import TrendChart from '../../components/TrendChart/TrendChart';
+import Select from '../../components/Select/Select';
+import {
+  fetchDevicePerformance,
+  fetchLocationPerformance,
+  fetchScansDaily,
+  formatRelativeTime,
+  colorForIndex,
+} from '../../lib/dashboardApi';
+import { REDIRECT_DOMAIN } from '../../lib/config';
+import { downloadQrPng } from '../../lib/qr';
 import './Devices.css';
+
+// v_device_performance (0008_dashboard_views.sql) no expone "reseñas" ni
+// "conversión" por dispositivo — esa atribución no existe a ese grano en el
+// schema (decisión 6: la atribución por dispositivo es un prorrateo que
+// todavía no calcula ninguna vista). Se muestra "—" en vez de inventar un
+// número.
+function mapDeviceRow(row) {
+  return {
+    id: row.device_id,
+    publicId: row.public_id,
+    name: row.label,
+    type: row.kind === 'instagram' ? 'instagram' : 'google',
+    location: row.location_name || 'Sin ubicación asignada',
+    status: row.status === 'active' ? 'active' : 'inactive',
+    scans: row.total_scans ?? 0,
+    reviews: null,
+    conversion: null,
+    lastScan: formatRelativeTime(row.last_scan_at),
+    activeSince: null,
+    weeklyScans: Array(7).fill(0),
+  };
+}
+
+// El QR siempre codifica ?s=q (medio "qr" en scan_events.medium, 0011). El
+// NFC se graba aparte con la misma URL pero ?s=n — no lo genera esta pantalla.
+// Los devices mock (fallback si falla la carga real) no tienen public_id, así
+// que no hay URL real que codificar: el botón queda deshabilitado para ellos.
+function handleDownloadQr(device) {
+  if (!device.publicId) return;
+  const url = `https://${REDIRECT_DOMAIN}/d/${device.publicId}?s=q`;
+  downloadQrPng(url, `linkstar-qr-${device.publicId}.png`).catch(err => {
+    console.error('No se pudo generar el QR:', err);
+  });
+}
+
+// "—" para campos sin dato real (null) en vez de renderizar "null" o "%" solo.
+function stat(value, suffix = '') {
+  return value === null || value === undefined ? '—' : `${value}${suffix}`;
+}
+
+// Shape mínima que necesita el mini-ranking de abajo de esta página.
+function mapLocationForRanking(row, index) {
+  return {
+    id: row.location_id,
+    name: row.name,
+    totalScans: row.unique_scans_30d ?? 0,
+    totalReviews: row.new_reviews_30d ?? 0,
+    color: colorForIndex(index),
+  };
+}
+
+const DEVICE_TYPE_OPTIONS = [
+  { value: 'google', label: 'Expositor Google Maps' },
+  { value: 'instagram', label: 'Expositor Instagram' },
+];
+
+const ACTIVITY_PERIOD_OPTIONS = [
+  { value: '7', label: 'Últimos 7 días' },
+  { value: '30', label: 'Últimos 30 días' },
+];
 
 /* ─── Shared icons ─────────────────────────────────────────── */
 function QrIcon({ size = 24 }) {
@@ -118,21 +188,24 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
                   autoFocus
                 />
               </label>
-              <label className="device-edit-form__field">
+              <div className="device-edit-form__field">
                 <span>Ubicación</span>
-                <select value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}>
-                  {ALL_LOCATIONS.map(l => (
-                    <option key={l.id} value={l.name}>{l.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="device-edit-form__field">
+                <Select
+                  value={form.location}
+                  onChange={v => setForm(f => ({ ...f, location: v }))}
+                  options={ALL_LOCATIONS.map(l => ({ value: l.name, label: l.name }))}
+                  triggerClassName="device-edit-form__select-trigger"
+                />
+              </div>
+              <div className="device-edit-form__field">
                 <span>Tipo</span>
-                <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
-                  <option value="google">Expositor Google Maps</option>
-                  <option value="instagram">Expositor Instagram</option>
-                </select>
-              </label>
+                <Select
+                  value={form.type}
+                  onChange={v => setForm(f => ({ ...f, type: v }))}
+                  options={DEVICE_TYPE_OPTIONS}
+                  triggerClassName="device-edit-form__select-trigger"
+                />
+              </div>
             </form>
           ) : (
             <>
@@ -146,13 +219,13 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
                 </div>
                 <div className="device-modal__stat-box">
                   <span className="device-modal__stat-val" style={{ color: 'var(--color-gold)' }}>
-                    {device.reviews}
+                    {stat(device.reviews)}
                   </span>
                   <span className="device-modal__stat-lbl">Reseñas</span>
                 </div>
                 <div className="device-modal__stat-box">
                   <span className="device-modal__stat-val" style={{ color: 'var(--color-forest)' }}>
-                    {device.conversion}%
+                    {stat(device.conversion, '%')}
                   </span>
                   <span className="device-modal__stat-lbl">Conversión</span>
                 </div>
@@ -166,7 +239,7 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
                 </div>
                 <div className="device-modal__info-item">
                   <div className="device-modal__info-key">Activo desde</div>
-                  <div className="device-modal__info-val">{device.activeSince}</div>
+                  <div className="device-modal__info-val">{stat(device.activeSince)}</div>
                 </div>
                 <div className="device-modal__info-item">
                   <div className="device-modal__info-key">Último escaneo</div>
@@ -207,6 +280,14 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
             </>
           ) : (
             <>
+              <button
+                className="device-modal__action-btn device-modal__action-btn--secondary"
+                onClick={() => handleDownloadQr(device)}
+                disabled={!device.publicId}
+                title={device.publicId ? undefined : 'QR no disponible (dato de ejemplo)'}
+              >
+                Descargar QR
+              </button>
               <button className="device-modal__action-btn device-modal__action-btn--secondary" onClick={startEditing}>
                 Editar
               </button>
@@ -242,7 +323,6 @@ function DeviceCardGrid({ devices, onSelect }) {
   return (
     <div className="devices-grid">
       {devices.map((device, index) => {
-        const max = Math.max(...device.weeklyScans, 1);
         return (
           <div
             key={device.id}
@@ -286,13 +366,13 @@ function DeviceCardGrid({ devices, onSelect }) {
                 </div>
                 <div className="device-full-card__stat">
                   <span className="device-full-card__stat-value device-full-card__stat-value--gold">
-                    {device.reviews}
+                    {stat(device.reviews)}
                   </span>
                   <span className="device-full-card__stat-label">Reseñas</span>
                 </div>
                 <div className="device-full-card__stat">
                   <span className="device-full-card__stat-value device-full-card__stat-value--forest">
-                    {device.conversion}%
+                    {stat(device.conversion, '%')}
                   </span>
                   <span className="device-full-card__stat-label">Conversión</span>
                 </div>
@@ -307,15 +387,26 @@ function DeviceCardGrid({ devices, onSelect }) {
                 </svg>
                 {device.lastScan}
               </span>
-              <button
-                className="device-full-card__menu-btn"
-                onClick={e => { e.stopPropagation(); onSelect(device); }}
-                aria-label="Ver detalle"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
-                </svg>
-              </button>
+              <div style={{ display: 'flex', gap: '0.35rem' }}>
+                <button
+                  className="device-full-card__menu-btn"
+                  onClick={e => { e.stopPropagation(); handleDownloadQr(device); }}
+                  disabled={!device.publicId}
+                  aria-label="Descargar QR"
+                  title={device.publicId ? 'Descargar QR' : 'QR no disponible (dato de ejemplo)'}
+                >
+                  <QrIcon size={14} />
+                </button>
+                <button
+                  className="device-full-card__menu-btn"
+                  onClick={e => { e.stopPropagation(); onSelect(device); }}
+                  aria-label="Ver detalle"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -338,6 +429,7 @@ function DeviceTable({ devices, onSelect }) {
             <th>Reseñas</th>
             <th>Conversión</th>
             <th>Último escaneo</th>
+            <th>QR</th>
           </tr>
         </thead>
         <tbody>
@@ -362,9 +454,20 @@ function DeviceTable({ devices, onSelect }) {
                 </span>
               </td>
               <td><span className="table-stat table-stat--orange">{device.scans.toLocaleString()}</span></td>
-              <td><span className="table-stat table-stat--gold">{device.reviews}</span></td>
-              <td><span className="table-stat table-stat--forest">{device.conversion}%</span></td>
+              <td><span className="table-stat table-stat--gold">{stat(device.reviews)}</span></td>
+              <td><span className="table-stat table-stat--forest">{stat(device.conversion, '%')}</span></td>
               <td>{device.lastScan}</td>
+              <td>
+                <button
+                  className="device-full-card__menu-btn"
+                  onClick={e => { e.stopPropagation(); handleDownloadQr(device); }}
+                  disabled={!device.publicId}
+                  aria-label="Descargar QR"
+                  title={device.publicId ? 'Descargar QR' : 'QR no disponible (dato de ejemplo)'}
+                >
+                  <QrIcon size={14} />
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -439,8 +542,9 @@ const FILTER_TABS = [
   { id: 'inactive',  label: 'Inactivos' },
 ];
 
-/* Last 7 calendar days of aggregate scans across all devices, for the activity chart */
-function buildDailyScans() {
+/* Last 7 calendar days of aggregate scans across mock devices — sólo se usa
+   si falla la carga real (ver fetchScansDaily más abajo). */
+function buildDailyScansMock() {
   const days = ALL_DEVICES[0]?.weeklyScans.length ?? 7;
   const totals = Array.from({ length: days }, (_, i) =>
     ALL_DEVICES.reduce((sum, d) => sum + (d.weeklyScans[i] ?? 0), 0)
@@ -454,13 +558,60 @@ function buildDailyScans() {
   return { totals, labels };
 }
 
+/* v_scans_daily trae un total por día ya agregado para toda la organización
+   (decisión 2: nunca se consulta scan_events/scan_daily_rollups directo). Se
+   rellenan con 0 los días sin fila (sin escaneos ese día). */
+function buildDailyScansFromRows(rows, days) {
+  const byDay = new Map(rows.map(r => [r.day, r.scans]));
+  const today = new Date();
+  const totals = [];
+  const labels = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    const key = date.toISOString().slice(0, 10);
+    totals.push(byDay.get(key) ?? 0);
+    labels.push(date.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }).replace('.', ''));
+  }
+  return { totals, labels };
+}
+
 export default function DevicesPage({ onNavigate, onNavigateSettings }) {
-  const [devices, setDevices]       = useState(ALL_DEVICES);
+  const [devices, setDevices]       = useState([]);
+  const [locations, setLocations]   = useState([]);
+  const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState('');
   const [filter, setFilter]         = useState('all');
   const [viewMode, setViewMode]     = useState('grid');   // 'grid' | 'table'
   const [selected, setSelected]     = useState(null);
   const [claiming, setClaiming]     = useState(false);
+
+  /* Carga real desde Supabase (v_device_performance / v_location_performance).
+     Si la query falla (red, RLS, lo que sea) se cae de vuelta al mock — nunca
+     se deja la pantalla en blanco. Un resultado vacío (org sin dispositivos
+     todavía) NO es una falla: se muestra tal cual, vacío. */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [deviceRows, locationRows] = await Promise.all([
+          fetchDevicePerformance(),
+          fetchLocationPerformance(),
+        ]);
+        if (cancelled) return;
+        setDevices(deviceRows.map(mapDeviceRow));
+        setLocations(locationRows.map(mapLocationForRanking));
+      } catch (err) {
+        console.error('No se pudieron cargar los dispositivos reales, muestro datos de ejemplo:', err);
+        if (cancelled) return;
+        setDevices(ALL_DEVICES);
+        setLocations(ALL_LOCATIONS);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   /* Derived stats */
   const totalActive = devices.filter(d => d.status === 'active').length;
@@ -484,7 +635,27 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
     });
   }, [devices, search, filter]);
 
-  const { totals: dailyScans, labels: dayLabels } = useMemo(buildDailyScans, []);
+  const [activityPeriod, setActivityPeriod] = useState('7');
+  const [dailyScans, setDailyScans] = useState({ totals: [], labels: [] });
+
+  /* El gráfico de actividad se recarga cada vez que cambia el período
+     (7/30 días) — v_scans_daily se filtra client-side a ese rango. */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const days = Number(activityPeriod);
+      try {
+        const rows = await fetchScansDaily(days);
+        if (cancelled) return;
+        setDailyScans(buildDailyScansFromRows(rows, days));
+      } catch (err) {
+        console.error('No se pudo cargar la actividad diaria real, muestro datos de ejemplo:', err);
+        if (cancelled) return;
+        setDailyScans(buildDailyScansMock());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activityPeriod]);
 
   function handleSaveDevice(updated) {
     setDevices(prev => prev.map(d => (d.id === updated.id ? updated : d)));
@@ -498,9 +669,13 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
   }
 
   const topLocations = useMemo(
-    () => [...ALL_LOCATIONS].sort((a, b) => b.totalScans - a.totalScans).slice(0, 3),
-    []
+    () => [...locations].sort((a, b) => b.totalScans - a.totalScans).slice(0, 3),
+    [locations]
   );
+
+  if (loading) {
+    return <div className="app-loading">Cargando…</div>;
+  }
 
   return (
     <div className="devices-page">
@@ -635,12 +810,14 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
             <h3 className="devices-activity__title">Actividad de Dispositivos</h3>
             <span className="devices-activity__subtitle">Escaneos únicos en el período seleccionado</span>
           </div>
-          <select className="devices-period-select" defaultValue="7">
-            <option value="7">Últimos 7 días</option>
-            <option value="30">Últimos 30 días</option>
-          </select>
+          <Select
+            value={activityPeriod}
+            onChange={setActivityPeriod}
+            options={ACTIVITY_PERIOD_OPTIONS}
+            triggerClassName="devices-period-select"
+          />
         </div>
-        <TrendChart data={dailyScans} labels={dayLabels} color="orange" />
+        <TrendChart data={dailyScans.totals} labels={dailyScans.labels} color="orange" />
       </div>
 
       {/* ── Ranking de ubicaciones ── */}
@@ -659,7 +836,7 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
             <tr>
               <th>Nombre del local</th>
               <th>Escaneos</th>
-              <th>Reseñas</th>
+              <th>Reseñas (estimado)</th>
             </tr>
           </thead>
           <tbody>

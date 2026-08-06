@@ -2,6 +2,10 @@
   width: 100%;
 }
 
+.trend-chart--empty {
+  height: 160px;
+}
+
 .trend-chart__svg {
   width: 100%;
   height: 160px;

@@ -287,7 +287,6 @@
 }
 
 .sidebar__lang-select {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -299,31 +298,25 @@
   color: var(--color-text-secondary);
 }
 
-.sidebar__lang-select select {
+.sidebar__lang-select .ls-select {
   flex: 1;
-  appearance: none;
+}
+
+.sidebar__lang-trigger {
+  width: 100%;
   border: 1px solid var(--color-border);
   border-radius: 0.65rem;
   background: var(--color-white);
-  padding: 0.45rem 1.8rem 0.45rem 0.75rem;
+  padding: 0.45rem 0.75rem;
   font-family: inherit;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--color-navy);
+  transition: border-color var(--transition-base);
 }
 
-.sidebar__lang-select select:focus {
-  outline: none;
+.sidebar__lang-trigger[aria-expanded="true"] {
   border-color: var(--color-orange);
-}
-
-.sidebar__lang-chevron {
-  position: absolute;
-  right: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--color-text-secondary);
-  pointer-events: none;
 }
 
 .sidebar__user-menu-divider {

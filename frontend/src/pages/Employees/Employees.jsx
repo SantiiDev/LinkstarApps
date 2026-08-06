@@ -1,6 +1,54 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ALL_EMPLOYEES } from '../../data/employees';
+import {
+  fetchEmployeeLeaderboard,
+  fetchLocationPerformance,
+  fetchDevicePerformance,
+  formatRelativeTime,
+  colorForIndex,
+  initialsFor,
+} from '../../lib/dashboardApi';
 import './Employees.css';
+
+// "—" para campos sin dato real (null) en vez de "null" o "%" solo.
+function stat(value, suffix = '') {
+  return value === null || value === undefined ? '—' : `${value}${suffix}`;
+}
+
+// v_employee_leaderboard (0008_dashboard_views.sql) no trae "reseñas" por
+// empleado ni racha/meta/insignias — esa atribución no existe a ese grano en
+// el schema (decisión 6: es un prorrateo que ninguna vista calcula todavía).
+// Se cruza con v_device_performance para armar la lista de dispositivos
+// asignados y la última actividad, que sí son datos reales.
+function mapEmployeeRow(row, { locationsById, devicesByEmployee, index }) {
+  const myDevices = devicesByEmployee.get(row.employee_id) || [];
+  const lastScanAt = myDevices.reduce((latest, d) => {
+    if (!d.last_scan_at) return latest;
+    return !latest || d.last_scan_at > latest ? d.last_scan_at : latest;
+  }, null);
+
+  return {
+    id: row.employee_id,
+    name: row.full_name,
+    initials: initialsFor(row.full_name),
+    role: row.role_title || 'Sin rol asignado',
+    location: locationsById.get(row.location_id)?.name || 'Sin ubicación asignada',
+    // La vista ya filtra `e.is_active` — todo lo que llega acá está activo.
+    status: 'active',
+    reviews: null,
+    scans: row.scans_30d ?? 0,
+    conversion: null,
+    streak: 0,
+    goal: 100,
+    color: colorForIndex(index),
+    joinDate: '—',
+    lastActivity: formatRelativeTime(lastScanAt),
+    devices: myDevices.map(d => d.label),
+    weeklyReviews: Array(7).fill(0),
+    badges: [],
+    position: row.position,
+  };
+}
 
 /* ─── Helpers ──────────────────────────────────────────────── */
 const DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -17,7 +65,7 @@ function rankClass(rank) {
 }
 
 /* ─── Employee Detail Modal ─────────────────────────────────── */
-function EmployeeModal({ employee, rank, onClose }) {
+function EmployeeModal({ employee, rank, total, onClose }) {
   if (!employee) return null;
   const max = Math.max(...employee.weeklyReviews, 1);
   const progress = pct(employee.reviews, employee.goal);
@@ -63,7 +111,7 @@ function EmployeeModal({ employee, rank, onClose }) {
           <div className="emp-modal__stats">
             <div className="emp-modal__stat-box">
               <span className="emp-modal__stat-val" style={{ color: 'var(--color-gold)' }}>
-                {employee.reviews}
+                {stat(employee.reviews)}
               </span>
               <span className="emp-modal__stat-lbl">Reseñas</span>
             </div>
@@ -75,7 +123,7 @@ function EmployeeModal({ employee, rank, onClose }) {
             </div>
             <div className="emp-modal__stat-box">
               <span className="emp-modal__stat-val" style={{ color: 'var(--color-forest)' }}>
-                {employee.conversion}%
+                {stat(employee.conversion, '%')}
               </span>
               <span className="emp-modal__stat-lbl">Conversión</span>
             </div>
@@ -85,7 +133,7 @@ function EmployeeModal({ employee, rank, onClose }) {
           <div className="emp-modal__goal-section">
             <div className="emp-modal__goal-header">
               <span className="emp-modal__goal-label">Progreso hacia meta</span>
-              <span className="emp-modal__goal-val">{employee.reviews} / {employee.goal} reseñas · {progress}%</span>
+              <span className="emp-modal__goal-val">{stat(employee.reviews)} / {employee.goal} reseñas · {progress}%</span>
             </div>
             <div className="emp-modal__goal-track">
               <div className="emp-modal__goal-fill" style={{ width: `${progress}%` }} />
@@ -100,7 +148,7 @@ function EmployeeModal({ employee, rank, onClose }) {
             </div>
             <div className="emp-modal__info-item">
               <div className="emp-modal__info-key">Posición en ranking</div>
-              <div className="emp-modal__info-val">#{rank} de {ALL_EMPLOYEES.length}</div>
+              <div className="emp-modal__info-val">#{rank} de {total}</div>
             </div>
             <div className="emp-modal__info-item">
               <div className="emp-modal__info-key">Racha activa</div>
@@ -276,7 +324,7 @@ function EmployeeCardGrid({ employees, rankedIds, onSelect }) {
               {/* Stats */}
               <div className="emp-card__stats">
                 <div className="emp-card__stat">
-                  <span className="emp-card__stat-value emp-card__stat-value--gold">{emp.reviews}</span>
+                  <span className="emp-card__stat-value emp-card__stat-value--gold">{stat(emp.reviews)}</span>
                   <span className="emp-card__stat-label">Reseñas</span>
                 </div>
                 <div className="emp-card__stat">
@@ -284,7 +332,7 @@ function EmployeeCardGrid({ employees, rankedIds, onSelect }) {
                   <span className="emp-card__stat-label">Escaneos</span>
                 </div>
                 <div className="emp-card__stat">
-                  <span className="emp-card__stat-value emp-card__stat-value--forest">{emp.conversion}%</span>
+                  <span className="emp-card__stat-value emp-card__stat-value--forest">{stat(emp.conversion, '%')}</span>
                   <span className="emp-card__stat-label">Conversión</span>
                 </div>
               </div>
@@ -351,9 +399,9 @@ function EmployeeTable({ employees, rankedIds, onSelect }) {
                     {emp.status === 'active' ? 'Activo' : 'Inactivo'}
                   </span>
                 </td>
-                <td><span className="emp-table__stat--gold">{emp.reviews}</span></td>
+                <td><span className="emp-table__stat--gold">{stat(emp.reviews)}</span></td>
                 <td><span className="emp-table__stat--orange">{emp.scans}</span></td>
-                <td><span className="emp-table__stat--forest">{emp.conversion}%</span></td>
+                <td><span className="emp-table__stat--forest">{stat(emp.conversion, '%')}</span></td>
                 <td>
                   <div className="emp-table__progress">
                     <div className="emp-table__progress-track">
@@ -389,25 +437,76 @@ const SORT_OPTIONS = [
 ];
 
 export default function EmployeesPage() {
+  const [employees, setEmployees] = useState([]);
+  const [estimatedReviews, setEstimatedReviews] = useState(0); // suma de new_reviews_30d por location (decisión 6)
+  const [loading,  setLoading]  = useState(true);
   const [search,   setSearch]   = useState('');
   const [filter,   setFilter]   = useState('all');
   const [sort,     setSort]     = useState('reviews');
   const [viewMode, setViewMode] = useState('grid');
   const [selected, setSelected] = useState(null);
 
-  /* Rank order is always by reviews (for ranking badge) */
-  const rankedIds = useMemo(() =>
-    [...ALL_EMPLOYEES].sort((a, b) => b.reviews - a.reviews).map(e => e.id),
-  []);
+  /* Carga real desde Supabase (v_employee_leaderboard, cruzada con
+     v_location_performance y v_device_performance para nombre de ubicación,
+     dispositivos asignados y última actividad). Si falla, mock completo — un
+     resultado vacío (org sin empleados todavía) no es una falla. */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [employeeRows, locationRows, deviceRows] = await Promise.all([
+          fetchEmployeeLeaderboard(),
+          fetchLocationPerformance(),
+          fetchDevicePerformance(),
+        ]);
+        if (cancelled) return;
+
+        const locationsById = new Map(locationRows.map(l => [l.location_id, l]));
+        const devicesByEmployee = new Map();
+        deviceRows.forEach(d => {
+          if (!d.employee_id) return;
+          if (!devicesByEmployee.has(d.employee_id)) devicesByEmployee.set(d.employee_id, []);
+          devicesByEmployee.get(d.employee_id).push(d);
+        });
+
+        setEmployees(employeeRows.map((row, index) =>
+          mapEmployeeRow(row, { locationsById, devicesByEmployee, index })
+        ));
+        setEstimatedReviews(locationRows.reduce((s, l) => s + (l.new_reviews_30d ?? 0), 0));
+      } catch (err) {
+        console.error('No se pudieron cargar los empleados reales, muestro datos de ejemplo:', err);
+        if (cancelled) return;
+        setEmployees(ALL_EMPLOYEES);
+        setEstimatedReviews(ALL_EMPLOYEES.reduce((s, e) => s + e.reviews, 0));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  /* Orden de ranking: usa la posición ya calculada por la vista
+     (rank() sobre unique_scans_30d) cuando existe; el mock no trae
+     `position`, así que cae al criterio anterior (por reseñas). */
+  const rankedIds = useMemo(() => {
+    const sorted = [...employees].sort((a, b) => {
+      if (a.position != null && b.position != null) return a.position - b.position;
+      return (b.reviews ?? 0) - (a.reviews ?? 0);
+    });
+    return sorted.map(e => e.id);
+  }, [employees]);
 
   /* Derived stats */
-  const totalActive   = ALL_EMPLOYEES.filter(e => e.status === 'active').length;
-  const totalReviews  = ALL_EMPLOYEES.reduce((s, e) => s + e.reviews, 0);
-  const avgConversion = (ALL_EMPLOYEES.reduce((s, e) => s + e.conversion, 0) / ALL_EMPLOYEES.length).toFixed(1);
+  const totalActive = employees.filter(e => e.status === 'active').length;
+  const totalReviews = estimatedReviews;
+  const conversionValues = employees.map(e => e.conversion).filter(c => c != null);
+  const avgConversion = conversionValues.length
+    ? (conversionValues.reduce((s, c) => s + c, 0) / conversionValues.length).toFixed(1)
+    : null;
 
   /* Filtered + sorted list */
   const displayed = useMemo(() => {
-    let list = ALL_EMPLOYEES.filter(e => {
+    let list = employees.filter(e => {
       const q = search.toLowerCase();
       const matchSearch =
         e.name.toLowerCase().includes(q) ||
@@ -425,11 +524,15 @@ export default function EmployeesPage() {
       return matchSearch && matchFilter;
     });
 
-    list = [...list].sort((a, b) => b[sort] - a[sort]);
+    list = [...list].sort((a, b) => (b[sort] ?? 0) - (a[sort] ?? 0));
     return list;
-  }, [search, filter, sort]);
+  }, [employees, search, filter, sort]);
 
   const selectedRank = selected ? rankedIds.indexOf(selected.id) + 1 : 1;
+
+  if (loading) {
+    return <div className="app-loading">Cargando…</div>;
+  }
 
   return (
     <div className="emp-page">
@@ -443,7 +546,7 @@ export default function EmployeesPage() {
           </div>
           <h1 className="emp-page__title">Empleados & Rendimiento</h1>
           <p className="emp-page__subtitle">
-            {ALL_EMPLOYEES.length} empleados registrados · {totalActive} activos · {totalReviews} reseñas este mes
+            {employees.length} empleados registrados · {totalActive} activos · {totalReviews} reseñas estimadas este mes
           </p>
         </div>
 
@@ -467,10 +570,10 @@ export default function EmployeesPage() {
       {/* ── Stats Strip ── */}
       <div className="emp-stats">
         {[
-          { key: 'total',  icon: 'users',  label: 'Total empleados',   value: ALL_EMPLOYEES.length, color: 'navy' },
-          { key: 'active', icon: 'check',  label: 'Activos este mes',  value: totalActive,           color: 'forest' },
-          { key: 'reviews',icon: 'star',   label: 'Reseñas totales',   value: totalReviews,          color: 'gold' },
-          { key: 'avg',    icon: 'percent',label: 'Conversión media',  value: `${avgConversion}%`,   color: 'orange' },
+          { key: 'total',  icon: 'users',  label: 'Total empleados',          value: employees.length, color: 'navy' },
+          { key: 'active', icon: 'check',  label: 'Activos este mes',         value: totalActive,       color: 'forest' },
+          { key: 'reviews',icon: 'star',   label: 'Reseñas totales (estimado)', value: totalReviews,    color: 'gold' },
+          { key: 'avg',    icon: 'percent',label: 'Conversión media',         value: stat(avgConversion, '%'), color: 'orange' },
         ].map((s, i) => (
           <div key={s.key} className="emp-stat-card" style={{ animationDelay: `${i * 0.07}s` }}>
             <div className={`emp-stat-icon emp-stat-icon--${s.color}`}>
@@ -571,6 +674,7 @@ export default function EmployeesPage() {
         <EmployeeModal
           employee={selected}
           rank={selectedRank}
+          total={employees.length}
           onClose={() => setSelected(null)}
         />
       )}

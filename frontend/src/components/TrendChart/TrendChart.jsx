@@ -10,10 +10,15 @@ const COLOR_VARS = {
 export default function TrendChart({ data, labels, color = 'orange' }) {
   const gradientId = `trendFill-${color}`;
   const strokeColor = COLOR_VARS[color] || COLOR_VARS.orange;
+
+  if (!data || data.length === 0) {
+    return <div className="trend-chart trend-chart--empty" />;
+  }
+
   const max = Math.max(...data);
   const min = 0;
   const w = 300, h = 120, pad = 8;
-  const stepX = (w - pad * 2) / (data.length - 1);
+  const stepX = (w - pad * 2) / (Math.max(data.length - 1, 1));
   const points = data.map((v, i) => {
     const x = pad + i * stepX;
     const y = h - pad - ((v - min) / (max - min || 1)) * (h - pad * 2);

@@ -21,6 +21,8 @@ function Icon({ name, ...rest }) {
     phone: <svg {...props}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>,
     globe: <svg {...props}><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>,
     clock: <svg {...props}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>,
+    plus: <svg {...props}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
+    info: <svg {...props}><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>,
   };
   return icons[name] || null;
 }
@@ -78,6 +80,8 @@ export default function GoogleProfile() {
             </div>
           </div>
 
+          <div className="gb-profile-preview__spacer" />
+
           <button className="gb-profile-preview__edit-btn">
             <Icon name="edit" /> Editar información
           </button>
@@ -103,20 +107,31 @@ export default function GoogleProfile() {
               ))}
             </ul>
           </div>
+        </div>
+      </div>
 
-          <div className="gb-card">
-            <div className="gb-card__header">
-              <div>
-                <h3 className="gb-card__title">Fotos</h3>
-                <span className="gb-card__subtitle">24 fotos publicadas</span>
-              </div>
-            </div>
-            <div className="gb-photos-grid">
-              {PHOTO_COLORS.map((c, i) => (
-                <div key={i} className="gb-photo-tile" style={{ background: `linear-gradient(135deg, ${c}, ${c}99)` }} />
-              ))}
-            </div>
+      <div className="gb-card">
+        <div className="gb-card__header">
+          <div>
+            <h3 className="gb-card__title">Fotos</h3>
+            <span className="gb-card__subtitle">24 fotos publicadas</span>
           </div>
+          <button type="button" className="gb-btn-primary">
+            <Icon name="plus" width={15} height={15} /> Añadir foto
+          </button>
+        </div>
+
+        <div className="gb-photo-notice">
+          <Icon name="info" width={16} height={16} />
+          <p>
+            Los cambios pueden tardar entre <strong>24 y 48 hs</strong> en reflejarse en tu ficha de Google, según sus políticas de revisión.
+          </p>
+        </div>
+
+        <div className="gb-photos-grid">
+          {PHOTO_COLORS.map((c, i) => (
+            <div key={i} className="gb-photo-tile" style={{ background: `linear-gradient(135deg, ${c}, ${c}99)` }} />
+          ))}
         </div>
       </div>
     </div>

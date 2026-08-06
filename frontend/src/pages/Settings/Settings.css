@@ -254,6 +254,7 @@
 
 .settings-select,
 .settings-text-input {
+  width: 100%;
   padding: 0.65rem 0.9rem;
   border-radius: 0.7rem;
   border: 1px solid var(--color-border);
@@ -261,11 +262,11 @@
   font-size: 0.85rem;
   color: var(--color-navy);
   font-family: inherit;
+  transition: border-color var(--transition-base);
 }
 
 .settings-field input:focus,
-.settings-field select:focus,
-.settings-select:focus,
+.settings-select[aria-expanded="true"],
 .settings-text-input:focus {
   outline: none;
   border-color: var(--color-orange);

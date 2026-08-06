@@ -6,11 +6,14 @@ import './GoogleBusiness.css';
 const VIEWS_TREND = [4200, 4650, 5100, 5480, 6120, 6900, 7640, 8412];
 const WEEKS = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8'];
 
+/* Interacciones que no se solapan con las 4 KPI cards de arriba
+   (vistas, llamadas, cómo llegar, sitio web) — para no repetir los
+   mismos números en dos lugares distintos de la misma pantalla. */
 const INTERACTIONS = [
-  { label: 'Cómo llegar', value: 342, icon: 'pin' },
-  { label: 'Llamar', value: 187, icon: 'phone' },
-  { label: 'Visitar sitio web', value: 519, icon: 'globe' },
   { label: 'Enviar mensaje', value: 64, icon: 'message' },
+  { label: 'Guardar ficha', value: 128, icon: 'bookmark' },
+  { label: 'Ver fotos', value: 940, icon: 'image' },
+  { label: 'Compartir ficha', value: 37, icon: 'share' },
 ];
 
 function Icon({ name, ...rest }) {
@@ -21,6 +24,9 @@ function Icon({ name, ...rest }) {
     pin: <svg {...props}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>,
     globe: <svg {...props}><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>,
     message: <svg {...props}><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></svg>,
+    bookmark: <svg {...props}><path d="M19 21 12 16l-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg>,
+    image: <svg {...props}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>,
+    share: <svg {...props}><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>,
   };
   return icons[name] || null;
 }

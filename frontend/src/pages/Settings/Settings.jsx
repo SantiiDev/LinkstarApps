@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
+import Select from '../../components/Select/Select';
+import DateField from '../../components/DateField/DateField';
 import './Settings.css';
 
 const TABS = [
@@ -62,7 +64,11 @@ function CardHead({ icon, iconVariant = 'navy', title, badge, subtitle, action }
 }
 
 /* ─── Gestión local ───────────────────────────────────────────── */
+const CONTACT_LOCATION_OPTIONS = [{ value: 'all', label: 'Todos los locales' }];
+
 function LocalTab() {
+  const [contactLocation, setContactLocation] = useState('all');
+
   return (
     <div className="settings-panel">
       <div className="settings-card">
@@ -124,9 +130,12 @@ function LocalTab() {
         />
 
         <div className="settings-contact-email-row">
-          <select className="settings-select" defaultValue="all">
-            <option value="all">Todos los locales</option>
-          </select>
+          <Select
+            value={contactLocation}
+            onChange={setContactLocation}
+            options={CONTACT_LOCATION_OPTIONS}
+            triggerClassName="settings-select"
+          />
           <input type="email" placeholder="contacto@tunegocio.com" className="settings-text-input" />
           <button type="button" className="settings-save-btn">Guardar</button>
         </div>
@@ -145,7 +154,13 @@ const ACTIVITY_LOG = [
   { id: 3, date: '03/08/2026 21:17', actor: 'santinogallo', text: 'Desconectó su cuenta de Google', email: 'santinogallo61@gmail.com' },
 ];
 
+const ACTIVITY_CATEGORY_OPTIONS = [{ value: 'all', label: 'Todas las categorías' }];
+
 function TeamTab() {
+  const [activityCategory, setActivityCategory] = useState('all');
+  const [dateFrom, setDateFrom] = useState(null);
+  const [dateTo, setDateTo] = useState(null);
+
   return (
     <div className="settings-panel">
       <div className="settings-card">
@@ -178,20 +193,23 @@ function TeamTab() {
         />
 
         <div className="settings-activity-filters">
-          <label className="settings-field">
+          <div className="settings-field">
             <span>Categoría</span>
-            <select className="settings-select" defaultValue="all">
-              <option value="all">Todas las categorías</option>
-            </select>
-          </label>
-          <label className="settings-field">
+            <Select
+              value={activityCategory}
+              onChange={setActivityCategory}
+              options={ACTIVITY_CATEGORY_OPTIONS}
+              triggerClassName="settings-select"
+            />
+          </div>
+          <div className="settings-field">
             <span>Desde</span>
-            <input type="date" />
-          </label>
-          <label className="settings-field">
+            <DateField value={dateFrom} onChange={setDateFrom} triggerClassName="settings-select" />
+          </div>
+          <div className="settings-field">
             <span>Hasta</span>
-            <input type="date" />
-          </label>
+            <DateField value={dateTo} onChange={setDateTo} triggerClassName="settings-select" />
+          </div>
         </div>
 
         <div className="settings-activity-log">

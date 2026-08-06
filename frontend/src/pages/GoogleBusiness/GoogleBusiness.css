@@ -163,10 +163,11 @@
 /* ── Profile preview card ── */
 .gb-profile-preview {
   position: relative;
-  /* Content here is naturally shorter than the two stacked side-col
-     cards next to it — don't stretch to match, that leaves a blank
-     void below the "Editar información" button. */
-  align-self: start;
+  /* Stretches to match "Completá tu ficha" next to it (grid default);
+     the edit button below absorbs the extra height via margin-top:auto
+     so both cards' bottom edges line up instead of one trailing off. */
+  display: flex;
+  flex-direction: column;
 }
 
 .gb-profile-preview__badge {
@@ -257,6 +258,13 @@
   flex-shrink: 0;
 }
 
+/* Absorbs whatever extra height stretching to match "Completá tu ficha"
+   adds, so the button below keeps a fixed gap instead of that gap
+   stretching — the button ends up flush with the card's bottom edge. */
+.gb-profile-preview__spacer {
+  flex: 1;
+}
+
 .gb-profile-preview__edit-btn {
   display: flex;
   align-items: center;
@@ -312,15 +320,47 @@
 }
 
 /* ── Photos grid ── */
+/* Fixed column count (not auto-fill/auto-fit) — with exactly 8 preview
+   tiles this fills one clean, even row on desktop instead of leaving a
+   lone tile stranded on its own row. Gap matches .gb-two-col/.gb-side-col
+   (1.25rem) so the spacing rhythm is the same as the row above. */
 .gb-photos-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.5rem;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 1.25rem;
 }
 
 .gb-photo-tile {
   aspect-ratio: 1;
-  border-radius: 0.6rem;
+  border-radius: 0.7rem;
+}
+
+/* ── Fotos: aviso permanente (no descartable) ── */
+.gb-photo-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  background: rgba(26, 38, 57, 0.05);
+  border: 1px solid rgba(26, 38, 57, 0.1);
+}
+
+.gb-photo-notice svg {
+  flex-shrink: 0;
+  color: var(--color-navy);
+  margin-top: 0.1rem;
+}
+
+.gb-photo-notice p {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.gb-photo-notice strong {
+  color: var(--color-navy);
 }
 
 /* ── Posts list ── */
@@ -534,6 +574,10 @@
   .gb-stat-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .gb-photos-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
 }
 
 @media (max-width: 1024px) {
@@ -564,6 +608,10 @@
     justify-content: flex-start;
     padding-top: 0.5rem;
     border-top: 1px solid rgba(26, 38, 57, 0.06);
+  }
+
+  .gb-photos-grid {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
