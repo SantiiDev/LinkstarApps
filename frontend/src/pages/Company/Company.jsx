@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import StatCard from '../../components/StatCard/StatCard';
 import TrendChart from '../../components/TrendChart/TrendChart';
@@ -97,6 +98,7 @@ const QUICK_LINKS = [
 ];
 
 export default function Company({ onNavigate }) {
+  const [alertDismissed, setAlertDismissed] = useState(false);
   const negativeUnresponded = ALL_REVIEWS.filter((r) => r.sentiment === 'negative' && !r.responded);
   const recentReviews = ALL_REVIEWS.slice(0, 5);
   const totalDist = REVIEW_STATS.distribution.reduce((sum, d) => sum + d.count, 0);
@@ -112,20 +114,12 @@ export default function Company({ onNavigate }) {
         title="Mi Empresa"
         subtitle="Resumen general del estado comercial en tu ficha de Google Business Profile"
         actions={
-          <>
-            <button className="company-btn company-btn--ghost">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              {formattedDate}
-            </button>
-            <button className="company-btn company-btn--dark">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Exportar
-            </button>
-          </>
+          <button className="company-btn company-btn--ghost">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            {formattedDate}
+          </button>
         }
       />
 
@@ -160,21 +154,28 @@ export default function Company({ onNavigate }) {
       </div>
 
       {/* ── Negative reviews alert ── */}
-      {negativeUnresponded.length > 0 && (
-        <button className="company-alert" onClick={() => onNavigate?.('reviews')}>
-          <div className="company-alert__icon"><Icon name="alert" /></div>
-          <div className="company-alert__body">
-            <div className="company-alert__title">
-              {negativeUnresponded.length} reseña{negativeUnresponded.length > 1 ? 's' : ''} negativa{negativeUnresponded.length > 1 ? 's' : ''} sin responder
+      {negativeUnresponded.length > 0 && !alertDismissed && (
+        <div className="company-alert">
+          <button className="company-alert__close" onClick={() => setAlertDismissed(true)} aria-label="Cerrar aviso">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+          <button className="company-alert__trigger" onClick={() => onNavigate?.('reviews')}>
+            <div className="company-alert__icon"><Icon name="alert" /></div>
+            <div className="company-alert__body">
+              <div className="company-alert__title">
+                {negativeUnresponded.length} reseña{negativeUnresponded.length > 1 ? 's' : ''} negativa{negativeUnresponded.length > 1 ? 's' : ''} sin responder
+              </div>
+              <p className="company-alert__text">
+                Responder rápido a las reseñas negativas mejora tu reputación online y ayuda a recuperar clientes.
+              </p>
             </div>
-            <p className="company-alert__text">
-              Responder rápido a las reseñas negativas mejora tu reputación online y ayuda a recuperar clientes.
-            </p>
-          </div>
-          <span className="company-alert__cta">
-            Responder ahora <Icon name="arrowRight" />
-          </span>
-        </button>
+            <span className="company-alert__cta">
+              Responder ahora <Icon name="arrowRight" />
+            </span>
+          </button>
+        </div>
       )}
 
       {/* ── KPI row ── */}
@@ -187,7 +188,7 @@ export default function Company({ onNavigate }) {
 
       {/* ── Trend chart + distribution/sentiment ── */}
       <div className="company-two-col">
-        <div className="company-card">
+        <div className="company-card chart-card">
           <div className="company-card__header">
             <div>
               <h3 className="company-card__title">Reseñas en el tiempo</h3>

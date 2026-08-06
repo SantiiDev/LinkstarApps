@@ -103,6 +103,42 @@ img {
   display: block;
 }
 
+/* --- Native form controls ---
+   accent-color themes the browser's own popups (the highlighted row in
+   an open <select> list, the selected day in a date picker) to match
+   the brand instead of the default OS blue; color-scheme keeps those
+   popups light even if the OS is set to dark mode. Individual
+   components still own their border/background — this only reaches
+   the parts CSS can't otherwise touch. */
+:root {
+  color-scheme: light;
+  accent-color: var(--color-orange);
+}
+
+select,
+input,
+textarea {
+  accent-color: var(--color-orange);
+  outline: none;
+}
+
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-orange);
+  outline-offset: 1px;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color var(--transition-base);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  background-color: rgba(245, 133, 41, 0.12);
+}
+
 /* --- Scrollbar --- */
 ::-webkit-scrollbar {
   width: 6px;

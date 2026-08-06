@@ -40,6 +40,10 @@
   border-color: rgba(245, 133, 41, 0.25);
 }
 
+.automation-card--soon {
+  opacity: 0.75;
+}
+
 .automation-card__icon {
   flex-shrink: 0;
   width: 44px;
@@ -64,9 +68,21 @@
 }
 
 .automation-card__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.88rem;
   font-weight: 700;
   color: var(--color-navy);
+}
+
+.automation-card__badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-badge);
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--color-gold);
 }
 
 .automation-card__text {
@@ -90,6 +106,11 @@
 
 .automation-toggle--on {
   background: var(--color-orange);
+}
+
+.automation-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .automation-toggle__knob {

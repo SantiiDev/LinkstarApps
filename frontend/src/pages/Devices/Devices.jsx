@@ -6,17 +6,6 @@ import TrendChart from '../../components/TrendChart/TrendChart';
 import './Devices.css';
 
 /* ─── Shared icons ─────────────────────────────────────────── */
-function NfcIcon({ size = 24 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36" />
-      <path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58" />
-      <path d="M12.91 4.1a16.1 16.1 0 0 1 0 15.8" />
-      <path d="M16.37 2a20.16 20.16 0 0 1 0 20" />
-    </svg>
-  );
-}
-
 function QrIcon({ size = 24 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -28,9 +17,31 @@ function QrIcon({ size = 24 }) {
   );
 }
 
-function DeviceTypeIcon({ type, size = 24 }) {
-  return type === 'nfc' ? <NfcIcon size={size} /> : <QrIcon size={size} />;
+function GoogleMapsIcon({ size = 24 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
+    </svg>
+  );
 }
+
+function InstagramIcon({ size = 24 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="6" />
+      <circle cx="12" cy="12" r="4.5" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
+
+/* `type` is the destination the expositor's NFC/QR redirects to — every
+   Linkstar device has both built in, this isn't hardware. */
+function DeviceTypeIcon({ type, size = 24 }) {
+  return type === 'google' ? <GoogleMapsIcon size={size} /> : <InstagramIcon size={size} />;
+}
+
+const TYPE_LABELS = { google: 'Expositor Google Maps', instagram: 'Expositor Instagram' };
 
 /* ─── Sparkline bar mini-chart ──────────────────────────────── */
 function SparkLine({ data, inactive, className = '' }) {
@@ -49,10 +60,24 @@ function SparkLine({ data, inactive, className = '' }) {
 }
 
 /* ─── Device Detail Modal ────────────────────────────────────── */
-function DeviceModal({ device, onClose }) {
+function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(null);
+
   if (!device) return null;
   const max = Math.max(...device.weeklyScans, 1);
   const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+  function startEditing() {
+    setForm({ name: device.name, location: device.location, type: device.type });
+    setEditing(true);
+  }
+
+  function handleSave(e) {
+    e.preventDefault();
+    onSave({ ...device, ...form });
+    setEditing(false);
+  }
 
   return (
     <div className="device-modal-overlay" onClick={onClose}>
@@ -80,81 +105,116 @@ function DeviceModal({ device, onClose }) {
 
         {/* Body */}
         <div className="device-modal__body">
-          {/* KPI row */}
-          <div className="device-modal__stats-row">
-            <div className="device-modal__stat-box">
-              <span className="device-modal__stat-val" style={{ color: 'var(--color-orange)' }}>
-                {device.scans.toLocaleString()}
-              </span>
-              <span className="device-modal__stat-lbl">Escaneos</span>
-            </div>
-            <div className="device-modal__stat-box">
-              <span className="device-modal__stat-val" style={{ color: 'var(--color-gold)' }}>
-                {device.reviews}
-              </span>
-              <span className="device-modal__stat-lbl">Reseñas</span>
-            </div>
-            <div className="device-modal__stat-box">
-              <span className="device-modal__stat-val" style={{ color: 'var(--color-forest)' }}>
-                {device.conversion}%
-              </span>
-              <span className="device-modal__stat-lbl">Conversión</span>
-            </div>
-          </div>
+          {editing ? (
+            /* Edit form */
+            <form id="device-edit-form" className="device-edit-form" onSubmit={handleSave}>
+              <label className="device-edit-form__field">
+                <span>Nombre</span>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  required
+                  autoFocus
+                />
+              </label>
+              <label className="device-edit-form__field">
+                <span>Ubicación</span>
+                <select value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}>
+                  {ALL_LOCATIONS.map(l => (
+                    <option key={l.id} value={l.name}>{l.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="device-edit-form__field">
+                <span>Tipo</span>
+                <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                  <option value="google">Expositor Google Maps</option>
+                  <option value="instagram">Expositor Instagram</option>
+                </select>
+              </label>
+            </form>
+          ) : (
+            <>
+              {/* KPI row */}
+              <div className="device-modal__stats-row">
+                <div className="device-modal__stat-box">
+                  <span className="device-modal__stat-val" style={{ color: 'var(--color-orange)' }}>
+                    {device.scans.toLocaleString()}
+                  </span>
+                  <span className="device-modal__stat-lbl">Escaneos</span>
+                </div>
+                <div className="device-modal__stat-box">
+                  <span className="device-modal__stat-val" style={{ color: 'var(--color-gold)' }}>
+                    {device.reviews}
+                  </span>
+                  <span className="device-modal__stat-lbl">Reseñas</span>
+                </div>
+                <div className="device-modal__stat-box">
+                  <span className="device-modal__stat-val" style={{ color: 'var(--color-forest)' }}>
+                    {device.conversion}%
+                  </span>
+                  <span className="device-modal__stat-lbl">Conversión</span>
+                </div>
+              </div>
 
-          {/* Info grid */}
-          <div className="device-modal__info-grid">
-            <div className="device-modal__info-item">
-              <div className="device-modal__info-key">Ubicación</div>
-              <div className="device-modal__info-val">{device.location}</div>
-            </div>
-            <div className="device-modal__info-item">
-              <div className="device-modal__info-key">Zona</div>
-              <div className="device-modal__info-val">{device.zone}</div>
-            </div>
-            <div className="device-modal__info-item">
-              <div className="device-modal__info-key">Empleado asignado</div>
-              <div className="device-modal__info-val">{device.assignedTo}</div>
-            </div>
-            <div className="device-modal__info-item">
-              <div className="device-modal__info-key">Activo desde</div>
-              <div className="device-modal__info-val">{device.activeSince}</div>
-            </div>
-            <div className="device-modal__info-item">
-              <div className="device-modal__info-key">Último escaneo</div>
-              <div className="device-modal__info-val">{device.lastScan}</div>
-            </div>
-            <div className="device-modal__info-item">
-              <div className="device-modal__info-key">Tipo</div>
-              <div className="device-modal__info-val">{device.type === 'nfc' ? 'Tarjeta NFC' : 'QR Expositor'}</div>
-            </div>
-          </div>
+              {/* Info grid */}
+              <div className="device-modal__info-grid">
+                <div className="device-modal__info-item">
+                  <div className="device-modal__info-key">Ubicación</div>
+                  <div className="device-modal__info-val">{device.location}</div>
+                </div>
+                <div className="device-modal__info-item">
+                  <div className="device-modal__info-key">Activo desde</div>
+                  <div className="device-modal__info-val">{device.activeSince}</div>
+                </div>
+                <div className="device-modal__info-item">
+                  <div className="device-modal__info-key">Último escaneo</div>
+                  <div className="device-modal__info-val">{device.lastScan}</div>
+                </div>
+                <div className="device-modal__info-item">
+                  <div className="device-modal__info-key">Tipo</div>
+                  <div className="device-modal__info-val">{TYPE_LABELS[device.type]}</div>
+                </div>
+              </div>
 
-          {/* Mini chart */}
-          <div className="device-modal__chart-title">Escaneos últimos 7 días</div>
-          <div className="device-modal__sparkline">
-            {device.weeklyScans.map((v, i) => (
-              <div
-                key={i}
-                className="device-modal__spark-bar"
-                style={{ height: `${(v / max) * 100}%` }}
-                title={`${days[i]}: ${v}`}
-              />
-            ))}
-          </div>
+              {/* Mini chart */}
+              <div className="device-modal__chart-title">Escaneos últimos 7 días</div>
+              <div className="device-modal__sparkline">
+                {device.weeklyScans.map((v, i) => (
+                  <div
+                    key={i}
+                    className="device-modal__spark-bar"
+                    style={{ height: `${(v / max) * 100}%` }}
+                    title={`${days[i]}: ${v}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Footer actions */}
         <div className="device-modal__footer">
-          <button className="device-modal__action-btn device-modal__action-btn--primary">
-            Ver historial completo
-          </button>
-          <button className="device-modal__action-btn device-modal__action-btn--secondary">
-            Editar
-          </button>
-          <button className="device-modal__action-btn device-modal__action-btn--danger">
-            {device.status === 'active' ? 'Desactivar' : 'Activar'}
-          </button>
+          {editing ? (
+            <>
+              <button type="button" className="device-modal__action-btn device-modal__action-btn--secondary" onClick={() => setEditing(false)}>
+                Cancelar
+              </button>
+              <button type="submit" form="device-edit-form" className="device-modal__action-btn device-modal__action-btn--primary">
+                Guardar cambios
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="device-modal__action-btn device-modal__action-btn--secondary" onClick={startEditing}>
+                Editar
+              </button>
+              <button className="device-modal__action-btn device-modal__action-btn--danger" onClick={() => onToggleStatus(device)}>
+                {device.status === 'active' ? 'Desactivar' : 'Activar'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -210,14 +270,7 @@ function DeviceCardGrid({ devices, onSelect }) {
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
                 </svg>
-                {device.location} — {device.zone}
-              </div>
-
-              <div className="device-full-card__assigned">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                </svg>
-                {device.assignedTo}
+                {device.location}
               </div>
 
               {/* Sparkline */}
@@ -297,11 +350,11 @@ function DeviceTable({ devices, onSelect }) {
                   </div>
                   <div>
                     <div className="table-name">{device.name}</div>
-                    <div className="table-type">{device.type === 'nfc' ? 'Tarjeta NFC' : 'QR Expositor'}</div>
+                    <div className="table-type">{TYPE_LABELS[device.type]}</div>
                   </div>
                 </div>
               </td>
-              <td>{device.location} — {device.zone}</td>
+              <td>{device.location}</td>
               <td>
                 <span className={`table-badge table-badge--${device.status}`}>
                   <span className="table-badge-dot" />
@@ -379,11 +432,11 @@ function ClaimDeviceModal({ onClose }) {
 
 /* ─── Main Page ─────────────────────────────────────────────── */
 const FILTER_TABS = [
-  { id: 'all',      label: 'Todos' },
-  { id: 'nfc',      label: 'NFC' },
-  { id: 'qr',       label: 'QR' },
-  { id: 'active',   label: 'Activos' },
-  { id: 'inactive', label: 'Inactivos' },
+  { id: 'all',       label: 'Todos' },
+  { id: 'google',    label: 'Google Maps' },
+  { id: 'instagram', label: 'Instagram' },
+  { id: 'active',    label: 'Activos' },
+  { id: 'inactive',  label: 'Inactivos' },
 ];
 
 /* Last 7 calendar days of aggregate scans across all devices, for the activity chart */
@@ -402,6 +455,7 @@ function buildDailyScans() {
 }
 
 export default function DevicesPage({ onNavigate, onNavigateSettings }) {
+  const [devices, setDevices]       = useState(ALL_DEVICES);
   const [search, setSearch]         = useState('');
   const [filter, setFilter]         = useState('all');
   const [viewMode, setViewMode]     = useState('grid');   // 'grid' | 'table'
@@ -409,30 +463,39 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
   const [claiming, setClaiming]     = useState(false);
 
   /* Derived stats */
-  const totalActive = ALL_DEVICES.filter(d => d.status === 'active').length;
-  const totalScans  = ALL_DEVICES.reduce((sum, d) => sum + d.scans, 0);
+  const totalActive = devices.filter(d => d.status === 'active').length;
+  const totalScans  = devices.reduce((sum, d) => sum + d.scans, 0);
 
   /* Filtered list */
   const filtered = useMemo(() => {
-    return ALL_DEVICES.filter(d => {
+    return devices.filter(d => {
       const matchSearch =
         d.name.toLowerCase().includes(search.toLowerCase()) ||
-        d.location.toLowerCase().includes(search.toLowerCase()) ||
-        d.zone.toLowerCase().includes(search.toLowerCase()) ||
-        d.assignedTo.toLowerCase().includes(search.toLowerCase());
+        d.location.toLowerCase().includes(search.toLowerCase());
 
       const matchFilter =
-        filter === 'all'      ? true :
-        filter === 'nfc'      ? d.type === 'nfc' :
-        filter === 'qr'       ? d.type === 'qr' :
-        filter === 'active'   ? d.status === 'active' :
-        filter === 'inactive' ? d.status === 'inactive' : true;
+        filter === 'all'       ? true :
+        filter === 'google'    ? d.type === 'google' :
+        filter === 'instagram' ? d.type === 'instagram' :
+        filter === 'active'    ? d.status === 'active' :
+        filter === 'inactive'  ? d.status === 'inactive' : true;
 
       return matchSearch && matchFilter;
     });
-  }, [search, filter]);
+  }, [devices, search, filter]);
 
   const { totals: dailyScans, labels: dayLabels } = useMemo(buildDailyScans, []);
+
+  function handleSaveDevice(updated) {
+    setDevices(prev => prev.map(d => (d.id === updated.id ? updated : d)));
+    setSelected(updated);
+  }
+
+  function handleToggleStatus(device) {
+    const updated = { ...device, status: device.status === 'active' ? 'inactive' : 'active' };
+    setDevices(prev => prev.map(d => (d.id === updated.id ? updated : d)));
+    setSelected(updated);
+  }
 
   const topLocations = useMemo(
     () => [...ALL_LOCATIONS].sort((a, b) => b.totalScans - a.totalScans).slice(0, 3),
@@ -446,11 +509,11 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
       <div className="devices-page__header">
         <div className="devices-page__title-block">
           <h1 className="devices-page__title">Dispositivos</h1>
-          <p className="devices-page__subtitle">Gestión de dispositivos NFC y QR de Linkstar</p>
+          <p className="devices-page__subtitle">Gestión de expositores Linkstar (NFC + QR en un mismo dispositivo)</p>
         </div>
 
         <div className="devices-page__actions">
-          <button className="devices-page__btn-icon" title="Cada dispositivo NFC o QR redirige a tu ficha de Google para sumar reseñas." aria-label="Información">
+          <button className="devices-page__btn-icon" title="Cada expositor tiene NFC y QR incorporados, y redirige a tu ficha de Google Maps o a tu Instagram según el tipo." aria-label="Información">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
@@ -494,7 +557,7 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
               <input
                 className="devices-search__input"
                 type="text"
-                placeholder="Buscar por nombre, ubicación, empleado…"
+                placeholder="Buscar por nombre o ubicación…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
@@ -554,7 +617,10 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
           </svg>
         </span>
         <span className="devices-teaser__body">
-          <span className="devices-teaser__title">Ranking de Empleados</span>
+          <span className="devices-teaser__title">
+            Ranking de Empleados
+            <span className="devices-teaser__badge">Próximamente</span>
+          </span>
           <span className="devices-teaser__text">Controlá qué empleado consigue más reseñas en Google con cada dispositivo Linkstar.</span>
         </span>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -621,7 +687,14 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
       </div>
 
       {/* ── Detail Modal ── */}
-      {selected && <DeviceModal device={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <DeviceModal
+          device={selected}
+          onClose={() => setSelected(null)}
+          onSave={handleSaveDevice}
+          onToggleStatus={handleToggleStatus}
+        />
+      )}
 
       {/* ── Claim device modal ── */}
       {claiming && <ClaimDeviceModal onClose={() => setClaiming(false)} />}

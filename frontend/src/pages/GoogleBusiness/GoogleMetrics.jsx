@@ -42,7 +42,7 @@ export default function GoogleMetrics() {
       </div>
 
       <div className="gb-two-col">
-        <div className="gb-card">
+        <div className="gb-card chart-card">
           <div className="gb-card__header">
             <div>
               <h3 className="gb-card__title">Vistas del perfil</h3>

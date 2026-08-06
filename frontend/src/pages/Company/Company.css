@@ -152,16 +152,12 @@
 
 /* ── Negative reviews alert ── */
 .company-alert {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+  position: relative;
   width: 100%;
-  padding: 1.1rem 1.4rem;
   margin-bottom: 1.75rem;
   border-radius: var(--radius-card);
   background: rgba(239, 68, 68, 0.06);
   border: 1px solid rgba(239, 68, 68, 0.18);
-  text-align: left;
   transition: all var(--transition-base);
   animation: fadeInUp 0.55s ease both;
   animation-delay: 0.14s;
@@ -170,6 +166,35 @@
 .company-alert:hover {
   background: rgba(239, 68, 68, 0.1);
   transform: translateY(-2px);
+}
+
+.company-alert__trigger {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 1.1rem 2.75rem 1.1rem 1.4rem;
+  text-align: left;
+  background: transparent;
+}
+
+.company-alert__close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-base);
+}
+
+.company-alert__close:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-danger);
 }
 
 .company-alert__icon {

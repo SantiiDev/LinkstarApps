@@ -279,19 +279,17 @@
 }
 
 /* ── Card Grid ──
-   flex (not CSS grid) so an incomplete last row centers itself instead
-   of leaving stray empty tracks — grid-template-columns would keep the
-   same column count on every row and strand a lone trailing card. */
+   auto-fill (not auto-fit) keeps every row's column tracks the same
+   width even when the last row has fewer cards — auto-fit collapses
+   the empty tracks and stretches the leftover cards to fill the row,
+   which is what made the last row's cards wider than the ones above. */
 .devices-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.25rem;
 }
 
 .device-full-card {
-  flex: 1 1 300px;
-  max-width: 400px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -354,14 +352,14 @@
   justify-content: center;
 }
 
-.device-full-card__icon-wrap--nfc {
+.device-full-card__icon-wrap--google {
   background: linear-gradient(135deg, rgba(245,133,41,0.15), rgba(245,158,11,0.08));
   color: var(--color-orange);
 }
 
-.device-full-card__icon-wrap--qr {
-  background: linear-gradient(135deg, rgba(26,38,57,0.1), rgba(26,38,57,0.05));
-  color: var(--color-navy);
+.device-full-card__icon-wrap--instagram {
+  background: linear-gradient(135deg, rgba(193,53,132,0.15), rgba(131,58,180,0.08));
+  color: #C13584;
 }
 
 .device-full-card__badge {
@@ -408,15 +406,6 @@
   align-items: center;
   gap: 0.35rem;
   font-size: 0.78rem;
-  color: var(--color-text-secondary);
-  margin-bottom: 0.2rem;
-}
-
-.device-full-card__assigned {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.75rem;
   color: var(--color-text-secondary);
   margin-bottom: 1rem;
 }
@@ -604,8 +593,8 @@
   flex-shrink: 0;
 }
 
-.table-device-icon--nfc { background: rgba(245,133,41,0.1); color: var(--color-orange); }
-.table-device-icon--qr  { background: rgba(26,38,57,0.08);  color: var(--color-navy); }
+.table-device-icon--google    { background: rgba(245,133,41,0.1); color: var(--color-orange); }
+.table-device-icon--instagram { background: rgba(193,53,132,0.1); color: #C13584; }
 
 .table-name { font-weight: 700; }
 .table-type {
@@ -716,14 +705,14 @@
   justify-content: center;
 }
 
-.device-modal__icon--nfc {
+.device-modal__icon--google {
   background: linear-gradient(135deg, rgba(245,133,41,0.18), rgba(245,158,11,0.1));
   color: var(--color-orange);
 }
 
-.device-modal__icon--qr {
-  background: linear-gradient(135deg, rgba(26,38,57,0.12), rgba(26,38,57,0.06));
-  color: var(--color-navy);
+.device-modal__icon--instagram {
+  background: linear-gradient(135deg, rgba(193,53,132,0.18), rgba(131,58,180,0.1));
+  color: #C13584;
 }
 
 .device-modal__name {
@@ -815,6 +804,43 @@
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--color-navy);
+}
+
+/* Edit form (replaces the read-only body while editing) */
+.device-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.device-edit-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.device-edit-form__field span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.device-edit-form__field input,
+.device-edit-form__field select {
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.7rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  font-size: 0.85rem;
+  color: var(--color-navy);
+  font-family: inherit;
+}
+
+.device-edit-form__field input:focus,
+.device-edit-form__field select:focus {
+  outline: none;
+  border-color: var(--color-orange);
 }
 
 /* Modal sparkline */
@@ -948,9 +974,21 @@
 }
 
 .devices-teaser__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.9rem;
   font-weight: 800;
   color: var(--color-navy);
+}
+
+.devices-teaser__badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-badge);
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--color-gold);
 }
 
 .devices-teaser__text {
@@ -1183,7 +1221,7 @@
 
 /* ── Empty state ── */
 .devices-empty {
-  flex: 1 1 100%;
+  grid-column: 1 / -1;
   text-align: center;
   padding: 4rem 2rem;
   color: var(--color-text-secondary);
@@ -1243,7 +1281,7 @@
   .devices-card__header { flex-direction: column; align-items: flex-start; }
   .devices-card__body { padding: 1rem; }
   .devices-toolbar { gap: 0.75rem; }
-  .device-full-card { flex-basis: 100%; max-width: 100%; }
+  .devices-grid { grid-template-columns: 1fr; }
   .devices-activity__header { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
   .device-modal__stats-row { grid-template-columns: 1fr 1fr 1fr; }
   .device-modal__info-grid { grid-template-columns: 1fr; }

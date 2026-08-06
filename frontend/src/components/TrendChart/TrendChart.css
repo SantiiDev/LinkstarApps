@@ -20,3 +20,25 @@
   color: var(--color-text-secondary);
   font-weight: 600;
 }
+
+/* Opt-in for chart cards sitting next to a taller sibling in a two-col
+   grid (grid stretches the shorter card, which otherwise leaves the
+   fixed-height chart floating with dead space below it) — the chart
+   grows to fill that stretched height instead. */
+.chart-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-card .trend-chart {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chart-card .trend-chart__svg {
+  flex: 1;
+  height: auto;
+  min-height: 160px;
+}

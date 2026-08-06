@@ -21,7 +21,7 @@ const INITIAL_AUTOMATIONS = [
   {
     id: 'weekly-summary',
     title: 'Resumen semanal por email',
-    text: 'Recibí todos los lunes un resumen de reseñas, escaneos y ranking de empleados.',
+    text: 'Recibí todos los lunes un resumen de reseñas y escaneos.',
     icon: 'mail',
     enabled: true,
   },
@@ -45,6 +45,7 @@ const INITIAL_AUTOMATIONS = [
     text: 'Notificá automáticamente cuando un empleado alcanza su meta mensual de reseñas.',
     icon: 'award',
     enabled: false,
+    comingSoon: true,
   },
 ];
 
@@ -67,7 +68,7 @@ export default function Automations() {
   const activeCount = automations.filter((a) => a.enabled).length;
 
   function toggle(id) {
-    setAutomations((prev) => prev.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a)));
+    setAutomations((prev) => prev.map((a) => (a.id === id && !a.comingSoon ? { ...a, enabled: !a.enabled } : a)));
   }
 
   return (
@@ -87,17 +88,22 @@ export default function Automations() {
 
       <div className="automations-list">
         {automations.map((a) => (
-          <div key={a.id} className={`automation-card ${a.enabled ? 'automation-card--on' : ''}`}>
+          <div key={a.id} className={`automation-card ${a.enabled ? 'automation-card--on' : ''} ${a.comingSoon ? 'automation-card--soon' : ''}`}>
             <div className={`automation-card__icon ${a.enabled ? 'automation-card__icon--on' : ''}`}>
               <Icon name={a.icon} />
             </div>
             <div className="automation-card__body">
-              <div className="automation-card__title">{a.title}</div>
+              <div className="automation-card__title">
+                {a.title}
+                {a.comingSoon && <span className="automation-card__badge">Próximamente</span>}
+              </div>
               <p className="automation-card__text">{a.text}</p>
             </div>
             <button
               className={`automation-toggle ${a.enabled ? 'automation-toggle--on' : ''}`}
               onClick={() => toggle(a.id)}
+              disabled={a.comingSoon}
+              title={a.comingSoon ? 'Disponible próximamente' : undefined}
               role="switch"
               aria-checked={a.enabled}
               aria-label={a.title}
