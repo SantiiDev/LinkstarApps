@@ -21,7 +21,10 @@ function generateOrderNumber() {
 async function sendOrderEmail({ orderNumber, customer, items, total }) {
   const origin = window.location.origin;
   const itemsText = items
-    .map(i => `• ${i.name} (${i.color === 'negro' ? 'Negro' : 'Blanco'}) x${i.qty} — $${(i.price * i.qty).toLocaleString('es-AR')}\n  Imagen: ${origin}${i.image}`)
+    .map(i => i.isBundle
+      ? `• ${i.name} — $${(i.price * i.qty).toLocaleString('es-AR')}\n` +
+        i.items.map(s => `  - ${s.label}: ${s.color === 'negro' ? 'Negro' : 'Blanco'} (${origin}${s.image})`).join('\n')
+      : `• ${i.name} (${i.color === 'negro' ? 'Negro' : 'Blanco'}) x${i.qty} — $${(i.price * i.qty).toLocaleString('es-AR')}\n  Imagen: ${origin}${i.image}`)
     .join('\n\n');
 
   const response = await fetch('https://api.web3forms.com/submit', {
@@ -304,12 +307,20 @@ export default function Checkout({ onBack }) {
             <ul className="checkout__summary-items">
               {items.map(item => (
                 <li className="checkout__summary-item" key={item.key}>
-                  <div className={`checkout__summary-img checkout__summary-img--${item.color}`}>
-                    <img src={item.image} alt={item.name} loading="lazy" />
+                  <div className={`checkout__summary-img checkout__summary-img--${item.isBundle ? item.items[0].color : item.color}`}>
+                    <img src={item.isBundle ? item.items[0].image : item.image} alt={item.name} loading="lazy" />
                   </div>
                   <div className="checkout__summary-info">
                     <span className="checkout__summary-name">{item.name}</span>
-                    <span className="checkout__summary-meta">{item.color === 'negro' ? 'Negro' : 'Blanco'} × {item.qty}</span>
+                    {item.isBundle ? (
+                      item.items.map((sub, i) => (
+                        <span key={i} className="checkout__summary-meta">
+                          {sub.label}: {sub.color === 'negro' ? 'Negro' : 'Blanco'}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="checkout__summary-meta">{item.color === 'negro' ? 'Negro' : 'Blanco'} × {item.qty}</span>
+                    )}
                   </div>
                   <span className="checkout__summary-price">${(item.price * item.qty).toLocaleString('es-AR')}</span>
                 </li>

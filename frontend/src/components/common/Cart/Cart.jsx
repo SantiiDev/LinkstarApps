@@ -1,8 +1,16 @@
+import { useEffect } from 'react';
 import { useCart } from '../../../context/CartContext';
 import './Cart.css';
 
 export default function Cart({ onCheckout }) {
   const { items, isOpen, setIsOpen, removeItem, updateQty, totalItems, totalPrice } = useCart();
+
+  // Bloquea el scroll de la página de fondo mientras el carrito está abierto,
+  // así el scroll siempre queda contenido dentro del drawer.
+  useEffect(() => {
+    document.body.style.overflow = isOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
 
   return (
     <>
@@ -50,8 +58,8 @@ export default function Cart({ onCheckout }) {
             <ul className="cart-drawer__items">
               {items.map(item => (
                 <li className="cart-item" key={item.key}>
-                  <div className={`cart-item__image-wrap cart-item__image-wrap--${item.color}`}>
-                    <img src={item.image} alt={item.name} className="cart-item__image" loading="lazy" />
+                  <div className={`cart-item__image-wrap cart-item__image-wrap--${item.isBundle ? item.items[0].color : item.color}`}>
+                    <img src={item.isBundle ? item.items[0].image : item.image} alt={item.name} className="cart-item__image" loading="lazy" />
                   </div>
                   <div className="cart-item__info">
                     <div className="cart-item__top">
@@ -62,13 +70,25 @@ export default function Cart({ onCheckout }) {
                         </svg>
                       </button>
                     </div>
-                    <span className="cart-item__color">{item.color === 'negro' ? 'Negro' : 'Blanco'}</span>
-                    <div className="cart-item__bottom">
-                      <div className="cart-item__qty">
-                        <button onClick={() => updateQty(item.key, item.qty - 1)} aria-label="Reducir">−</button>
-                        <span>{item.qty}</span>
-                        <button onClick={() => updateQty(item.key, item.qty + 1)} aria-label="Aumentar">+</button>
+                    {item.isBundle ? (
+                      <div className="cart-item__bundle-colors">
+                        {item.items.map((sub, i) => (
+                          <span key={i} className="cart-item__color">
+                            {sub.label}: {sub.color === 'negro' ? 'Negro' : 'Blanco'}
+                          </span>
+                        ))}
                       </div>
+                    ) : (
+                      <span className="cart-item__color">{item.color === 'negro' ? 'Negro' : 'Blanco'}</span>
+                    )}
+                    <div className={`cart-item__bottom ${item.isBundle ? 'cart-item__bottom--bundle' : ''}`}>
+                      {!item.isBundle && (
+                        <div className="cart-item__qty">
+                          <button onClick={() => updateQty(item.key, item.qty - 1)} aria-label="Reducir">−</button>
+                          <span>{item.qty}</span>
+                          <button onClick={() => updateQty(item.key, item.qty + 1)} aria-label="Aumentar">+</button>
+                        </div>
+                      )}
                       <span className="cart-item__price">${(item.price * item.qty).toLocaleString('es-AR')}</span>
                     </div>
                   </div>

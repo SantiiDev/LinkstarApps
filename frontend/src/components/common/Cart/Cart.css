@@ -92,6 +92,7 @@
 .cart-drawer__body {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-4) var(--space-6);
 }
 
@@ -220,11 +221,21 @@
   text-transform: capitalize;
 }
 
+.cart-item__bundle-colors {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .cart-item__bottom {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-top: var(--space-1);
+}
+
+.cart-item__bottom--bundle {
+  justify-content: flex-end;
 }
 
 .cart-item__qty {
