@@ -1,0 +1,106 @@
+/* ============================================
+   APP SHELL — sidebar + content column layout
+   ============================================ */
+
+.app-shell {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+
+.app-shell__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-shell__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 2rem;
+  background: linear-gradient(90deg, rgba(245, 133, 41, 0.1), rgba(245, 158, 11, 0.06));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.app-shell__contact {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-navy);
+  opacity: 0.8;
+  transition: opacity var(--transition-base);
+}
+
+.app-shell__contact:hover {
+  opacity: 1;
+  color: var(--color-orange);
+}
+
+.app-shell__topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-shell__icon-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--color-navy);
+  transition: all var(--transition-base);
+}
+
+.app-shell__icon-btn:hover {
+  background: var(--color-white);
+  color: var(--color-orange);
+}
+
+.app-shell__icon-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-orange);
+  border: 1.5px solid var(--color-white);
+}
+
+.app-shell__content {
+  min-height: calc(100vh - 44px);
+}
+
+@media (max-width: 768px) {
+  .app-shell__topbar {
+    padding: 0 1rem;
+  }
+
+  .app-shell__contact {
+    font-size: 0.68rem;
+  }
+
+  .app-shell__contact svg {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-shell__contact {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

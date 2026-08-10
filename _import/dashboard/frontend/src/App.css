@@ -1,0 +1,40 @@
+/* ============================================
+   APP LAYOUT
+   ============================================ */
+
+.app {
+  min-height: 100vh;
+  background: transparent;
+}
+
+.app-loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+/* Shared page footer (used across dashboard pages) */
+.dashboard__footer {
+  text-align: center;
+  padding: 2rem 0;
+  margin-top: 2rem;
+  animation: fadeIn 1s ease both;
+  animation-delay: 0.8s;
+}
+
+.dashboard__footer-text {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.dashboard__footer-brand {
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.dashboard__footer-dot {
+  color: var(--color-orange);
+}

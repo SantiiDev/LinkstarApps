@@ -1,0 +1,115 @@
+/* ============================================
+   STAT CARD — shared glass KPI-style card
+   ============================================ */
+
+.stat-card {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  padding: 1.5rem;
+  box-shadow: var(--glass-shadow);
+  transition: all var(--transition-base);
+  animation: fadeInUp 0.6s ease both;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.08) 60%, transparent 100%);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  pointer-events: none;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.stat-card:hover {
+  background: var(--glass-bg-hover);
+  -webkit-backdrop-filter: var(--glass-blur-hover);
+  backdrop-filter: var(--glass-blur-hover);
+  transform: translateY(-5px) scale(1.01);
+  box-shadow: var(--glass-shadow-hover);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+.stat-card:hover::before {
+  opacity: 1;
+}
+
+.stat-card--orange::before { background: var(--color-orange); }
+.stat-card--gold::before { background: var(--color-gold); }
+.stat-card--forest::before { background: var(--color-forest); }
+.stat-card--navy::before { background: var(--color-navy); }
+
+.stat-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.stat-card__icon-wrapper {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-card__icon-wrapper--orange { background: rgba(245, 133, 41, 0.1); color: var(--color-orange); }
+.stat-card__icon-wrapper--gold { background: rgba(245, 158, 11, 0.1); color: var(--color-gold); }
+.stat-card__icon-wrapper--forest { background: rgba(16, 185, 129, 0.1); color: var(--color-forest); }
+.stat-card__icon-wrapper--navy { background: rgba(26, 38, 57, 0.1); color: var(--color-navy); }
+
+.stat-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-badge);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.stat-card__badge--up { background: rgba(16, 185, 129, 0.1); color: var(--color-forest); }
+.stat-card__badge--down { background: rgba(239, 68, 68, 0.1); color: var(--color-danger); }
+
+.stat-card__value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  line-height: 1.1;
+  margin-bottom: 0.25rem;
+  animation: countUp 0.8s ease both;
+}
+
+.stat-card__label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 480px) {
+  .stat-card__value {
+    font-size: 1.75rem;
+  }
+}

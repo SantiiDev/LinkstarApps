@@ -1,0 +1,158 @@
+/* ============================================
+   DATE FIELD — custom calendar popup (replaces
+   native <input type="date"> and its OS picker)
+   ============================================ */
+
+.ls-date {
+  position: relative;
+}
+
+.ls-date__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  cursor: pointer;
+}
+
+.ls-date__trigger:focus-visible {
+  outline: 2px solid var(--color-orange);
+  outline-offset: 2px;
+}
+
+.ls-date__label {
+  flex: 1;
+  text-align: left;
+}
+
+.ls-date__label--placeholder {
+  color: var(--color-text-secondary);
+}
+
+.ls-date__trigger svg {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.ls-date__panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 60;
+  width: 300px;
+  background: var(--color-white);
+  border: 1px solid var(--glass-border);
+  border-radius: 1rem;
+  box-shadow: 0 14px 34px rgba(26, 38, 57, 0.18);
+  padding: 1rem;
+  animation: scaleIn 0.15s ease both;
+}
+
+.ls-date__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.ls-date__month {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.ls-date__nav-group {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.ls-date__nav {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-navy);
+  transition: all var(--transition-base);
+}
+
+.ls-date__nav svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ls-date__nav:hover {
+  background: var(--color-light);
+  color: var(--color-orange);
+}
+
+.ls-date__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 0.3rem;
+}
+
+.ls-date__weekdays span {
+  display: block;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.ls-date__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.ls-date__day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-navy);
+  transition: all var(--transition-base);
+}
+
+.ls-date__day:hover {
+  background: var(--color-light);
+}
+
+.ls-date__day--muted {
+  color: rgba(27, 26, 46, 0.28);
+}
+
+.ls-date__day--today {
+  box-shadow: inset 0 0 0 1.5px var(--color-orange);
+}
+
+.ls-date__day--selected {
+  background: var(--color-orange);
+  color: white;
+  box-shadow: none;
+}
+
+.ls-date__clear {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(26, 38, 57, 0.08);
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.ls-date__clear:hover {
+  color: var(--color-danger);
+}

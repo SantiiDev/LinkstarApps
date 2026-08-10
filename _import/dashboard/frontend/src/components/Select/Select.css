@@ -1,0 +1,89 @@
+/* ============================================
+   SELECT — custom dropdown (replaces native <select>
+   so the open menu follows the site's own styling
+   instead of the browser/OS default popup)
+   ============================================ */
+
+.ls-select {
+  position: relative;
+}
+
+.ls-select__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.ls-select__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ls-select__trigger:focus-visible {
+  outline: 2px solid var(--color-orange);
+  outline-offset: 2px;
+}
+
+.ls-select__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.ls-select__chevron {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  transition: transform var(--transition-base);
+}
+
+.ls-select__trigger[aria-expanded="true"] .ls-select__chevron {
+  transform: rotate(180deg);
+  color: var(--color-orange);
+}
+
+.ls-select__menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  min-width: 100%;
+  z-index: 60;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--color-white);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.85rem;
+  box-shadow: 0 14px 34px rgba(26, 38, 57, 0.18);
+  padding: 0.4rem;
+  animation: scaleIn 0.15s ease both;
+}
+
+.ls-select__option {
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.55rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-navy);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--transition-base);
+}
+
+.ls-select__option:hover {
+  background: var(--color-light);
+}
+
+.ls-select__option--selected {
+  background: rgba(245, 133, 41, 0.1);
+  color: var(--color-orange);
+  font-weight: 700;
+}
+
+.ls-select__option--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
