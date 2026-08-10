@@ -1,0 +1,14 @@
+{
+  "name": "linkstar",
+  "compatibility_date": "2026-08-07",
+  "account_id": "5991443b4284ab352cac4849e38ddf50",
+  "workers_dev": true,
+  "route": {
+    "pattern": "linkstarapp.com/*",
+    "zone_name": "linkstarapp.com"
+  },
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

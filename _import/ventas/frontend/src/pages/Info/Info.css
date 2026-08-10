@@ -1,0 +1,89 @@
+/* ========================================
+   INFO PAGES (Legal, Privacy, About, etc.)
+   ======================================== */
+
+.info-page {
+  padding-top: calc(var(--navbar-height) + var(--space-8));
+  padding-bottom: var(--space-12);
+  background-color: var(--color-cream);
+  min-height: 100vh;
+}
+
+.info-page__inner {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.info-page__title {
+  font-size: var(--font-size-3xl);
+  font-weight: 800;
+  color: var(--color-navy);
+  margin-bottom: var(--space-8);
+  line-height: 1.1;
+  letter-spacing: -1px;
+}
+
+.info-page__content {
+  background: #ffffff;
+  padding: var(--space-8);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-navy);
+}
+
+.info-page__content h2 {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  margin-top: var(--space-8);
+  margin-bottom: var(--space-4);
+  color: var(--color-navy);
+}
+
+.info-page__content h2:first-child {
+  margin-top: 0;
+}
+
+.info-page__content h3 {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-3);
+}
+
+.info-page__content p {
+  font-size: var(--font-size-base);
+  line-height: 1.7;
+  margin-bottom: var(--space-4);
+  color: rgba(27, 26, 46, 0.8); /* navy with opacity */
+}
+
+.info-page__content ul, .info-page__content ol {
+  margin-bottom: var(--space-4);
+  padding-left: var(--space-6);
+}
+
+.info-page__content li {
+  font-size: var(--font-size-base);
+  line-height: 1.7;
+  margin-bottom: var(--space-2);
+  color: rgba(27, 26, 46, 0.8);
+}
+
+.info-page__content a {
+  color: var(--color-orange);
+  text-decoration: underline;
+  transition: color var(--transition-fast);
+}
+
+.info-page__content a:hover {
+  color: var(--color-orange-hover);
+}
+
+@media (max-width: 768px) {
+  .info-page__title {
+    font-size: var(--font-size-2xl);
+  }
+  .info-page__content {
+    padding: var(--space-6);
+  }
+}
