@@ -2,6 +2,8 @@ import { useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import Select from '../../components/Select/Select';
 import DateField from '../../components/DateField/DateField';
+import EmployeesPage from '../Employees/Employees';
+import LocationsPage from '../Locations/Locations';
 import './Settings.css';
 
 const TABS = [
@@ -71,6 +73,14 @@ function LocalTab() {
 
   return (
     <div className="settings-panel">
+      {/* Ubicaciones reales (v_location_performance, cruzada con
+          v_device_performance). Esta pestaña reemplazó en su momento a la
+          pantalla propia de Ubicaciones, pero con placeholders: LocationsPage
+          seguía escrita y conectada a datos reales sin ninguna forma de llegar
+          a ella desde la app. Ahora se renderiza acá, sin su encabezado ni su
+          pie propios (`embedded`), porque esta página ya trae los suyos. */}
+      <LocationsPage embedded />
+
       <div className="settings-card">
         <CardHead
           icon="mapPin"
@@ -163,26 +173,13 @@ function TeamTab() {
 
   return (
     <div className="settings-panel">
-      <div className="settings-card">
-        <CardHead
-          icon="users"
-          iconVariant="orange"
-          title="Equipo"
-          badge={<span className="settings-badge settings-badge--soon">Próximamente</span>}
-          subtitle={<p className="settings-card__subtitle">Invitá empleados y gestioná sus permisos.</p>}
-          action={
-            <button type="button" className="settings-save-btn" disabled title="Disponible próximamente">
-              <Icon name="userPlus" width={15} height={15} /> Invitar empleado
-            </button>
-          }
-        />
-
-        <div className="settings-empty-state">
-          <div className="settings-empty-state__icon"><Icon name="users" width={22} height={22} /></div>
-          <p className="settings-empty-state__title">Estamos trabajando en esto.</p>
-          <p className="settings-empty-state__text">Muy pronto vas a poder invitar empleados y asignarles permisos desde acá.</p>
-        </div>
-      </div>
+      {/* Empleados reales (v_employee_leaderboard). Mismo caso que Ubicaciones
+          en la pestaña "Gestión local": la página existía y leía datos reales,
+          pero acá había un placeholder "Próximamente" y ningún camino hasta
+          ella. Se renderiza con `embedded` para no repetir encabezado y pie.
+          Invitar/permisos sigue sin existir — eso necesita `invitations` y
+          `memberships` del 0002, que todavía no tiene UI. */}
+      <EmployeesPage embedded />
 
       <div className="settings-card">
         <CardHead

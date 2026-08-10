@@ -5,11 +5,11 @@ import './LinkstarApp.css';
 const linkstarFaqData = [
   {
     question: '¿Qué es LinkstarApp?',
-    answer: 'La plataforma gratuita donde controlas todos tus dispositivos Linkstar y ves las estadisticas de uso.',
+    answer: 'La plataforma donde controlas todos tus dispositivos Linkstar y ves las estadisticas de uso.',
   },
   {
-    question: '¿De verdad no hay que pagar por la Plataforma?',
-    answer: 'No, viene incluida con la compra de tus dispositivos. Sin suscripciones ni costes ocultos.',
+    question: '¿La plataforma se paga aparte del dispositivo?',
+    answer: 'Sí. El dispositivo se paga una sola vez y la plataforma va por suscripción mensual, sin permanencia: cambias o cancelas cuando quieras. Los planes y lo que incluye cada uno están dentro de LinkstarApp.',
   },
   {
     question: '¿Cómo vinculo los dispositivos Linkstar a mi cuenta?',
@@ -235,13 +235,13 @@ export default function LinkstarApp({ onShop, onContact }) {
         </div>
         <div className="container lapp__hero-inner">
           <div className="lapp__hero-content-wrapper">
-            <div className="lapp__badge">Incluido gratis con tus dispositivos</div>
+            <div className="lapp__badge">El panel de tus dispositivos Linkstar</div>
             <h2 className="lapp__title">
               El panel de control de tus <span className="lapp__highlight">reseñas en Google</span>
             </h2>
             <p className="lapp__subtitle">
               Controla, mide y optimiza el rendimiento de todos tus carteles Linkstar desde un único lugar.
-              <strong> Sin suscripciones. Sin costes ocultos.</strong>
+              <strong> Sin permanencia. Cancelas cuando quieras.</strong>
             </p>
             <div className="lapp__ctas">
               <button type="button" className="lapp__btn lapp__btn--primary" onClick={(e) => { e.preventDefault(); onShop(); }}>
@@ -268,8 +268,11 @@ export default function LinkstarApp({ onShop, onContact }) {
               </div>
               <div className="lapp__stat-div"></div>
               <div className="lapp__stat">
-                <span className="lapp__stat-num">$<CountUp end={0} /></span>
-                <span className="lapp__stat-text">Coste de plataforma</span>
+                {/* Antes acá decía "$0 — Coste de plataforma". La plataforma
+                    pasó a ser una suscripción mensual: los importes viven sólo
+                    en la Landing del dashboard. */}
+                <span className="lapp__stat-num">24/7</span>
+                <span className="lapp__stat-text">Seguimiento de escaneos</span>
               </div>
             </div>
           </div>
@@ -646,16 +649,24 @@ export default function LinkstarApp({ onShop, onContact }) {
         <div className="lapp__pricing-box">
           <div className="lapp__pricing-glow"></div>
           <div className="lapp__pricing-content">
-            <span className="lapp__pricing-overline">Sin sorpresas</span>
+            <span className="lapp__pricing-overline">Sin permanencia</span>
             <h3 className="lapp__pricing-title">¿Cuánto cuesta la plataforma?</h3>
-            <div className="lapp__pricing-amount">$0 <span className="lapp__pricing-period">/ siempre</span></div>
-            <p className="lapp__pricing-desc">Incluida gratis con la compra de cualquier dispositivo Linkstar. Sin suscripciones ni costes ocultos.</p>
+            {/* Los precios viven en un solo lugar, la Landing del dashboard
+                (apps/dashboard/src/pages/Landing/Landing.jsx). Acá se explica
+                el modelo — dispositivo una vez, plataforma por mes — sin
+                repetir importes, para que no queden dos fuentes de verdad
+                que se desincronicen. */}
+            <p className="lapp__pricing-desc">
+              El dispositivo se paga una sola vez. La plataforma va aparte, por suscripción mensual y sin
+              permanencia: cambias de plan o cancelas cuando quieras. Los planes y lo que incluye cada uno
+              están dentro de LinkstarApp.
+            </p>
 
             <ul className="lapp__pricing-features">
               <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg> Panel de control completo</li>
               <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg> Estadísticas en tiempo real</li>
-              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg> Dispositivos ilimitados</li>
-              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg> Ubicaciones ilimitadas</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg> Escaneos por dispositivo, local y empleado</li>
+              <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg> QR y NFC en el mismo expositor</li>
             </ul>
 
             <button className="lapp__btn lapp__btn--primary lapp__pricing-btn" onClick={(e) => { e.preventDefault(); onShop(); }}>

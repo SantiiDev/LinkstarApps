@@ -821,6 +821,11 @@
 }
 
 .landing-price-card__btn {
+  /* La tarjeta "A medida" usa un <a> en vez de un <button> porque lleva a un
+     canal de contacto externo; display/text-decoration hacen que las dos se
+     vean igual. */
+  display: block;
+  text-decoration: none;
   width: 100%;
   padding: 0.75rem;
   border-radius: var(--radius-button);

@@ -96,7 +96,7 @@ function Icon({ name, className }) {
 /* ─── Nav structure ────────────────────────────────────────── */
 const MAIN_ITEMS = [
   { id: 'company', label: 'Mi Empresa', icon: 'building' },
-  { id: 'devices', label: 'Dispositivos', icon: 'cpu', badge: 'GRATIS' },
+  { id: 'devices', label: 'Dispositivos', icon: 'cpu' },
   { id: 'reviews', label: 'Reseñas', icon: 'star' },
 ];
 

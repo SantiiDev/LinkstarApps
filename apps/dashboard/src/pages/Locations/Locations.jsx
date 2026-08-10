@@ -495,7 +495,10 @@ const SORT_OPTIONS = [
   { value: 'avgRating',    label: 'Por rating' },
 ];
 
-export default function LocationsPage() {
+// `embedded`: la página se renderiza dentro de la pestaña "Gestión local" de
+// Configuración, que ya trae su propio PageHeader. En ese modo se ocultan el
+// encabezado y el pie propios para no duplicarlos.
+export default function LocationsPage({ embedded = false }) {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
@@ -583,6 +586,7 @@ export default function LocationsPage() {
     <div className="loc-page">
 
       {/* ── Header ── */}
+      {!embedded && (
       <div className="loc-page__header">
         <div className="loc-page__title-block">
           <div className="loc-page__eyebrow">
@@ -611,6 +615,7 @@ export default function LocationsPage() {
           </button>
         </div>
       </div>
+      )}
 
       {/* ── Stats Strip ── */}
       <div className="loc-stats">
@@ -706,6 +711,7 @@ export default function LocationsPage() {
       }
 
       {/* ── Footer ── */}
+      {!embedded && (
       <div className="loc-page__footer">
         <p className="loc-page__footer-text">
           © 2026 <span className="loc-page__footer-brand">
@@ -713,6 +719,7 @@ export default function LocationsPage() {
           </span> — Panel de gestión de reseñas
         </p>
       </div>
+      )}
 
       {/* ── Modal ── */}
       {selected && (

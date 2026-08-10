@@ -8,13 +8,13 @@ export default function Terms() {
         <div className="info-page__content">
           <h2>1. Objeto de los Términos</h2>
           <p>
-            Las presentes Condiciones Generales regulan el uso de este sitio web, así como la compra de nuestros dispositivos de tecnología NFC y el uso de la plataforma gratuita asociada (LinkstarApp).
+            Las presentes Condiciones Generales regulan el uso de este sitio web, así como la compra de nuestros dispositivos de tecnología NFC y el uso de la plataforma asociada (LinkstarApp).
           </p>
           
           <h2>2. Productos y Servicios</h2>
           <p>
             Linkstar ofrece carteles expositores físicos equipados con tecnología NFC que permiten redireccionar a los usuarios hacia enlaces preconfigurados (reseñas en Google, perfiles de Instagram, entre otros).
-            La compra de un dispositivo incluye el acceso indefinido y gratuito a LinkstarApp para la gestión y medición de las interacciones.
+            La gestión y medición de las interacciones se realiza desde LinkstarApp, que se contrata por separado del dispositivo mediante una suscripción mensual, sin permanencia y cancelable en cualquier momento. Las condiciones y el precio vigente de cada plan se indican en LinkstarApp antes de contratar.
           </p>
 
           <h2>3. Proceso de Compra y Envíos</h2>

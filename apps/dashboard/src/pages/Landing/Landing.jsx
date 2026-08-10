@@ -359,13 +359,23 @@ function CheckIcon({ variant = 'orange' }) {
   );
 }
 
+// Único lugar del monorepo donde vive un precio. La página de LinkstarApp del
+// sitio de ventas describe el modelo (dispositivo una vez + plataforma por mes)
+// pero no repite importes, justamente para no tener dos fuentes de verdad.
+const STARTER_PRICE = '$24.900';
+
+// TODO: canal de contacto real para el plan a medida. Hoy el único que existe
+// en el repo es el Instagram del footer del sitio de ventas; cuando haya un
+// mail o un WhatsApp de ventas, cambiar esto por ese.
+const SALES_CONTACT_URL = 'https://www.instagram.com/santisiena?igsh=MWwyeW5lYmlsNWRtNQ==';
+
 function Pricing({ onEnterDashboard }) {
   return (
     <RevealSection className="landing-pricing" id="pricing">
       <span className="landing-section-tag">Planes</span>
       <h2 className="landing-section-title">Elige el plan que mejor se adapte</h2>
       <p className="landing-section-subtitle">
-        Sin permanencia, sin letra pequeña. Cambia o cancela cuando quieras.
+        Sin permanencia, sin letra chica. Cambiás o cancelás cuando quieras.
       </p>
 
       <div className="landing-pricing__grid">
@@ -374,7 +384,7 @@ function Pricing({ onEnterDashboard }) {
           <div className="landing-price-card__name">Starter</div>
           <p className="landing-price-card__desc">Ideal para un solo local con pocos dispositivos.</p>
           <div className="landing-price-card__price">
-            <span className="landing-price-card__amount">€29</span>
+            <span className="landing-price-card__amount">{STARTER_PRICE}</span>
             <span className="landing-price-card__period">/mes</span>
           </div>
           <div className="landing-price-card__features">
@@ -385,30 +395,33 @@ function Pricing({ onEnterDashboard }) {
             <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Soporte por email</div>
           </div>
           <button className="landing-price-card__btn landing-price-card__btn--outline" onClick={onEnterDashboard}>
-            Empieza gratis
+            Empezar
           </button>
         </div>
 
-        {/* Pro */}
+        {/* A medida */}
         <div className="landing-price-card landing-price-card--featured">
-          <span className="landing-price-card__badge">Más popular</span>
-          <div className="landing-price-card__name">Pro</div>
-          <p className="landing-price-card__desc">Para negocios con múltiples locales y equipos.</p>
+          <span className="landing-price-card__badge">Varios locales</span>
+          <div className="landing-price-card__name">A medida</div>
+          <p className="landing-price-card__desc">Para negocios con varios locales y equipos.</p>
           <div className="landing-price-card__price">
-            <span className="landing-price-card__amount">€79</span>
-            <span className="landing-price-card__period">/mes</span>
+            <span className="landing-price-card__amount">A convenir</span>
           </div>
           <div className="landing-price-card__features">
-            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Dispositivos ilimitados</div>
-            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Ubicaciones ilimitadas</div>
+            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Dispositivos y ubicaciones según tu operación</div>
             <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Ranking de empleados</div>
             <div className="landing-price-card__feature"><CheckIcon variant="forest" /> IA con tono personalizado</div>
             <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Automatizaciones 24/7</div>
             <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Soporte prioritario</div>
           </div>
-          <button className="landing-price-card__btn landing-price-card__btn--solid" onClick={onEnterDashboard}>
-            Empieza tu prueba gratis
-          </button>
+          <a
+            className="landing-price-card__btn landing-price-card__btn--solid"
+            href={SALES_CONTACT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Consultanos
+          </a>
         </div>
       </div>
     </RevealSection>

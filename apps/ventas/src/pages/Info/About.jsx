@@ -20,7 +20,7 @@ export default function About() {
 
           <h2>Nuestra Tecnología</h2>
           <p>
-            No solo fabricamos dispositivos estéticos y premium. Hemos desarrollado <strong>LinkstarApp</strong>, una plataforma propia y gratuita que entrega el verdadero valor a nuestros clientes: los datos.
+            No solo fabricamos dispositivos estéticos y premium. Hemos desarrollado <strong>LinkstarApp</strong>, una plataforma propia que entrega el verdadero valor a nuestros clientes: los datos.
             Permitimos a los dueños de negocios medir cada interacción, comparar ubicaciones, gamificar el trabajo de sus empleados y tener el control absoluto de su reputación online.
           </p>
           

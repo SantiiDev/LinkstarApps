@@ -436,7 +436,11 @@ const SORT_OPTIONS = [
   { value: 'streak',     label: 'Por racha' },
 ];
 
-export default function EmployeesPage() {
+// `embedded`: la página se renderiza dentro de la pestaña "Equipo" de
+// Configuración, que ya trae su propio PageHeader y vive dentro del AppShell.
+// En ese modo se ocultan el encabezado y el pie propios para no duplicarlos;
+// todo lo demás (stats, filtros, grilla/tabla, modal) es igual.
+export default function EmployeesPage({ embedded = false }) {
   const [employees, setEmployees] = useState([]);
   const [estimatedReviews, setEstimatedReviews] = useState(0); // suma de new_reviews_30d por location (decisión 6)
   const [loading,  setLoading]  = useState(true);
@@ -538,6 +542,7 @@ export default function EmployeesPage() {
     <div className="emp-page">
 
       {/* ── Header ── */}
+      {!embedded && (
       <div className="emp-page__header">
         <div className="emp-page__title-block">
           <div className="emp-page__eyebrow">
@@ -566,6 +571,7 @@ export default function EmployeesPage() {
           </button>
         </div>
       </div>
+      )}
 
       {/* ── Stats Strip ── */}
       <div className="emp-stats">
@@ -661,6 +667,7 @@ export default function EmployeesPage() {
       }
 
       {/* ── Footer ── */}
+      {!embedded && (
       <div className="emp-page__footer">
         <p className="emp-page__footer-text">
           © 2026 <span className="emp-page__footer-brand">
@@ -668,6 +675,7 @@ export default function EmployeesPage() {
           </span> — Panel de gestión de reseñas
         </p>
       </div>
+      )}
 
       {/* ── Modal ── */}
       {selected && (
