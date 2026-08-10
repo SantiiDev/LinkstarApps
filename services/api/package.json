@@ -10,10 +10,12 @@
     "rebuild-today-rollup": "node scripts/rebuild-today-rollup.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "mercadopago": "^2.0.15",
-    "@supabase/supabase-js": "^2.49.8"
+    "express-rate-limit": "^8.6.2",
+    "helmet": "^8.3.0",
+    "mercadopago": "^2.0.15"
   }
 }

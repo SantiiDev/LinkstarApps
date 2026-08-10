@@ -21,7 +21,7 @@ export function withTimeout(promise, ms, label) {
 // Manifiesto: "id:{data.id};request-id:{x-request-id};ts:{ts};" firmado con
 // HMAC-SHA256 usando el secreto del webhook (panel de MP → Webhooks → Firma secreta).
 // Sin esto, cualquiera puede hacer un curl a este endpoint y marcar una orden
-// como pagada. Ver supabase/README.md, regla 1 del webhook.
+// como pagada. Ver packages/database/supabase/README.md, regla 1 del webhook.
 export function isValidMpSignature(req) {
   const secret = process.env.MP_WEBHOOK_SECRET;
   if (!secret) return false; // fail-closed: sin secreto configurado, no se confía en nada

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-// El schema en supabase/migrations/0006_rls.sql niega insert/update/delete
+// El schema en packages/database/supabase/migrations/0006_rls.sql niega insert/update/delete
 // sobre `orders` y ejecución de `resolve_scan` a `anon`/`authenticated` a
 // propósito: sólo un cliente de confianza (este backend) puede escribir ahí.
 // Por eso este cliente usa la service_role key, no la publishable/anon.

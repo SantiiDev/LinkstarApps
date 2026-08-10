@@ -8,7 +8,7 @@ import { REDIRECT_DOMAIN } from '../lib/config.js';
 // asignado a esa location. Pensado para probar el flujo de /d/:publicId de
 // punta a punta contra datos reales de tu cuenta de test.
 //
-// ADVERTENCIA: usa las credenciales de backend/.env tal cual estén (hoy
+// ADVERTENCIA: usa las credenciales de services/api/.env tal cual estén (hoy
 // apuntan al proyecto Supabase de PRODUCCIÓN, no a un stack local). Corré
 // esto sólo si querés escribir en esa base.
 //

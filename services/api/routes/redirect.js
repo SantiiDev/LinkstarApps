@@ -1,7 +1,18 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { supabase } from '../lib/supabase.js';
 
 const router = Router();
+
+// Un tap de NFC/QR legítimo es, como mucho, unos pocos por minuto y por IP
+// (una persona tocando el expositor). Esto no frena el uso normal, sólo
+// scraping/enumeración de public_id y floods.
+const scanLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Medio físico del toque, indicado por el sufijo ?s= en la URL grabada en
 // cada soporte: el QR impreso lleva ?s=q, el chip NFC lleva ?s=n. Mismo
@@ -12,9 +23,9 @@ const SCAN_MEDIUM_BY_QUERY_PARAM = { q: 'qr', n: 'nfc' };
 // GET /d/:publicId
 // Resuelve un toque de NFC/QR: llama a resolve_scan() (SECURITY DEFINER,
 // sólo service_role) y redirige. SIEMPRE responde con un destino, incluso
-// si algo falla — ver supabase/migrations/0007_functions_and_jobs.sql.
+// si algo falla — ver packages/database/supabase/migrations/0007_functions_and_jobs.sql.
 // ──────────────────────────────────────────────────────────
-router.get('/d/:publicId', async (req, res) => {
+router.get('/d/:publicId', scanLimiter, async (req, res) => {
   const fallback = 'https://linkstar.com.ar';
   try {
     const ip = (req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || '').trim();

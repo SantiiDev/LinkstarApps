@@ -5,7 +5,7 @@ export function generateOrderNumber() {
 }
 
 // Inserta la orden + sus renglones (public.orders / public.order_items,
-// ver supabase/migrations/0005_billing_and_orders.sql). Lanza si algo falla:
+// ver packages/database/supabase/migrations/0005_billing_and_orders.sql). Lanza si algo falla:
 // mejor un 500 explícito que un pedido "fantasma" sin order_items.
 export async function createOrder({ orderNumber, status, paymentMethod, buyer, items, total, extra = {} }) {
   const { data: order, error: orderError } = await supabase
