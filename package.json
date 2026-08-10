@@ -1,0 +1,30 @@
+{
+  "name": "linkstar-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo de Linkstar: sitio de ventas, dashboard SaaS, API y esquema de base de datos.",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:ventas": "npm run dev --workspace @linkstar/ventas",
+    "dev:dashboard": "npm run dev --workspace @linkstar/dashboard",
+    "dev:api": "npm run dev --workspace @linkstar/api",
+    "build": "npm run build --workspace @linkstar/ventas && npm run build --workspace @linkstar/dashboard",
+    "build:ventas": "npm run build --workspace @linkstar/ventas",
+    "build:dashboard": "npm run build --workspace @linkstar/dashboard",
+    "lint": "npm run lint --workspace @linkstar/dashboard",
+    "deploy:ventas": "npm run deploy --workspace @linkstar/ventas",
+    "db:push": "npm run db:push --workspace @linkstar/database",
+    "db:reset": "npm run db:reset --workspace @linkstar/database"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "workerd": true
+  }
+}

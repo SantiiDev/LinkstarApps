@@ -1,3 +1,12 @@
+// Config del Worker que sirve el sitio de ventas (apps/ventas).
+//
+// Wrangler resuelve las rutas relativas contra el directorio de ESTE archivo,
+// no contra el cwd, así que "./dist" sigue apuntando a apps/ventas/dist después
+// de la mudanza al monorepo. Lo que sí cambia es desde dónde se invoca: el
+// binario de wrangler ahora está hoisteado en el node_modules de la raíz y no
+// hay ningún wrangler.jsonc ahí, así que `npx wrangler deploy` desde la raíz no
+// encuentra config. Usar `npm run deploy:ventas` desde la raíz (entra al
+// workspace antes de ejecutar) o `npx wrangler deploy` parado en apps/ventas.
 {
   "name": "linkstar",
   "compatibility_date": "2026-08-07",
