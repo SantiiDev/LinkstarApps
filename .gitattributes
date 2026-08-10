@@ -1,0 +1,15 @@
+# Un solo final de línea para todo el monorepo: LF en el índice y en el working
+# tree, en Windows también. Antes cada repo dependía de core.autocrlf=true, así
+# que los checkouts en Windows quedaban CRLF y los diffs se ensuciaban al pasar
+# archivos de un lado al otro.
+* text=auto eol=lf
+
+# Binarios: que git no toque nada.
+*.png  binary
+*.webp binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.woff  binary
+*.woff2 binary

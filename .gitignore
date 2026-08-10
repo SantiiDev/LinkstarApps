@@ -1,0 +1,39 @@
+# Dependencias — un solo node_modules hoisteado en la raíz por npm workspaces,
+# más los que npm deja en cada workspace cuando hay conflicto de versiones.
+node_modules/
+
+# Builds
+dist/
+dist-ssr/
+.wrangler/
+
+# Secretos. Los .env reales viven fuera del repo; en el repo sólo los .example.
+.env
+.env.*
+!.env.example
+!.env.production
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# Varios
+*.local
