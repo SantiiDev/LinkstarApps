@@ -1,0 +1,11 @@
+{
+  "name": "@linkstar/database",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Esquema Postgres de Linkstar (migraciones, RLS y tests). Fuente de verdad del modelo de datos para @linkstar/api y @linkstar/dashboard.",
+  "scripts": {
+    "db:reset": "supabase db reset",
+    "db:push": "supabase db push",
+    "db:status": "supabase migration list"
+  }
+}
