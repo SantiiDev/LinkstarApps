@@ -1,3 +1,9 @@
+if (!process.env.WEB3FORMS_KEY) {
+  console.warn(
+    '⚠️  Falta WEB3FORMS_KEY en .env — las notificaciones de nuevas órdenes por email no se van a enviar.'
+  );
+}
+
 export async function sendEmailNotification(orderData) {
   try {
     const itemsText = orderData.items

@@ -1,7 +1,12 @@
+import crypto from 'node:crypto';
 import { supabase } from './supabase.js';
 
+// crypto.randomUUID() en vez de Date.now()+Math.random(): el número de orden
+// es la llave usada en GET /api/orders/:orderNumber (con email como segundo
+// factor, ver routes/orders.js), así que necesita entropía real y no un
+// timestamp + 3 caracteres adivinables por fuerza bruta.
 export function generateOrderNumber() {
-  return `LS-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+  return `LS-${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
 }
 
 // Inserta la orden + sus renglones (public.orders / public.order_items,

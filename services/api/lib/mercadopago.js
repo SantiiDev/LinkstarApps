@@ -1,6 +1,13 @@
 import crypto from 'node:crypto';
 import { MercadoPagoConfig } from 'mercadopago';
 
+if (!process.env.MP_ACCESS_TOKEN) {
+  console.warn(
+    '⚠️  Falta MP_ACCESS_TOKEN en .env — crear preferencias y procesar pagos de ' +
+    'Mercado Pago va a fallar. Buscalo en el panel de Mercado Pago: Tus integraciones → Credenciales.'
+  );
+}
+
 export const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
 });

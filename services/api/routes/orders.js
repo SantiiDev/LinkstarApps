@@ -1,25 +1,51 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { Preference, Payment } from 'mercadopago';
 import { supabase } from '../lib/supabase.js';
 import { mpClient } from '../lib/mercadopago.js';
 import { FRONTEND_URL } from '../lib/config.js';
 import { generateOrderNumber, createOrder } from '../lib/orders.js';
 import { sendEmailNotification } from '../lib/email.js';
+import {
+  validateBody,
+  createPreferenceSchema,
+  orderTransferSchema,
+  processPaymentSchema,
+} from '../lib/validation.js';
+import { assertCatalogPrices, assertMatchesCatalogTotal } from '../lib/catalog.js';
 
 const router = Router();
+
+// Estas tres rutas llaman a la API paga de Mercado Pago y/o mandan un email
+// por Web3Forms — sin límite, un atacante puede generar tráfico de pago o
+// vaciar la cuota de notificaciones. Un comprador real hace como mucho un
+// puñado de intentos en unos minutos.
+const paymentLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// GET /api/orders/:orderNumber ahora exige el email del comprador como
+// segundo factor (ver más abajo) — el rate limit es la segunda barrera
+// contra fuerza bruta del número de orden.
+const orderLookupLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // ──────────────────────────────────────────────────────────
 // POST /api/create-preference
 // Creates a Mercado Pago preference + order in Supabase
 // Used for: Card & Mercado Pago payments
 // ──────────────────────────────────────────────────────────
-router.post('/api/create-preference', async (req, res) => {
+router.post('/api/create-preference', paymentLimiter, validateBody(createPreferenceSchema), async (req, res) => {
   try {
     const { items, customer, payMethod } = req.body;
-
-    if (!items?.length || !customer?.name || !customer?.email) {
-      return res.status(400).json({ error: 'Datos incompletos' });
-    }
+    assertCatalogPrices(items);
 
     const orderNumber = generateOrderNumber();
     const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
@@ -88,6 +114,7 @@ router.post('/api/create-preference', async (req, res) => {
       order_number: orderNumber,
     });
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error('Error creating preference:', err);
     res.status(500).json({ error: 'Error al crear la preferencia de pago' });
   }
@@ -97,13 +124,10 @@ router.post('/api/create-preference', async (req, res) => {
 // POST /api/orders/transfer
 // Creates an order for bank transfer payment
 // ──────────────────────────────────────────────────────────
-router.post('/api/orders/transfer', async (req, res) => {
+router.post('/api/orders/transfer', paymentLimiter, validateBody(orderTransferSchema), async (req, res) => {
   try {
     const { items, customer } = req.body;
-
-    if (!items?.length || !customer?.name || !customer?.email) {
-      return res.status(400).json({ error: 'Datos incompletos' });
-    }
+    assertCatalogPrices(items);
 
     const orderNumber = generateOrderNumber();
     const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
@@ -137,6 +161,7 @@ router.post('/api/orders/transfer', async (req, res) => {
       total,
     });
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error('Error creating transfer order:', err);
     res.status(500).json({ error: 'Error al crear la orden' });
   }
@@ -146,16 +171,21 @@ router.post('/api/orders/transfer', async (req, res) => {
 // POST /api/process-payment
 // Process a card payment using the token from CardPayment Brick
 // ──────────────────────────────────────────────────────────
-router.post('/api/process-payment', async (req, res) => {
+router.post('/api/process-payment', paymentLimiter, validateBody(processPaymentSchema), async (req, res) => {
   try {
     const { formData, customer, cartItems } = req.body;
 
-    if (!formData?.token || !customer?.name || !customer?.email) {
-      return res.status(400).json({ error: 'Datos incompletos' });
+    // El monto que se le cobra en MP tiene que salir del catálogo, no del
+    // transaction_amount que manda el cliente — si no hay cartItems no hay
+    // con qué validarlo, así que se rechaza (mejor eso que cobrar a ciegas).
+    if (!cartItems?.length) {
+      return res.status(400).json({ error: 'Faltan los items del carrito' });
     }
+    assertCatalogPrices(cartItems);
+    assertMatchesCatalogTotal(formData.transaction_amount, cartItems);
 
     const orderNumber = generateOrderNumber();
-    const transactionAmount = Number(formData.transaction_amount);
+    const transactionAmount = formData.transaction_amount;
 
     // 1. Create the payment via MP SDK
     const payment = new Payment(mpClient);
@@ -163,7 +193,7 @@ router.post('/api/process-payment', async (req, res) => {
       body: {
         token: formData.token,
         transaction_amount: transactionAmount,
-        installments: Number(formData.installments),
+        installments: formData.installments,
         payment_method_id: formData.payment_method_id,
         issuer_id: formData.issuer_id,
         payer: {
@@ -222,24 +252,35 @@ router.post('/api/process-payment', async (req, res) => {
       payment_id: paymentResult.id,
     });
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    // El detalle completo del error (puede incluir texto del SDK de MP o de
+    // Postgres) sólo va al log del servidor — nunca al cliente. Ver CWE-209.
     console.error('Error processing payment:', err);
-    res.status(500).json({
-      error: 'Error al procesar el pago',
-      detail: err.message,
-    });
+    res.status(500).json({ error: 'Error al procesar el pago' });
   }
 });
 
 // ──────────────────────────────────────────────────────────
-// GET /api/orders/:orderNumber
-// Get order status (used for success page)
+// GET /api/orders/:orderNumber?email=<buyer_email>
+// Get order status (used for success page). Este cliente usa service_role,
+// que bypassea el RLS de 0006_rls.sql (orders_select exige
+// buyer_email = auth.jwt()->>'email' o pertenencia a la organización) — así
+// que replicamos esa misma condición acá a mano exigiendo el email del
+// comprador como segundo factor. Sin esto, el order_number solo (aunque hoy
+// tenga entropía real, ver lib/orders.js) sería la única barrera.
 // ──────────────────────────────────────────────────────────
-router.get('/api/orders/:orderNumber', async (req, res) => {
+router.get('/api/orders/:orderNumber', orderLookupLimiter, async (req, res) => {
   try {
+    const email = String(req.query.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ error: 'Falta el email del comprador' });
+    }
+
     const { data, error } = await supabase
       .from('orders')
       .select('*, order_items(*)')
       .eq('order_number', req.params.orderNumber)
+      .ilike('buyer_email', email)
       .single();
 
     if (error || !data) {
