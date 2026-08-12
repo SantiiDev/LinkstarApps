@@ -6,11 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Linkstar sells NFC/QR "expositores" — physical cards a business puts on tables and counters so customers
 tap or scan them and land on the business's Google review form. Buyers then manage those devices from
-**LinkstarApp**, a multi-tenant SaaS dashboard (devices, locations, employees, scan analytics).
+**LinkstarApp**, a multi-tenant SaaS dashboard (devices, locations, employees (soon), scan analytics).
 
 The dashboard is a **paid subscription**, billed monthly, no lock-in. It is not bundled free with the
 hardware — earlier copy on the sales site said it was, and that is no longer true anywhere in this repo.
 See "Pricing" below before touching any price or plan wording.
+
+**Status: pre-launch.** Nothing is sold yet and nothing but the schema is deployed. There are no real
+tenants, so the schema and the API can still change shape without a migration story for production data —
+but the invariants under "Data model" are the part that gets expensive to undo *after* launch, so they
+hold now too. Concretely: `services/api` and `apps/dashboard` have no deploy target, checkout is
+disconnected, and large parts of the dashboard are UI ahead of their data (see `apps/dashboard` below).
+This file describes what is actually wired today, not the roadmap — when something lands, update the
+section that claimed it was missing.
 
 This is a monorepo, created by merging two previously separate repos (`SantiiDev/Linkstar` and
 `SantiiDev/LinkstarApp`) with `git subtree add`, so `git log` contains both histories. The tags
@@ -62,6 +70,7 @@ Supabase (needs the `supabase` CLI installed globally):
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
 npm run db:reset         # -> supabase db reset (applies 0000 → 0012 in order, locally)
+npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
 `supabase migration list` compares local vs remote. If a migration was applied by hand outside the CLI
@@ -69,9 +78,10 @@ npm run db:reset         # -> supabase db reset (applies 0000 → 0012 in order,
 without re-running the SQL. Run `packages/database/supabase/tests/rls_isolation.sql` before any RLS change
 ships.
 
-Ops scripts live in `services/api/scripts/` and run with `node scripts/<name>.js` from `services/api`.
-They use the same `service_role` client as the server, so `services/api/.env` decides whether you are
-writing to local or production.
+Ops scripts live in `services/api/scripts/` and run with `node scripts/<name>.js` from `services/api`
+(`provision-devices.js` and `rebuild-today-rollup.js` also have npm aliases — `npm run provision-devices`,
+`npm run rebuild-today-rollup`; `seed-test-device.js` doesn't). They use the same `service_role` client as
+the server, so `services/api/.env` decides whether you are writing to local or production.
 
 No test runner is configured in any workspace.
 
@@ -81,16 +91,24 @@ No test runner is configured in any workspace.
 was untracked during the monorepo migration, but it is still reachable in the pre-monorepo history of
 `SantiiDev/LinkstarApp`, so that key must stay rotated).
 
+The `.env.example` files **are** tracked and are the only spec of what each service needs — this repo has
+more than one developer, so a new variable is only real once it's in the matching `.env.example`. Copy them
+to `.env`, don't rename them away.
+
 - `services/api/.env` — see `services/api/.env.example`. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-  `PORT`, `FRONTEND_URL`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `WEBHOOK_URL`, `WEB3FORMS_KEY`.
+  `PORT`, `FRONTEND_URL`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `WEBHOOK_URL`, `WEB3FORMS_KEY`,
+  `REDIRECT_DOMAIN` (optional, defaults to `l.linkstar.com.ar`).
   `FRONTEND_URL` is **comma-separated**: this one service serves both frontends, so CORS needs both
   origins. The first entry is the one used for Mercado Pago `back_urls`, so it must be the ventas site
   (that's where checkout lives). Missing `SUPABASE_SERVICE_ROLE_KEY` only warns at boot — writes then fail
   later at request time via RLS rejection.
 - `apps/dashboard/.env` — see `apps/dashboard/.env.example`. `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
-  `VITE_API_URL`.
+  `VITE_API_URL`, `VITE_REDIRECT_DOMAIN` (optional, same default as the API's `REDIRECT_DOMAIN` — the two
+  apps deploy separately, so each defines it on its own; they must agree or the QR the dashboard generates
+  points somewhere the API doesn't serve).
 - `apps/ventas/.env.production` — `VITE_API_URL`, still the `BACKEND_URL_PENDIENTE` placeholder until the
-  API is deployed.
+  API is deployed. Tracked in git on purpose (`.gitignore` whitelists `.env.production`); it holds no
+  secrets.
 
 ## Architecture
 
@@ -165,6 +183,13 @@ escape the rate limit.
 - `lib/mercadopago.js` — MP SDK client, `isValidMpSignature`, `withTimeout`.
 - `lib/orders.js` — `generateOrderNumber`, `createOrder`.
 - `lib/email.js` — `sendEmailNotification`, posts order details to Web3Forms.
+- `lib/validation.js` — zod schemas (`cartItemSchema`, `customerSchema`, `createPreferenceSchema`,
+  `orderTransferSchema`, `processPaymentSchema`) plus `validateBody(schema)`, the middleware every payment
+  route runs before its handler. Shape validation only — *amounts* are `lib/catalog.js`'s job.
+- `lib/catalog.js` — `assertCatalogPrices(items)` / `assertMatchesCatalogTotal(amount, items)`. The server
+  never trusts `item.price` or `formData.transaction_amount` from the body; both are checked against a
+  hardcoded catalog. See "Pricing" — this file is a deliberate second copy of the ventas prices and has to
+  move with them.
 - `middleware/auth.js` — `requireAuth(supabase)`, validates the Supabase JWT from `Authorization: Bearer`.
 
 Routes, one router per file, all mounted at the app root:
@@ -178,7 +203,21 @@ Routes, one router per file, all mounted at the app root:
   nothing computes yet, so those `scan_events` columns stay null in practice.
 - `routes/orders.js` — `POST /api/create-preference` (pending order + MP preference; `auto_return` only
   for non-localhost `FRONTEND_URL`), `POST /api/orders/transfer`, `POST /api/process-payment`,
-  `GET /api/orders/:orderNumber`.
+  `GET /api/orders/:orderNumber`. Nothing here is reachable from a browser today — `apps/ventas` checkout
+  doesn't call the API (see below) — but the hardening is already in place and must not be undone when it
+  reconnects:
+  - The three POSTs run `validateBody(...)` then `assertCatalogPrices(...)`, and `/api/process-payment`
+    additionally runs `assertMatchesCatalogTotal(...)` and rejects a body with no `cartItems` rather than
+    charging a client-supplied `transaction_amount` blind.
+  - `GET /api/orders/:orderNumber` **requires `?email=<buyer_email>`** and matches it against
+    `buyer_email` (`ilike`). This client is `service_role`, so it bypasses the `orders_select` policy of
+    `0006` — the email check re-implements that policy by hand. Without it, guessing an order number
+    returned the buyer's name, email, phone and address. Any new order-reading route needs the same
+    second factor, or real auth.
+  - Rate limits are per-router, not global: payments 20 / 15 min, order lookup 30 / 15 min (brute-force
+    barrier on the order number), scans 30 / min in `redirect.js`.
+  - Handlers re-throw with `err.status === 400` for validation failures and return a generic 500 message
+    otherwise; the full error only goes to the server log (CWE-209). Keep that split.
 - `routes/webhooks.js` — `POST /api/webhook/mercadopago`. Validates `x-signature` (HMAC-SHA256, fail-closed
   if `MP_WEBHOOK_SECRET` is unset) **before** anything else, acks `200` immediately (MP requires <22s),
   then processes async. Idempotency via `record_webhook_event()`'s unique `(provider, topic, external_id)`
@@ -189,14 +228,33 @@ Routes, one router per file, all mounted at the app root:
 
 ### `apps/dashboard`
 
+Still pre-launch: most of the dashboard is **UI built ahead of its backend**. Read the "real vs. mock"
+split below before wiring anything — the shell is finished, the data mostly isn't.
+
 - `App.jsx` owns a single `activeSection` string — that is the whole routing mechanism, no router library.
-  `PROTECTED_SECTIONS` is gated: with no authenticated user, App renders `Login`. `company` is the
-  post-login landing page.
+  It starts at `landing`; `landing`, `login` and `register` render bare (no `AppShell`), everything else
+  renders inside it. `PROTECTED_SECTIONS` is gated: with no authenticated user, App renders `Login`.
+  `company` is the post-login landing page.
+- Sections wired in `App.jsx` (and in `components/Sidebar/Sidebar.jsx`, which groups them):
+  `company`, `devices`, `reviews`, the `gb-*` group (`gb-metrics`, `gb-profile`, `gb-posts`, `gb-seo`),
+  the `reports-*` group (`reports-nps`, `reports-sentiment`, `reports-keywords`), `monthly-reports`,
+  `automations`, `settings`, `profile`. Adding a section means touching both files.
+- **Real vs. mock.** Only three screens read the database: `devices` (via `lib/dashboardApi.js`) and
+  `employees` / `locations` (embedded in `settings`). `profile` reads the logged-in user from
+  `AuthContext`. **Everything else is a static mock** — `company` and `reviews` off `data/reviews.js`,
+  and `gb-*`, `reports-*`, `monthly-reports`, `automations` off arrays hardcoded in their own files
+  (review counts, NPS, Google Business metrics, monthly PDFs, automation toggles). None of that has a
+  backing table, and most of it can't have one until the Google Business Profile integration exists.
+  Treat those pages as design targets, not as features: don't "fix" their numbers, and don't cite them as
+  evidence that a data source exists.
 - `context/AuthContext.jsx` wraps `App` and owns all Supabase Auth state. Its `onAuthStateChange` listener
   is the single place that calls `POST /api/auth/login-event` on `SIGNED_IN` — don't duplicate that inside
   `Login`/`Register`.
 - `lib/supabaseClient.js` — the anon-key client, the only Supabase client on the frontend. Once logged in
   it attaches the session JWT, so PostgREST evaluates queries as `authenticated`.
+- `lib/config.js` — `REDIRECT_DOMAIN` from `VITE_REDIRECT_DOMAIN`. `lib/qr.js` — `downloadQrPng`, builds
+  the `https://<REDIRECT_DOMAIN>/d/<public_id>` QR client-side with the `qrcode` package (that's what the
+  dependency is for). `lib/authErrors.js` — maps Supabase Auth error strings to Spanish UI copy.
 - `lib/dashboardApi.js` — reads **only** the `0008` views (`v_device_performance`,
   `v_employee_leaderboard`, `v_location_performance`, `v_scans_daily`), never `scan_events`/
   `scan_daily_rollups` (invariant 2). Exports `ESTIMATED_LABEL` — any number derived from `review_deltas`
@@ -225,22 +283,41 @@ Routes, one router per file, all mounted at the app root:
 - `pages/LinkstarApp/LinkstarApp.jsx` is a **marketing page with a hardcoded mock dashboard**, not the real
   product — every chart/table on it is a static mock array, and "Acceder a LinkstarApp" is a no-op
   (`e.preventDefault()` only) because the real dashboard is `apps/dashboard`, not deployed yet.
+- `pages/Shop/Shop.jsx` holds the device prices and the four tiers (1 unidad / 2 unidades / combo Google +
+  Instagram / pedido grande) as module constants, and pushes items into `CartContext` with the price
+  already resolved. See "Pricing".
 - `pages/Checkout/Checkout.jsx` generates its own order number client-side and only sends a notification
-  email via Web3Forms straight from the browser; it does not call `services/api`. Real checkout/payment is
-  being rebuilt separately with a collaborator. Before reconnecting it: validate item price/qty server-side
-  against the real catalog (the old implementation trusted `req.body.price`) and require auth on the
-  order-lookup route (it used to return buyer name/email/phone/address to anyone who guessed an order
-  number). Don't touch checkout/payment without confirming which direction is wanted.
+  email via Web3Forms straight from the browser; it does **not** call `services/api`, so nothing is
+  persisted in `orders` and nothing is charged. Real checkout/payment is being rebuilt separately with a
+  collaborator. The two holes that made the old version unsafe are already fixed on the API side
+  (server-side price validation via `lib/catalog.js`, and `?email=` required on the order-lookup route) —
+  reconnecting means pointing this page at those routes, not re-doing that work, and not routing around
+  it. Don't touch checkout/payment without confirming which direction is wanted.
 
 ## Pricing
 
-One source of truth: `apps/dashboard/src/pages/Landing/Landing.jsx` (`STARTER_PRICE` and the "A medida"
-card). Prices are in Argentine pesos.
+Two separate things are priced, and they don't live in the same place. All amounts are Argentine pesos, all
+hardcoded in the frontend — there is no `plans`/catalog row driving any of this yet.
 
-`apps/ventas` describes the model — device paid once, platform monthly, no lock-in — and deliberately shows
-**no amounts**, so there is nothing to keep in sync. If you add a price to the sales site, you have created
-a second source of truth that will drift. The old `$0 / siempre` block and the "incluido gratis / sin
-suscripciones" copy were removed for exactly this reason.
+**The subscription** (dashboard, monthly): one source of truth,
+`apps/dashboard/src/pages/Landing/Landing.jsx` (`STARTER_PRICE` and the "A medida" card). `apps/ventas`
+describes the model — device paid once, platform monthly, no lock-in — but shows **no subscription amount**
+on purpose. If you put a monthly price on the sales site you've created a second source of truth that will
+drift. The old `$0 / siempre` block and the "incluido gratis / sin suscripciones" copy were removed for
+exactly this reason.
+
+**The hardware** (the expositores themselves): `apps/ventas/src/pages/Shop/Shop.jsx` — `UNIT_PRICE`,
+`DOUBLE_TOTAL_PRICE`, `COMBO_TOTAL_PRICE` and the tiers derived from them. These *are* shown on the sales
+site, and they are **deliberately duplicated** in `services/api/lib/catalog.js`, because the price charged
+has to be decided by the server and never read off the request body. That copy is not a mistake to clean
+up — but it does mean:
+
+> Changing a price or a tier in `Shop.jsx` **requires the same change in `services/api/lib/catalog.js`, in
+> the same commit.** Out of sync, the shop shows one number and every payment route rejects the cart with
+> a 400 "Precio inválido".
+
+When the rebuilt checkout gets a real catalog table, `lib/catalog.js` is replaced by a query against it and
+this whole duplication goes away — that's the intended endgame, not the current state.
 
 `SALES_CONTACT_URL` in `Landing.jsx` still points at the Instagram profile from the ventas footer, because
 that's the only real contact channel in the repo. Replace it when there's a sales email or WhatsApp.
@@ -257,12 +334,14 @@ that's the only real contact channel in the repo. Replace it when there's a sale
   `services/api`, planned at `api.linkstarapp.com`. When that goes live, update `apps/ventas/.env.production`'s
   `VITE_API_URL` and the API's `FRONTEND_URL` together.
 - `apps/dashboard` has no deploy target configured yet.
-- Three pieces referenced by `packages/database/supabase/README.md` still don't exist as services: the
-  production `redirect` function (the Express route covers it for now), an `mp-webhook` handler outside the
-  API, and the `sync-reviews` daily job.
+- Of the three services `packages/database/supabase/README.md` originally assumed would be Edge Functions,
+  two now live in `services/api` (`routes/redirect.js`, `routes/webhooks.js`) and are not planned as
+  separate functions. Only `sync-reviews` (the daily Google Business Profile job that fills
+  `location_review_snapshots`) still doesn't exist anywhere — and until it does, every "reseñas" number in
+  the product is either mock or unfed.
 
 ## Language note
 
-Code comments, commit messages, and `packages/database/supabase/README.md` are in Spanish (Argentina).
-Match that when editing existing files in `services/api/` and `packages/database/`. UI copy is Spanish too.
-This file and the per-repo docs are in English.
+Code comments, commit messages, UI copy, `README.md` and `packages/database/supabase/README.md` are in
+Spanish (Argentina) — that's the working language of the project and of the two people on it. This file
+(`CLAUDE.md`) is the exception and stays in English. Match whatever the file you're editing already uses.
