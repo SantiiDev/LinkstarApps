@@ -173,3 +173,32 @@
 .auth-card__switch-link:hover {
   text-decoration: underline;
 }
+
+/* ── Responsive ──
+   El botón "volver" es position: fixed y en pantallas bajas se superponía con
+   la tarjeta; en móvil pasa a ser parte del flujo, arriba de todo. */
+@media (max-width: 640px) {
+  .auth-page {
+    padding: 5.5rem 1.25rem 2.5rem;
+    align-items: flex-start;
+  }
+
+  .auth-page__back {
+    top: 1rem;
+    left: 1rem;
+  }
+
+  .auth-card {
+    padding: 2rem 1.5rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .auth-page {
+    padding: 5rem 0.75rem 2rem;
+  }
+
+  .auth-card {
+    padding: 1.75rem 1.15rem;
+  }
+}

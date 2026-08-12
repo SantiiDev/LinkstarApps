@@ -189,3 +189,15 @@
     text-align: center;
   }
 }
+
+/* ── Targets táctiles ──
+   Los links del footer son una lista de navegación: con 17px de alto son
+   difíciles de acertar con el dedo. En pantalla táctil se les da altura sin
+   cambiar el aspecto en desktop. */
+@media (pointer: coarse), (max-width: 480px) {
+  .footer__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+}

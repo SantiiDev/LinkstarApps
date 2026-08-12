@@ -160,10 +160,17 @@
 .loc-stat-icon--gold   { background: rgba(245,158,11,0.1);  color: var(--color-gold); }
 .loc-stat-icon--orange { background: rgba(245,133,41,0.1);  color: var(--color-orange); }
 
+/* min-width: 0 — sin esto el item flex no baja de su ancho de contenido y las
+   etiquetas largas se salen de la tarjeta en pantallas angostas. */
 .loc-stat-body {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
+  min-width: 0;
+}
+
+.loc-stat-label {
+  overflow-wrap: anywhere;
 }
 
 .loc-stat-value {
@@ -644,6 +651,8 @@
 }
 
 /* ── Table View ── */
+/* overflow-x: auto (no hidden): con 8 columnas la tabla no entra en pantallas
+   angostas y con hidden las últimas quedaban recortadas e inalcanzables. */
 .loc-table-wrap {
   background: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -651,9 +660,14 @@
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-card);
   box-shadow: var(--glass-shadow);
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   animation: fadeInUp 0.5s ease both;
   position: relative;
+}
+
+.loc-table {
+  min-width: 780px;
 }
 
 .loc-table-wrap::before {
@@ -1193,4 +1207,14 @@
   .loc-filters { display: none; }
   .loc-stats   { grid-template-columns: 1fr 1fr; }
   .loc-modal__stats { grid-template-columns: 1fr 1fr 1fr; }
+
+  /* La tarjeta se queda sin ancho para icono + texto en una fila. */
+  .loc-stat-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 1rem;
+  }
+
+  .loc-stat-value { font-size: 1.35rem; }
 }

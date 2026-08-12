@@ -637,6 +637,8 @@
 }
 
 /* ── Table View ── */
+/* overflow-x: auto (no hidden): con 8 columnas la tabla no entra en pantallas
+   angostas y con hidden las últimas quedaban recortadas e inalcanzables. */
 .emp-table-wrap {
   background: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -644,9 +646,14 @@
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-card);
   box-shadow: var(--glass-shadow);
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   animation: fadeInUp 0.5s ease both;
   position: relative;
+}
+
+.emp-table {
+  min-width: 760px;
 }
 
 .emp-table-wrap::before {
