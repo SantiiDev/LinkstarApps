@@ -138,7 +138,7 @@ function initialsFor(name, email) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-export default function Sidebar({ activeSection, onNavigate, onLogout }) {
+export default function Sidebar({ activeSection, onNavigate, onLogout, open = false, onClose }) {
   const { user } = useAuth();
   const fullName = user?.user_metadata?.full_name;
   const displayName = fullName || user?.email || 'Usuario';
@@ -180,9 +180,15 @@ export default function Sidebar({ activeSection, onNavigate, onLogout }) {
 
   return (
     <>
-      <aside className="sidebar">
+      <aside className={`sidebar ${open ? 'sidebar--open' : ''}`}>
         <div className="sidebar__logo">
           linkstar<span className="sidebar__logo-dot">.</span>
+          {/* Sólo visible en móvil, donde el sidebar es un cajón superpuesto. */}
+          <button className="sidebar__close" onClick={onClose} aria-label="Cerrar menú">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
 
         <nav className="sidebar__nav">

@@ -25,7 +25,10 @@
   right: 0;
   width: 420px;
   max-width: 92vw;
+  /* dvh y no vh: en el navegador del celular 100vh incluye la barra de
+     direcciones, así que el footer con el botón de checkout quedaba tapado. */
   height: 100vh;
+  height: 100dvh;
   background: #fff;
   box-shadow: -8px 0 40px rgba(27, 26, 46, 0.15);
   z-index: 999;

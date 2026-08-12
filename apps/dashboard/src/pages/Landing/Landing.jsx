@@ -62,7 +62,12 @@ function RevealSection({ children, className = '', id, bg }) {
 }
 
 /* ─── Navbar ────────────────────────────── */
-const NAV_SECTION_IDS = ['features', 'how', 'pricing'];
+const NAV_LINKS = [
+  { id: 'features', label: 'Funciones' },
+  { id: 'how', label: 'Cómo funciona' },
+  { id: 'pricing', label: 'Planes' },
+];
+const NAV_SECTION_IDS = NAV_LINKS.map((link) => link.id);
 
 function useActiveSection(ids) {
   const [activeId, setActiveId] = useState(null);
@@ -85,52 +90,119 @@ function useActiveSection(ids) {
 
 function Navbar({ onEnterDashboard }) {
   const activeSection = useActiveSection(NAV_SECTION_IDS);
+  // Mismo comportamiento que el navbar del sitio de ventas: fondo plano arriba
+  // de todo y sombra + blur apenas se scrollea.
+  const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // El drawer es fixed y tapa toda la ventana: sin esto el fondo se sigue
+  // scrolleando por detrás.
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleKeyDown = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [menuOpen]);
+
+  // El scroll suave arranca recién en el frame siguiente: mientras el menú está
+  // abierto el body tiene overflow:hidden y scrollIntoView no haría nada.
+  const goToSection = (id) => {
+    setMenuOpen(false);
+    requestAnimationFrame(() => scrollTo(id));
+  };
+
+  const handleEnterDashboard = () => {
+    setMenuOpen(false);
+    onEnterDashboard();
+  };
 
   return (
-    <nav className="landing-nav">
-      <div className="landing-nav__logo" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-        linkstar<span className="landing-nav__logo-dot">.</span>
+    <nav className={`landing-nav ${scrolled ? 'landing-nav--scrolled' : ''} ${menuOpen ? 'landing-nav--menu-open' : ''}`}>
+      <div className="landing-nav__inner">
+        <div className="landing-nav__logo" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+          <span className="landing-nav__logo-text">linkstar</span>
+          <span className="landing-nav__logo-dot" />
+        </div>
+
+        <div className="landing-nav__links">
+          {NAV_LINKS.map((link) => (
+            <button
+              key={link.id}
+              className={`landing-nav__link ${activeSection === link.id ? 'landing-nav__link--active' : ''}`}
+              onClick={() => scrollTo(link.id)}
+            >
+              {link.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="landing-nav__actions">
+          <button className="landing-nav__login-btn" onClick={onEnterDashboard}>
+            Iniciar sesión
+          </button>
+          <button className="landing-nav__cta-btn" onClick={onEnterDashboard}>
+            Empieza gratis
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+            </svg>
+          </button>
+
+          {/* Mobile toggle */}
+          <button
+            className={`landing-nav__toggle ${menuOpen ? 'landing-nav__toggle--open' : ''}`}
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
+            aria-expanded={menuOpen}
+            aria-controls="landing-mobile-menu"
+          >
+            <span className="landing-nav__toggle-bar" />
+            <span className="landing-nav__toggle-bar" />
+            <span className="landing-nav__toggle-bar" />
+          </button>
+        </div>
       </div>
 
-      <div className="landing-nav__links">
-        <button
-          className={`landing-nav__link ${activeSection === 'features' ? 'landing-nav__link--active' : ''}`}
-          onClick={() => scrollTo('features')}
-        >
-          Funciones
-        </button>
-        <button
-          className={`landing-nav__link ${activeSection === 'how' ? 'landing-nav__link--active' : ''}`}
-          onClick={() => scrollTo('how')}
-        >
-          Cómo funciona
-        </button>
-        <button
-          className={`landing-nav__link ${activeSection === 'pricing' ? 'landing-nav__link--active' : ''}`}
-          onClick={() => scrollTo('pricing')}
-        >
-          Planes
-        </button>
+      {/* Menú mobile: las mismas tres secciones del navbar de escritorio */}
+      <div
+        id="landing-mobile-menu"
+        className={`landing-nav__mobile ${menuOpen ? 'landing-nav__mobile--open' : ''}`}
+      >
+        {NAV_LINKS.map((link) => (
+          <button
+            key={link.id}
+            className={`landing-nav__mobile-link ${activeSection === link.id ? 'landing-nav__mobile-link--active' : ''}`}
+            onClick={() => goToSection(link.id)}
+            tabIndex={menuOpen ? 0 : -1}
+          >
+            {link.label}
+          </button>
+        ))}
+
+        <div className="landing-nav__mobile-actions">
+          <button className="landing-nav__login-btn" onClick={handleEnterDashboard} tabIndex={menuOpen ? 0 : -1}>
+            Iniciar sesión
+          </button>
+          <button className="landing-nav__cta-btn" onClick={handleEnterDashboard} tabIndex={menuOpen ? 0 : -1}>
+            Empieza gratis
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      <div className="landing-nav__actions">
-        <button className="landing-nav__login-btn" onClick={onEnterDashboard}>
-          Iniciar sesión
-        </button>
-        <button className="landing-nav__cta-btn" onClick={onEnterDashboard}>
-          Empieza gratis
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-          </svg>
-        </button>
-
-        {/* Mobile toggle */}
-        <button className="landing-nav__toggle" onClick={onEnterDashboard} aria-label="Menu">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
-      </div>
+      {menuOpen && <div className="landing-nav__overlay" onClick={() => setMenuOpen(false)} />}
     </nav>
   );
 }
@@ -138,7 +210,7 @@ function Navbar({ onEnterDashboard }) {
 /* ─── Hero ──────────────────────────────── */
 function Hero({ onEnterDashboard }) {
   return (
-    <div className="landing-section landing-section--light">
+    <div className="landing-section landing-section--light landing-hero-block">
       <section className="landing-hero">
         <div className="landing-hero__content">
           <span className="landing-hero__badge">
@@ -220,6 +292,11 @@ function Hero({ onEnterDashboard }) {
           </div>
         </div>
       </section>
+
+      {/* La barra de stats vive dentro del bloque del hero: juntos ocupan
+          exactamente el alto de la ventana, así la sección oscura de abajo
+          no asoma antes de scrollear. */}
+      <Stats />
     </div>
   );
 }
@@ -227,7 +304,7 @@ function Hero({ onEnterDashboard }) {
 /* ─── Stats ─────────────────────────────── */
 function Stats() {
   return (
-    <RevealSection className="landing-stats" bg="light">
+    <RevealSection className="landing-stats">
       <div className="landing-stats__grid">
         <div className="landing-stats__item">
           <div className="landing-stats__value">+12.000</div>
@@ -645,6 +722,39 @@ function Pricing({ onEnterDashboard }) {
 }
 
 /* ─── FAQ ───────────────────────────────── */
+// Mismo patrón que apps/ventas FAQ.jsx: tarjetas blancas independientes con
+// ícono "+/×" en vez del acordeón de bordes planos que tenía antes. El alto
+// real de la respuesta se mide con un ref después de montar (no en el primer
+// render, donde contentRef.current todavía es null) para que el ítem que
+// arranca abierto no quede colapsado en max-height: 0.
+function FAQItem({ q, a, isOpen, onClick }) {
+  const contentRef = useRef(null);
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    if (isOpen && contentRef.current) {
+      setHeight(contentRef.current.scrollHeight);
+    }
+  }, [isOpen]);
+
+  return (
+    <div className={`landing-faq__item ${isOpen ? 'landing-faq__item--open' : ''}`}>
+      <button className="landing-faq__question" onClick={onClick} aria-expanded={isOpen}>
+        <span>{q}</span>
+        <span className="landing-faq__icon">
+          <span className="landing-faq__icon-bar landing-faq__icon-bar--h" />
+          <span className="landing-faq__icon-bar landing-faq__icon-bar--v" />
+        </span>
+      </button>
+      <div className="landing-faq__answer-wrapper" style={{ maxHeight: isOpen ? `${height}px` : '0px' }}>
+        <div className="landing-faq__answer" ref={contentRef}>
+          <p className="landing-faq__answer-text">{a}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FAQ({ openFaq, setOpenFaq }) {
   return (
     <RevealSection className="landing-faq" id="faq" bg="light">
@@ -653,17 +763,13 @@ function FAQ({ openFaq, setOpenFaq }) {
 
       <div className="landing-faq__list">
         {faqData.map((item, i) => (
-          <div key={i} className={`landing-faq__item ${openFaq === i ? 'landing-faq__item--open' : ''}`}>
-            <button className="landing-faq__question" onClick={() => setOpenFaq(openFaq === i ? null : i)}>
-              {item.q}
-              <svg className="landing-faq__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-            <div className="landing-faq__answer">
-              <p className="landing-faq__answer-text">{item.a}</p>
-            </div>
-          </div>
+          <FAQItem
+            key={i}
+            q={item.q}
+            a={item.a}
+            isOpen={openFaq === i}
+            onClick={() => setOpenFaq(openFaq === i ? null : i)}
+          />
         ))}
       </div>
     </RevealSection>
@@ -694,7 +800,6 @@ export default function Landing({ onEnterDashboard }) {
     <div className="landing-page">
       <Navbar onEnterDashboard={onEnterDashboard} />
       <Hero onEnterDashboard={onEnterDashboard} />
-      <Stats />
       <Features />
       <HowItWorks />
       <Pricing onEnterDashboard={onEnterDashboard} />

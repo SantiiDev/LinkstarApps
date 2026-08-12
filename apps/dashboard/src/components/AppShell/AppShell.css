@@ -13,6 +13,17 @@
   min-width: 0;
 }
 
+/* Cubre el contenido mientras el cajón de navegación está abierto en móvil. */
+.app-shell__nav-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgba(26, 38, 57, 0.45);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  animation: fadeIn var(--transition-base) both;
+}
+
 .app-shell__topbar {
   position: sticky;
   top: 0;
@@ -20,6 +31,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
   height: 44px;
   padding: 0 2rem;
   background: linear-gradient(90deg, rgba(245, 133, 41, 0.1), rgba(245, 158, 11, 0.06));
@@ -79,6 +91,25 @@
   border: 1.5px solid var(--color-white);
 }
 
+/* Botón hamburguesa: sólo existe en móvil, donde el sidebar está fuera de pantalla. */
+.app-shell__nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-left: -0.5rem;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: var(--color-navy);
+  flex-shrink: 0;
+  transition: background var(--transition-base);
+}
+
+.app-shell__nav-toggle:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
 .app-shell__content {
   min-height: calc(100vh - 44px);
 }
@@ -90,10 +121,26 @@
 
   .app-shell__contact {
     font-size: 0.68rem;
+    min-width: 0;
   }
 
   .app-shell__contact svg {
     flex-shrink: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell__nav-toggle {
+    display: flex;
+  }
+
+  /* La barra crece para alojar un target táctil cómodo. */
+  .app-shell__topbar {
+    height: 52px;
+  }
+
+  .app-shell__content {
+    min-height: calc(100vh - 52px);
   }
 }
 

@@ -30,6 +30,18 @@ const faqData = [
 
 function FAQItem({ question, answer, isOpen, onClick, index }) {
   const contentRef = useRef(null);
+  const [height, setHeight] = useState(0);
+
+  // contentRef sólo queda apuntando al nodo real después del commit, así que
+  // en el primer render (el ítem que arranca abierto) scrollHeight todavía es
+  // undefined y el wrapper queda con max-height inválido, colapsado en 0. Un
+  // efecto que mide una vez montado corrige tanto ese caso como los toggles
+  // normales.
+  useEffect(() => {
+    if (isOpen && contentRef.current) {
+      setHeight(contentRef.current.scrollHeight);
+    }
+  }, [isOpen]);
 
   return (
     <div className={`faq__item ${isOpen ? 'faq__item--open' : ''}`}>
@@ -43,7 +55,7 @@ function FAQItem({ question, answer, isOpen, onClick, index }) {
       <div
         className="faq__answer-wrapper"
         style={{
-          maxHeight: isOpen ? contentRef.current?.scrollHeight + 'px' : '0px',
+          maxHeight: isOpen ? height + 'px' : '0px',
         }}
       >
         <div className="faq__answer" ref={contentRef}>

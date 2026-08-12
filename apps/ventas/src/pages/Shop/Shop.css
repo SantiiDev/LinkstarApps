@@ -327,9 +327,12 @@
   border-width: 4px;
 }
 
+/* flex-wrap: el badge es nowrap y en tarjetas angostas (grilla de 2 columnas,
+   ~900–1100px) empujaba el contenido fuera del borde del tier, que recorta. */
 .shop-card__tier-label {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
   flex: 1;
   min-width: 0;
@@ -410,10 +413,13 @@
   min-width: 0;
 }
 
+/* El precio no encoge (flex-shrink: 0), así que el título tiene que poder
+   cortarse; si no, en tarjetas angostas la fila se sale del tier, que recorta. */
 .shop-card__unit-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
@@ -422,6 +428,8 @@
   font-weight: 700;
   color: var(--color-navy);
   padding-top: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .shop-card__unit-price {
@@ -461,8 +469,11 @@
 }
 
 /* Color Selector */
+/* flex-wrap: con la grilla en 2 columnas (~900–1100px) la tarjeta queda
+   angosta y los botones de color se salían del borde. */
 .shop-card__colors {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
@@ -695,5 +706,25 @@
     flex-direction: column;
     gap: var(--space-3);
     padding: var(--space-4) var(--space-5);
+  }
+}
+/* ── Targets táctiles ──
+   En pantalla táctil los controles chicos son difíciles de acertar: las
+   flechas del carrusel, los selectores de color y el "volver" crecen a un
+   área cómoda sin cambiar su aspecto en desktop. */
+@media (pointer: coarse), (max-width: 600px) {
+  .shop-card__image-arrow {
+    width: 40px;
+    height: 40px;
+  }
+
+  .shop-card__color {
+    padding: var(--space-2) var(--space-3);
+    min-height: 40px;
+  }
+
+  .shop__back {
+    padding: var(--space-2) var(--space-4);
+    min-height: 40px;
   }
 }

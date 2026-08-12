@@ -11,6 +11,7 @@
   --shadow-button-hover: 0 8px 25px rgba(216, 87, 46, 0.4);
   --ls-bg-light: #FBF6EE;
   --ls-bg-dark: #1B1A2E;
+  --ls-nav-height: 72px;
 }
 
 /* Cada sección ocupa todo el ancho y alterna fondo; el contenido (con su
@@ -44,62 +45,94 @@
   border-color: rgba(255, 255, 255, 0.9);
 }
 
-/* ---------- Landing Navbar ---------- */
+/* ---------- Landing Navbar ----------
+   Mismo estilado que el navbar del sitio de ventas (apps/ventas Navbar.css):
+   fondo crema sin borde, sombra + blur recién al scrollear, logo con el punto
+   naranja como círculo, y links tipo pill con hover gris suave (el naranja
+   queda reservado para el link activo). Los valores van literales porque el
+   dashboard no tiene los tokens --space-* / --font-size-* / --radius-full
+   del sitio de ventas. */
 .landing-nav {
   position: sticky;
   top: 0;
   z-index: 200;
+  height: var(--ls-nav-height);
+  background: var(--ls-bg-light);
+  transition: box-shadow var(--transition-base), background var(--transition-base);
+  animation: fadeIn 0.4s ease both;
+}
+
+.landing-nav--scrolled {
+  background: rgba(251, 246, 238, 0.95);
+  box-shadow: 0 2px 16px rgba(27, 26, 46, 0.08);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+/* Ancho contenido igual al del resto de la landing, así el logo queda alineado
+   con el título del hero en vez de pegado al borde de la ventana.
+   Cada bloque declara su columna a mano: en mobile los links se ocultan con
+   display:none y, sin esto, el auto-placement de grid mete las acciones en la
+   columna del medio y el botón hamburguesa termina en el centro del navbar. */
+.landing-nav__inner {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
+  height: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
   padding: 0 3rem;
-  height: 76px;
-  background: var(--ls-bg-light);
-  border-bottom: 1px solid rgba(26, 38, 57, 0.06);
-  box-shadow: 0 1px 0 rgba(26, 38, 57, 0.04);
-  animation: fadeIn 0.4s ease both;
 }
 
 .landing-nav__logo {
   display: flex;
   align-items: center;
+  grid-column: 1;
   justify-self: start;
-  gap: 0.15rem;
-  font-size: 1.55rem;
-  font-weight: 800;
-  color: var(--color-navy);
-  letter-spacing: -0.5px;
+  gap: 2px;
   user-select: none;
   cursor: pointer;
 }
 
-.landing-nav__logo-dot {
-  color: var(--color-orange);
-  font-size: 2rem;
+.landing-nav__logo-text {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  letter-spacing: -0.5px;
   line-height: 1;
+}
+
+.landing-nav__logo-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-orange);
+  margin-bottom: -6px;
+  margin-left: 1px;
 }
 
 .landing-nav__links {
   display: flex;
   align-items: center;
+  grid-column: 2;
   justify-self: center;
-  gap: 0.35rem;
+  gap: 0.25rem;
 }
 
 .landing-nav__link {
-  padding: 0.6rem 1.35rem;
-  border-radius: var(--radius-button);
-  font-size: 0.9rem;
-  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
   color: var(--color-navy);
   background: transparent;
-  transition: all var(--transition-base);
+  white-space: nowrap;
+  transition: all 150ms ease;
 }
 
 .landing-nav__link:hover,
 .landing-nav__link:focus-visible {
-  color: #fff;
-  background: var(--color-orange);
+  background: rgba(27, 26, 46, 0.06);
 }
 
 .landing-nav__link--active {
@@ -114,34 +147,35 @@
 .landing-nav__actions {
   display: flex;
   align-items: center;
+  grid-column: 3;
   justify-self: end;
   gap: 0.65rem;
 }
 
 .landing-nav__login-btn {
-  padding: 0.6rem 1.35rem;
-  border-radius: var(--radius-button);
-  font-size: 0.85rem;
-  font-weight: 700;
+  padding: 0.5rem 1.15rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: var(--color-navy);
   background: transparent;
-  border: 1.5px solid rgba(26, 38, 57, 0.15);
-  transition: all var(--transition-base);
+  border: 1.5px solid rgba(27, 26, 46, 0.14);
+  transition: all 150ms ease;
 }
 
 .landing-nav__login-btn:hover {
-  border-color: var(--color-orange);
-  color: var(--color-orange);
+  border-color: var(--color-navy);
+  background: rgba(27, 26, 46, 0.06);
 }
 
 .landing-nav__cta-btn {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.65rem 1.55rem;
-  border-radius: var(--radius-button);
-  font-size: 0.85rem;
-  font-weight: 700;
+  padding: 0.55rem 1.35rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: #fff;
   background: var(--color-orange);
   box-shadow: var(--shadow-button);
@@ -149,19 +183,33 @@
 }
 
 .landing-nav__cta-btn:hover {
+  background: var(--color-orange-hover);
   transform: translateY(-2px);
   box-shadow: var(--shadow-button-hover);
 }
 
 /* ---------- Hero Section ---------- */
+
+/* Hero + barra de stats ocupan juntos exactamente lo que queda de ventana
+   debajo del navbar: la primera pantalla se ve completa y la sección oscura
+   arranca justo en el borde inferior, sin asomarse. */
+.landing-hero-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: calc(100vh - var(--ls-nav-height));
+  min-height: calc(100dvh - var(--ls-nav-height));
+}
+
 .landing-hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 3.5rem;
+  width: 100%;
   max-width: 1240px;
   margin: 0 auto;
-  padding: 5rem 3rem 3.5rem;
+  padding: 3.5rem 3rem 2.5rem;
 }
 
 .landing-hero__content {
@@ -440,9 +488,10 @@
 
 /* ---------- Stats Bar ---------- */
 .landing-stats {
+  width: 100%;
   max-width: 1240px;
   margin: 0 auto;
-  padding: 0 3rem 3rem;
+  padding: 0 3rem 2.5rem;
   animation: fadeInUp 0.7s ease 0.3s both;
 }
 
@@ -483,10 +532,26 @@
 }
 
 /* ---------- Features Section ---------- */
+
+/* Sección compacta a propósito: con el padding y los tamaños del resto de las
+   secciones, el bento de 6 tarjetas no entraba en una pantalla y obligaba a
+   scrollear para verlo entero. Los recortes viven acá (no en las reglas
+   generales) para no achicar Cómo funciona / Planes / FAQ. */
 .landing-features {
-  padding: 5rem 3rem;
+  padding: 3.25rem 3rem;
   max-width: 1240px;
   margin: 0 auto;
+}
+
+.landing-features .landing-section-title {
+  font-size: 2.1rem;
+  margin-bottom: 0.65rem;
+}
+
+.landing-features .landing-section-subtitle {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin-bottom: 1.85rem;
 }
 
 .landing-section-tag {
@@ -520,15 +585,57 @@
 .landing-features__bento {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
 .landing-feature-card--lg {
   grid-column: span 2;
 }
 
+/* Las cuatro tarjetas de la fila inferior van más compactas (padding, icono,
+   tipografía y mockup) para que queden rectángulos más bajos que las dos
+   grandes de arriba. */
 .landing-feature-card--sm {
   grid-column: span 1;
+  padding: 1.25rem 1.25rem;
+}
+
+.landing-feature-card--sm .landing-feature-card__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  margin-bottom: 0.7rem;
+}
+
+.landing-feature-card--sm .landing-feature-card__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.landing-feature-card--sm .landing-feature-card__title {
+  font-size: 0.95rem;
+  line-height: 1.3;
+  margin-bottom: 0.35rem;
+}
+
+.landing-feature-card--sm .landing-feature-card__desc {
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.landing-feature-card--sm .landing-feature-card__mockup {
+  margin-top: 0.75rem;
+  padding: 0.6rem;
+  gap: 0.3rem;
+}
+
+.landing-feature-card--sm .landing-feature-card__mockup-quote {
+  font-size: 0.72rem;
+  margin: 0.25rem 0 0.45rem;
+}
+
+.landing-feature-card--sm .landing-feature-card__sparkline {
+  height: 24px;
 }
 
 .landing-feature-card {
@@ -537,7 +644,7 @@
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   border-radius: 1.15rem;
-  padding: 2rem 1.75rem;
+  padding: 1.6rem 1.5rem;
   box-shadow: var(--glass-shadow);
   transition: all var(--transition-base);
   position: relative;
@@ -578,14 +685,19 @@
 }
 
 .landing-feature-card__icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.9rem;
   color: #fff;
+}
+
+.landing-feature-card__icon svg {
+  width: 21px;
+  height: 21px;
 }
 
 .landing-feature-card__icon--orange {
@@ -601,28 +713,29 @@
 }
 
 .landing-feature-card__title {
-  font-size: 1.15rem;
+  font-size: 1.08rem;
   font-weight: 700;
   color: var(--color-navy);
-  margin-bottom: 0.6rem;
+  line-height: 1.3;
+  margin-bottom: 0.45rem;
 }
 
 .landing-feature-card__desc {
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   color: var(--color-text-secondary);
-  line-height: 1.65;
+  line-height: 1.55;
 }
 
 /* Mini-mockup inside feature cards */
 .landing-feature-card__mockup {
-  margin-top: 1.25rem;
+  margin-top: 0.9rem;
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.8);
   border-radius: 0.75rem;
-  padding: 0.85rem;
+  padding: 0.7rem;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.4rem;
 }
 
 .landing-feature-card__mockup-row {
@@ -1227,15 +1340,29 @@
 .landing-faq__list {
   text-align: left;
   margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
+/* Tarjeta blanca independiente por ítem, como .faq__item en apps/ventas
+   (antes era un acordeón de bordes planos, sin fondo propio). */
 .landing-faq__item {
-  border-top: 1px solid rgba(26, 38, 57, 0.08);
-  padding: 1.25rem 0;
+  background: #fff;
+  border: 1px solid rgba(26, 38, 57, 0.08);
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: all var(--transition-base);
 }
 
-.landing-faq__item:last-child {
-  border-bottom: 1px solid rgba(26, 38, 57, 0.08);
+.landing-faq__item:hover {
+  border-color: rgba(26, 38, 57, 0.15);
+  box-shadow: 0 2px 10px rgba(26, 38, 57, 0.05);
+}
+
+.landing-faq__item--open {
+  border-color: rgba(216, 87, 46, 0.22);
+  box-shadow: 0 4px 16px rgba(216, 87, 46, 0.07);
 }
 
 .landing-faq__question {
@@ -1247,59 +1374,72 @@
   font-size: 1rem;
   font-weight: 700;
   color: var(--color-navy);
-  padding: 0.35rem 0;
+  padding: 1.15rem 1.35rem;
   cursor: pointer;
   text-align: left;
+  line-height: 1.5;
   transition: color var(--transition-base);
 }
 
-.landing-faq__question:hover {
+.landing-faq__question:hover,
+.landing-faq__item--open .landing-faq__question {
   color: var(--color-orange);
 }
 
-.landing-faq__chevron {
-  width: 20px;
-  height: 20px;
-  color: var(--color-text-secondary);
+/* Ícono "+" que rota a "×" al abrir, igual que .faq__icon en apps/ventas
+   (reemplaza el chevron que rotaba 180°). */
+.landing-faq__icon {
+  position: relative;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
-  transition: transform var(--transition-base);
+  margin-left: 1rem;
 }
 
-.landing-faq__item--open .landing-faq__chevron {
-  transform: rotate(180deg);
-  color: var(--color-orange);
+.landing-faq__icon-bar {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: var(--color-navy);
+  border-radius: 2px;
+  transition: all var(--transition-base);
+}
+
+.landing-faq__icon-bar--h {
+  width: 13px;
+  height: 2px;
+  transform: translate(-50%, -50%);
+}
+
+.landing-faq__icon-bar--v {
+  width: 2px;
+  height: 13px;
+  transform: translate(-50%, -50%);
+}
+
+.landing-faq__item--open .landing-faq__icon-bar {
+  background: var(--color-orange);
+}
+
+.landing-faq__item--open .landing-faq__icon-bar--v {
+  transform: translate(-50%, -50%) rotate(90deg);
+  opacity: 0;
+}
+
+.landing-faq__answer-wrapper {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .landing-faq__answer {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    padding 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.landing-faq__item--open .landing-faq__answer {
-  max-height: 200px;
+  padding: 0 1.35rem 1.35rem;
 }
 
 .landing-faq__answer-text {
-  padding-top: 0.65rem;
   font-size: 0.88rem;
   color: var(--color-text-secondary);
   line-height: 1.7;
-}
-
-.landing-section--dark .landing-faq__item,
-.landing-section--dark .landing-faq__item:last-child {
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-.landing-section--dark .landing-faq__question {
-  color: #fff;
-}
-
-.landing-section--dark .landing-faq__chevron,
-.landing-section--dark .landing-faq__answer-text {
-  color: rgba(255, 255, 255, 0.55);
 }
 
 /* ---------- Footer ---------- */
@@ -1352,19 +1492,64 @@
 }
 
 /* ---------- Mobile Nav Toggle ---------- */
+/* Las tres barras son elementos propios (no un <svg>) para poder animarlas
+   hasta la "X" cuando el menú está abierto, igual que en apps/ventas. */
 .landing-nav__toggle {
   display: none;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 5px;
   width: 40px;
   height: 40px;
-  border-radius: 10px;
-  background: var(--color-light);
+  border-radius: 0.75rem;
+  background: transparent;
   color: var(--color-navy);
+  transition: background 150ms ease;
+}
+
+.landing-nav__toggle:hover {
+  background: rgba(27, 26, 46, 0.06);
+}
+
+.landing-nav__toggle-bar {
+  display: block;
+  width: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--color-navy);
+  transition: transform var(--transition-base), opacity var(--transition-base);
+  transform-origin: center;
+}
+
+.landing-nav__toggle--open .landing-nav__toggle-bar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.landing-nav__toggle--open .landing-nav__toggle-bar:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+
+.landing-nav__toggle--open .landing-nav__toggle-bar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ---------- Mobile Menu ----------
+   Sólo existe abajo de 768px; arriba de eso los links viven en el navbar. */
+.landing-nav__mobile,
+.landing-nav__overlay {
+  display: none;
 }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1024px) {
+  /* Apilado, el hero ya pasa de largo el alto de la ventana: forzar la altura
+     mínima sólo agregaría aire muerto. */
+  .landing-hero-block {
+    min-height: 0;
+  }
+
   .landing-hero {
     flex-direction: column;
     padding: 3.5rem 2rem 2.5rem;
@@ -1443,7 +1628,7 @@
 }
 
 @media (max-width: 768px) {
-  .landing-nav {
+  .landing-nav__inner {
     padding: 0 1.25rem;
   }
 
@@ -1457,6 +1642,98 @@
 
   .landing-nav__login-btn {
     display: none;
+  }
+
+  /* El drawer se dibuja arriba de todo, así que el header queda encima para
+     que la "X" siga siendo clickeable; el CTA se esconde mientras está
+     abierto para no superponerse con el panel. */
+  .landing-nav__inner {
+    position: relative;
+    z-index: 1000;
+  }
+
+  .landing-nav--menu-open .landing-nav__actions .landing-nav__cta-btn {
+    display: none;
+  }
+
+  .landing-nav__mobile {
+    display: flex;
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 999;
+    flex-direction: column;
+    gap: 0.35rem;
+    width: min(300px, 85vw);
+    height: 100vh;
+    height: 100dvh;
+    padding: calc(var(--ls-nav-height) + 1rem) 1.25rem 1.5rem;
+    background: var(--ls-bg-light);
+    box-shadow: -8px 0 32px rgba(27, 26, 46, 0.18);
+    overflow-y: auto;
+    visibility: hidden;
+    transform: translateX(100%);
+    transition: transform 300ms ease, visibility 300ms ease;
+  }
+
+  .landing-nav__mobile--open {
+    visibility: visible;
+    transform: translateX(0);
+  }
+
+  .landing-nav__mobile-link {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border-radius: 0.75rem;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: left;
+    color: var(--color-navy);
+    background: transparent;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .landing-nav__mobile-link:hover,
+  .landing-nav__mobile-link:focus-visible {
+    background: rgba(27, 26, 46, 0.06);
+  }
+
+  .landing-nav__mobile-link--active {
+    color: #fff;
+    background: var(--color-orange);
+  }
+
+  .landing-nav__mobile-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    margin-top: auto;
+    padding-top: 1.5rem;
+  }
+
+  /* Ganan por especificidad a las reglas de arriba que esconden el login y
+     dimensionan el CTA para el header. */
+  .landing-nav__mobile-actions .landing-nav__login-btn {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+  }
+
+  .landing-nav__mobile-actions .landing-nav__cta-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+  }
+
+  .landing-nav__overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 998;
+    background: rgba(27, 26, 46, 0.45);
+    animation: fadeIn 200ms ease;
   }
 
   .landing-hero {
@@ -1519,8 +1796,30 @@
     font-size: 1.65rem;
   }
 
+  /* Los tres números siguen uno al lado del otro: apilados dejaban tarjetas
+     larguísimas con todo el ancho vacío a los costados. Se achican la caja y
+     la tipografía en vez de romper la grilla. */
+  .landing-hero__panel {
+    padding: 1.15rem;
+  }
+
   .landing-hero__panel-stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+  }
+
+  .landing-hero__panel-stat {
+    padding: 0.6rem 0.4rem;
+    text-align: center;
+  }
+
+  .landing-hero__panel-stat-label {
+    font-size: 0.53rem;
+    letter-spacing: 0.02em;
+  }
+
+  .landing-hero__panel-stat-value {
+    font-size: 1.05rem;
   }
 
   .landing-stats__grid {

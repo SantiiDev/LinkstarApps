@@ -38,7 +38,7 @@ export default function Hero({ onShop, onLinkstarApp }) {
           </div>
 
           <h1 className="hero__title">
-            Tu marca,<br />
+            Tu marca<br />
             <span className="hero__title-highlight">siempre visible.</span><br />
             Sin esfuerzo.
           </h1>

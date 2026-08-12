@@ -197,9 +197,12 @@
 }
 
 /* Filter tabs */
+/* flex-wrap: los chips de filtro no entran en una línea entre ~481 y 560px y
+   se desbordaban de la tarjeta contenedora. */
 .devices-filters {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.25rem;
   background: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -513,6 +516,9 @@
 }
 
 /* ── Table View ── */
+/* overflow-x: auto (no hidden): la tabla tiene 8 columnas con th nowrap y en
+   pantallas angostas no entra. Con hidden las columnas sobrantes quedaban
+   recortadas y sin forma de llegar a ellas. */
 .devices-table-wrap {
   background: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -520,9 +526,14 @@
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-card);
   box-shadow: var(--glass-shadow);
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   animation: fadeInUp 0.5s ease both;
   position: relative;
+}
+
+.devices-table {
+  min-width: 720px;
 }
 
 .devices-table-wrap::before {
@@ -666,7 +677,13 @@
   box-shadow: 0 30px 80px rgba(26,38,57,0.2), inset 0 1.5px 0 rgba(255,255,255,0.95);
   width: 100%;
   max-width: 560px;
-  overflow: hidden;
+  /* El panel es más alto que una pantalla de teléfono (y mucho más que una en
+     apaisado): sin tope de alto y con overflow hidden, la mitad del modal
+     quedaba fuera de la ventana y era imposible llegar a los botones. */
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-x: hidden;
+  overflow-y: auto;
   animation: scaleIn var(--transition-bounce) both;
   position: relative;
 }
@@ -1119,6 +1136,9 @@
   position: relative;
   width: 100%;
   max-width: 420px;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   padding: 2rem 1.75rem 1.75rem;
   border-radius: 1.25rem;
   background: rgba(255, 255, 255, 0.85);
