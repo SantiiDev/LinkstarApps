@@ -583,7 +583,7 @@ export default function LocationsPage({ embedded = false }) {
   }
 
   return (
-    <div className="loc-page">
+    <div className={`loc-page ${embedded ? 'loc-page--embedded' : ''}`}>
 
       {/* ── Header ── */}
       {!embedded && (

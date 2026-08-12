@@ -1,9 +1,15 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../../context/CartContext';
+import { ROUTES } from '../../../lib/routes';
 import './Cart.css';
 
-export default function Cart({ onCheckout }) {
+export default function Cart() {
   const { items, isOpen, setIsOpen, removeItem, updateQty, totalItems, totalPrice } = useCart();
+  // El carrito se monta fuera de <Routes> (es un cajón, no una página), pero
+  // adentro del BrowserRouter: puede navegar por su cuenta y ya no necesita
+  // que App le pase un callback.
+  const navigate = useNavigate();
 
   // Bloquea el scroll de la página de fondo mientras el carrito está abierto,
   // así el scroll siempre queda contenido dentro del drawer.
@@ -113,7 +119,7 @@ export default function Cart({ onCheckout }) {
             </div>
             <button
               className="cart-drawer__checkout"
-              onClick={() => { setIsOpen(false); onCheckout(); }}
+              onClick={() => { setIsOpen(false); navigate(ROUTES.checkout); }}
             >
               Realizar pedido
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

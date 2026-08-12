@@ -365,11 +365,17 @@
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--color-navy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* Un mail es una sola palabra larguísima: sin punto de corte estiraba la fila
+   y se llevaba puesto el botón "Desconectar". */
 .settings-account-row__email {
   font-size: 0.72rem;
   color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 /* ── Danger banners / cards ── */
@@ -672,6 +678,25 @@
   .settings-activity-filters {
     grid-template-columns: 1fr;
   }
+
+  /* Las cuatro pestañas no entran en una línea y al envolverse el control
+     segmentado se deformaba en un bloque de dos o tres filas con el fondo
+     gris alrededor. Se mantiene en una sola fila que se desliza. */
+  .settings-tabs {
+    flex-wrap: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-tab {
+    flex-shrink: 0;
+  }
 }
 
 @media (max-width: 640px) {
@@ -679,9 +704,32 @@
     padding: 1rem;
   }
 
-  .settings-invoice-row,
+  .settings-card {
+    padding: 1.15rem;
+  }
+
   .settings-activity-row {
     flex-wrap: wrap;
+  }
+
+  /* Ícono y período arriba; estado, importe y descarga en una segunda línea
+     alineada con el texto. Con el wrap a secas los cinco elementos caían en
+     cualquier orden y el importe terminaba solo en el medio de la fila. */
+  .settings-invoice-row {
+    flex-wrap: wrap;
+    row-gap: 0.6rem;
+  }
+
+  .settings-invoice-row__body {
+    flex: 1 0 calc(100% - 36px - 0.9rem);
+  }
+
+  .settings-invoice-row__status {
+    margin-left: calc(36px + 0.9rem);
+  }
+
+  .settings-invoice-row__download {
+    margin-left: auto;
   }
 
   .settings-card__head {
@@ -689,6 +737,33 @@
   }
 
   .settings-card__head-action {
+    width: 100%;
+  }
+
+  /* El botón ocupa el ancho del bloque: apilado y con su ancho de contenido
+     quedaba chico y pegado a la izquierda, desalineado con la tarjeta. */
+  .settings-card__head-action .settings-btn,
+  .settings-card__head-action .settings-save-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .settings-plan-actions {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .settings-plan-actions > * {
+    flex: 1 1 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .settings-danger-card {
+    padding: 1.15rem;
+  }
+
+  .settings-danger-btn {
     width: 100%;
   }
 }

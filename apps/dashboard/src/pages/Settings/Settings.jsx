@@ -1,22 +1,23 @@
 import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import Select from '../../components/Select/Select';
 import DateField from '../../components/DateField/DateField';
 import EmployeesPage from '../Employees/Employees';
 import LocationsPage from '../Locations/Locations';
+import { SETTINGS_TABS, SETTINGS_TAB_ALIASES, settingsTabPath } from '../../lib/routes';
 import './Settings.css';
 
+// Los ids son los mismos que van en la URL (/panel/configuracion/equipo), así
+// que no hace falta traducir entre el id de la pestaña y su path. Los nombres
+// viejos ('team', 'billing', 'employees'…) siguen funcionando como alias, en
+// SETTINGS_TAB_ALIASES.
 const TABS = [
   { id: 'local', label: 'Gestión local', icon: 'mapPin' },
-  { id: 'team', label: 'Equipo', icon: 'users' },
-  { id: 'billing', label: 'Facturación y suscripción', icon: 'card' },
+  { id: 'equipo', label: 'Equipo', icon: 'users' },
+  { id: 'facturacion', label: 'Facturación y suscripción', icon: 'card' },
   { id: 'legal', label: 'Legal', icon: 'gear' },
 ];
-
-// initialTab llega desde deep-links viejos (Devices.jsx apuntaba a
-// 'employees'/'locations' cuando esas eran pestañas propias) — se
-// mapean a las pestañas nuevas más cercanas.
-const TAB_ALIASES = { general: 'local', employees: 'team', locations: 'local' };
 
 function Icon({ name, ...rest }) {
   const props = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', ...rest };
@@ -326,9 +327,16 @@ function LegalTab() {
 }
 
 /* ─── Root ────────────────────────────────────────────────────── */
-export default function SettingsPage({ initialTab }) {
-  const resolvedInitial = TAB_ALIASES[initialTab] || initialTab || 'local';
-  const [tab, setTab] = useState(resolvedInitial);
+/* La pestaña abierta vive en la URL (/panel/configuracion/:tab) y no en un
+   useState: así se puede enlazar directo a una pestaña —Dispositivos enlaza a
+   "Gestión local"—, compartir el enlace y usar atrás del navegador entre
+   pestañas. Sin :tab, o con una pestaña que no existe, se abre la primera. */
+export default function SettingsPage() {
+  const { tab: tabParam } = useParams();
+  const navigate = useNavigate();
+
+  const resolved = SETTINGS_TAB_ALIASES[tabParam] || tabParam;
+  const tab = SETTINGS_TABS.includes(resolved) ? resolved : 'local';
 
   return (
     <div className="settings-page">
@@ -343,7 +351,7 @@ export default function SettingsPage({ initialTab }) {
           <button
             key={t.id}
             className={`settings-tab ${tab === t.id ? 'settings-tab--active' : ''}`}
-            onClick={() => setTab(t.id)}
+            onClick={() => navigate(settingsTabPath(t.id))}
           >
             <Icon name={t.icon} width={15} height={15} />
             {t.label}
@@ -352,8 +360,8 @@ export default function SettingsPage({ initialTab }) {
       </div>
 
       {tab === 'local' && <LocalTab />}
-      {tab === 'team' && <TeamTab />}
-      {tab === 'billing' && <BillingTab />}
+      {tab === 'equipo' && <TeamTab />}
+      {tab === 'facturacion' && <BillingTab />}
       {tab === 'legal' && <LegalTab />}
     </div>
   );

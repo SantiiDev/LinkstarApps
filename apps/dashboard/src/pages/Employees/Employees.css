@@ -9,6 +9,20 @@
   margin: 0 auto;
 }
 
+/* Dentro de la pestaña "Equipo" la página ya vive adentro de .settings-page,
+   que trae su propio padding: sumados dejaban la tabla contra el centro de la
+   pantalla y en un teléfono se comían 2rem de ancho útil.
+
+   `margin: 0` no es cosmético: .settings-panel es un flex en columna y un
+   margen lateral `auto` cancela el estirado del ítem, que entonces se
+   dimensiona al ancho de su contenido — el de la tabla. Ver el mismo
+   comentario en Locations.css. */
+.emp-page--embedded {
+  padding: 0;
+  margin: 0;
+  max-width: none;
+}
+
 /* ── Page Header ── */
 .emp-page__header {
   display: flex;
@@ -721,8 +735,10 @@
   border: 2px solid rgba(255,255,255,0.7);
 }
 
-.emp-table__name  { font-weight: 700; line-height: 1.2; }
-.emp-table__role  { font-size: 0.7rem; color: var(--color-text-secondary); }
+/* nowrap: la tabla ya se desliza dentro de .emp-table-wrap; ver el mismo
+   comentario en Locations.css. */
+.emp-table__name  { font-weight: 700; line-height: 1.2; white-space: nowrap; }
+.emp-table__role  { font-size: 0.7rem; color: var(--color-text-secondary); white-space: nowrap; }
 
 .emp-table__rank {
   display: inline-flex;
@@ -820,6 +836,7 @@
   width: 100%;
   max-width: 580px;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
   animation: scaleIn var(--transition-bounce) both;
   position: relative;
@@ -1178,7 +1195,20 @@
 }
 
 @media (max-width: 480px) {
-  .emp-filters { display: none; }
+  /* Los filtros se deslizan en horizontal en vez de desaparecer: con
+     display:none no había forma de filtrar desde el teléfono. */
+  .emp-filters {
+    flex-wrap: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .emp-filters::-webkit-scrollbar { display: none; }
+
+  .emp-filter-tab { flex-shrink: 0; }
+
   .emp-stats   { grid-template-columns: 1fr 1fr; }
   .emp-modal__stats { grid-template-columns: 1fr 1fr 1fr; }
 }

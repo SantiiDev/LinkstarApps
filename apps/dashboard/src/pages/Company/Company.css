@@ -237,9 +237,14 @@
 }
 
 /* ── KPI grid ── */
+/* minmax(0, 1fr) y no 1fr: `1fr` equivale a `minmax(auto, 1fr)`, así que la
+   columna nunca baja del min-content de la tarjeta más ancha. Basta un texto
+   con `nowrap` adentro (un nombre, una fecha, una insignia) para que la
+   columna crezca por encima del ancho de la pantalla y la grilla entera se
+   desborde hacia la derecha. Con mínimo 0 manda siempre el ancho disponible. */
 .company-stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1.25rem;
   margin-bottom: 1.75rem;
 }
@@ -250,7 +255,7 @@
    stacked side-col) fills out instead of leaving a jagged bottom edge. */
 .company-two-col {
   display: grid;
-  grid-template-columns: 1.3fr 1fr;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   gap: 1.25rem;
   margin-bottom: 1.75rem;
 }
@@ -446,7 +451,13 @@
   gap: 0.5rem;
 }
 
+/* Se recorta el nombre en vez de empujar la fecha fuera de la tarjeta: en el
+   teléfono la fila no tiene ancho para los dos. */
 .recent-review__author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--color-navy);
@@ -554,13 +565,13 @@
 /* ── Responsive ── */
 @media (max-width: 1200px) {
   .company-stat-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 1024px) {
   .company-two-col {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .company-page {
@@ -573,18 +584,101 @@
     padding: 1rem;
   }
 
+  /* El banner pasa a bloque: ícono, texto y botón uno debajo del otro. Con
+     flex-wrap el texto quedaba encajonado entre el ícono de 48px y el borde,
+     y el botón caía suelto contra la izquierda. */
   .company-banner {
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.9rem;
+    padding: 1.15rem;
   }
 
   .company-banner__actions {
     width: 100%;
-    justify-content: space-between;
+  }
+
+  .company-banner__connect-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* "Responder ahora" baja a su propia línea, alineado con el texto, en vez de
+     pelearle el ancho al título contra el borde derecho. */
+  .company-alert__trigger {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.75rem 0.9rem;
+    padding: 1.1rem 2.5rem 1.1rem 1.1rem;
+  }
+
+  .company-alert__body {
+    flex: 1 1 60%;
+  }
+
+  .company-alert__cta {
+    flex-basis: 100%;
+    margin-left: calc(40px + 0.9rem);
+  }
+
+  .company-card {
+    padding: 1.25rem;
   }
 }
 
 @media (max-width: 480px) {
+  /* Dos columnas y no una: en una sola, cada KPI ocupaba una tarjeta enorme
+     con el número perdido arriba a la izquierda y había que scrollear cuatro
+     pantallas para ver los cuatro. */
   .company-stat-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .company-stat-grid .stat-card {
+    padding: 1.1rem;
+  }
+
+  /* Ícono y variación no entran en una línea con la tarjeta a media pantalla.
+     La insignia baja SIEMPRE a su propia línea (flex-basis: 100%), no sólo
+     cuando el texto es largo: si no, "+13 esta semana" envolvía y "+5%" no, y
+     los números de dos tarjetas vecinas quedaban a distinta altura. */
+  .company-stat-grid .stat-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
+  }
+
+  .company-stat-grid .stat-card__badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+  }
+
+  .company-stat-grid .stat-card__icon-wrapper {
+    width: 36px;
+    height: 36px;
+  }
+
+  .company-stat-grid .stat-card__label {
+    font-size: 0.72rem;
+    line-height: 1.3;
+  }
+
+  .company-chip {
+    font-size: 0.72rem;
+    padding: 0.45rem 0.8rem;
+  }
+
+  .company-sentiment-card {
+    padding: 1.25rem;
+  }
+
+  /* El badge "Nuevo" se superponía con el título cuando este ocupa dos
+     líneas: deja de ser absoluto y se apila arriba del todo. */
+  .company-sentiment-card__badge {
+    position: static;
+    align-self: flex-start;
+    margin-bottom: 0.15rem;
   }
 }

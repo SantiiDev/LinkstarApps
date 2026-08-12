@@ -1,35 +1,41 @@
+import { Link } from 'react-router-dom';
+import { ROUTES } from '../../../lib/routes';
 import './Footer.css';
 
+// Antes eran anclas `#tienda` con un onClick que interceptaba el click y
+// llamaba al callback correspondiente: el href no llevaba a ningún lado y el
+// footer, que es donde viven los enlaces legales, no era rastreable. Ahora
+// cada entrada es una ruta real.
 const footerLinks = {
   Productos: [
-    { label: 'Carteles NFC', href: '#tienda' },
-    { label: 'LinkstarApp', href: '#linkstarapp' },
+    { label: 'Carteles NFC', to: ROUTES.shop },
+    { label: 'LinkstarApp', to: ROUTES.linkstarapp },
   ],
   Empresa: [
-    { label: 'Sobre nosotros', href: '#sobre-nosotros', page: 'about' },
+    { label: 'Sobre nosotros', to: ROUTES.about },
   ],
   Soporte: [
-    { label: 'Contacto', href: '#contacto' },
-    { label: 'Garantía', href: '#garantia', page: 'warranty' },
+    { label: 'Contacto', to: ROUTES.contact },
+    { label: 'Garantía', to: ROUTES.warranty },
   ],
   Legal: [
-    { label: 'Aviso legal', href: '#aviso-legal', page: 'legal' },
-    { label: 'Política de privacidad', href: '#privacidad', page: 'privacy' },
-    { label: 'Términos y condiciones', href: '#terminos', page: 'terms' },
+    { label: 'Aviso legal', to: ROUTES.legal },
+    { label: 'Política de privacidad', to: ROUTES.privacy },
+    { label: 'Términos y condiciones', to: ROUTES.terms },
   ],
 };
 
-export default function Footer({ onContact, onShop, onLinkstarApp, onNavigate }) {
+export default function Footer() {
   return (
     <footer className="footer">
       <div className="footer__inner container">
         {/* Top section */}
         <div className="footer__top">
           <div className="footer__brand">
-            <a href="#inicio" className="footer__logo">
+            <Link to={ROUTES.home} className="footer__logo">
               <span className="footer__logo-text">linkstar</span>
               <span className="footer__logo-dot"></span>
-            </a>
+            </Link>
             <p className="footer__tagline">
               Conecta tu marca con el mundo digital a través de
               carteles expositores inteligentes con tecnología NFC.
@@ -54,29 +60,11 @@ export default function Footer({ onContact, onShop, onLinkstarApp, onNavigate })
               <div className="footer__column" key={category}>
                 <h4 className="footer__column-title">{category}</h4>
                 <ul className="footer__column-links">
-                  {links.map((link, index) => (
-                    <li key={index}>
-                      <a
-                        href={link.href}
-                        className="footer__link"
-                        onClick={(e) => {
-                          if (link.href === '#contacto' && onContact) {
-                            e.preventDefault();
-                            onContact();
-                          } else if (link.href === '#tienda' && onShop) {
-                            e.preventDefault();
-                            onShop();
-                          } else if (link.href === '#linkstarapp' && onLinkstarApp) {
-                            e.preventDefault();
-                            onLinkstarApp();
-                          } else if (link.page && onNavigate) {
-                            e.preventDefault();
-                            onNavigate(link.page);
-                          }
-                        }}
-                      >
+                  {links.map((link) => (
+                    <li key={link.to}>
+                      <Link to={link.to} className="footer__link">
                         {link.label}
-                      </a>
+                      </Link>
                     </li>
                   ))}
                 </ul>

@@ -1090,8 +1090,16 @@
   background: rgba(245, 133, 41, 0.08);
 }
 
+.devices-locations-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .devices-locations-table {
   width: 100%;
+  /* Abajo de este ancho los números se apilan letra por letra; con el
+     envoltorio de arriba la tabla se desliza en vez de romperse. */
+  min-width: 340px;
   border-collapse: collapse;
 }
 
@@ -1317,8 +1325,21 @@
 }
 
 @media (max-width: 480px) {
-  .devices-filters { display: none; }
+  /* Antes los filtros se escondían con display:none y en el teléfono no había
+     forma de filtrar por estado. Ahora la tira se desliza en horizontal. */
+  .devices-filters {
+    flex-wrap: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .devices-filters::-webkit-scrollbar { display: none; }
+
+  .devices-filter-tab { flex-shrink: 0; }
+
   .device-modal__footer { flex-direction: column; }
-  .devices-locations-table th:nth-child(3),
-  .devices-locations-table td:nth-child(3) { display: none; }
+  .device-modal__header { padding: 1.15rem 1.15rem 0.85rem; }
+  .device-modal__body { padding: 0.85rem 1.15rem 1.15rem; }
 }

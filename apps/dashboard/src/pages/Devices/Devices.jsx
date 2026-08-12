@@ -831,29 +831,33 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
             </svg>
           </button>
         </div>
-        <table className="devices-locations-table">
-          <thead>
-            <tr>
-              <th>Nombre del local</th>
-              <th>Escaneos</th>
-              <th>Reseñas (estimado)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {topLocations.map((loc) => (
-              <tr key={loc.id}>
-                <td>
-                  <div className="devices-locations-table__name">
-                    <span className="devices-locations-table__dot" style={{ background: loc.color }} />
-                    {loc.name}
-                  </div>
-                </td>
-                <td><span className="table-stat table-stat--orange">{loc.totalScans.toLocaleString()}</span></td>
-                <td><span className="table-stat table-stat--gold">{loc.totalReviews}</span></td>
+        {/* Envoltorio con scroll horizontal: en teléfonos la tabla no entra y
+            antes se ocultaba la columna de reseñas, que es justamente el dato. */}
+        <div className="devices-locations-table-wrap">
+          <table className="devices-locations-table">
+            <thead>
+              <tr>
+                <th>Nombre del local</th>
+                <th>Escaneos</th>
+                <th>Reseñas (estimado)</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {topLocations.map((loc) => (
+                <tr key={loc.id}>
+                  <td>
+                    <div className="devices-locations-table__name">
+                      <span className="devices-locations-table__dot" style={{ background: loc.color }} />
+                      {loc.name}
+                    </div>
+                  </td>
+                  <td><span className="table-stat table-stat--orange">{loc.totalScans.toLocaleString()}</span></td>
+                  <td><span className="table-stat table-stat--gold">{loc.totalReviews}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* ── Footer ── */}

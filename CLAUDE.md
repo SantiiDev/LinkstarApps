@@ -231,14 +231,28 @@ Routes, one router per file, all mounted at the app root:
 Still pre-launch: most of the dashboard is **UI built ahead of its backend**. Read the "real vs. mock"
 split below before wiring anything — the shell is finished, the data mostly isn't.
 
-- `App.jsx` owns a single `activeSection` string — that is the whole routing mechanism, no router library.
-  It starts at `landing`; `landing`, `login` and `register` render bare (no `AppShell`), everything else
-  renders inside it. `PROTECTED_SECTIONS` is gated: with no authenticated user, App renders `Login`.
-  `company` is the post-login landing page.
+- Routing is `react-router-dom` (v7, `BrowserRouter` in `main.jsx`). `src/lib/routes.js` is the single
+  source of truth: `PUBLIC_ROUTES` (`/`, `/iniciar-sesion`, `/registro`), `SECTION_PATHS` (section id →
+  `/panel/...` path), and the `sectionFromPath` / `pathForSection` / `settingsTabPath` helpers. URLs are
+  Spanish and ASCII-only (`/panel/resenas`, not `/panel/reseñas`). `/`, `/iniciar-sesion` and `/registro`
+  render bare (no `AppShell`); everything under `/panel` renders inside it.
 - Sections wired in `App.jsx` (and in `components/Sidebar/Sidebar.jsx`, which groups them):
   `company`, `devices`, `reviews`, the `gb-*` group (`gb-metrics`, `gb-profile`, `gb-posts`, `gb-seo`),
   the `reports-*` group (`reports-nps`, `reports-sentiment`, `reports-keywords`), `monthly-reports`,
-  `automations`, `settings`, `profile`. Adding a section means touching both files.
+  `automations`, `settings`, `profile`. Pages and `Sidebar` still speak in those **section ids**; the
+  id → path translation happens in `App.jsx` and `AppShell.jsx`, so no page imports the router. Adding a
+  section means touching three files: `SECTION_PATHS` in `lib/routes.js`, the `<Route>` in `App.jsx`, and
+  the item in `Sidebar.jsx`.
+- `AppShell` is the parent route of everything under `/panel`: it renders the sidebar + topbar once and
+  the section into its `<Outlet />`. It derives the active section from `useLocation()` (never from its
+  own state, or a deep link would leave the wrong sidebar item marked) and resets scroll to the top on
+  every pathname change.
+- `RequireAuth` in `App.jsx` gates the whole `/panel` subtree: with no authenticated user it redirects to
+  `/iniciar-sesion` carrying `state.from`, and `LoginRoute` sends the user back there after signing in.
+  `/panel/empresa` is the post-login landing page.
+- Settings tabs live in the URL (`/panel/configuracion/:tab` — `local`, `equipo`, `facturacion`, `legal`),
+  which is what makes Devices' "Ver más" able to deep-link into "Gestión local". `SETTINGS_TAB_ALIASES`
+  keeps the old ids (`general`, `employees`, `locations`, `team`, `billing`) working.
 - **Real vs. mock.** Only three screens read the database: `devices` (via `lib/dashboardApi.js`) and
   `employees` / `locations` (embedded in `settings`). `profile` reads the logged-in user from
   `AuthContext`. **Everything else is a static mock** — `company` and `reviews` off `data/reviews.js`,
@@ -277,9 +291,18 @@ split below before wiring anything — the shell is finished, the data mostly is
 
 ### `apps/ventas`
 
-- Single-page app with no router: `App.jsx` holds a `page` string in `useState` and conditionally renders
-  whole page components. Navigation is `onX` callbacks passed down through `Navbar`/`Footer`. Cart state is
-  global via `CartContext` and the `Cart` drawer is always mounted.
+- Routing is `react-router-dom` (v7, `BrowserRouter` in `main.jsx`), with the paths in `src/lib/routes.js`:
+  `/`, `/tienda`, `/linkstarapp`, `/contacto`, `/finalizar-compra`, `/nosotros`, `/garantia`, `/legal`,
+  `/privacidad`, `/terminos`. Unknown paths redirect to `/`.
+- `SiteLayout` (navbar + `<Outlet />` + footer) wraps every page **except** `/finalizar-compra`: checkout
+  is a purchase funnel and deliberately renders without navbar or footer, as it did before.
+- `Navbar` and `Footer` use `<Link>`/`<NavLink>` — real `<a href>`s, crawlable and openable in a new tab.
+  In-page CTAs (Hero, Features, FAQ…) keep their `onShop`/`onContact` callbacks, now wired to `navigate`:
+  they are styled buttons, not navigation, so they were left alone.
+- Cart state is global via `CartContext`; the `Cart` drawer is mounted outside `<Routes>` (it is a drawer,
+  not a page) and navigates to checkout by itself.
+- The Worker already serves the site with `not_found_handling: "single-page-application"`, so new paths
+  work as deep links without touching `wrangler.jsonc`.
 - `pages/LinkstarApp/LinkstarApp.jsx` is a **marketing page with a hardcoded mock dashboard**, not the real
   product — every chart/table on it is a static mock array, and "Acceder a LinkstarApp" is a no-op
   (`e.preventDefault()` only) because the real dashboard is `apps/dashboard`, not deployed yet.
@@ -333,7 +356,9 @@ that's the only real contact channel in the repo. Replace it when there's a sale
 - `services/api` deploys to Railway or Render (plain Node host, not a Worker), root directory
   `services/api`, planned at `api.linkstarapp.com`. When that goes live, update `apps/ventas/.env.production`'s
   `VITE_API_URL` and the API's `FRONTEND_URL` together.
-- `apps/dashboard` has no deploy target configured yet.
+- `apps/dashboard` has no deploy target configured yet. Whatever host it lands on must serve `index.html`
+  for unknown paths (SPA fallback), or every `/panel/...` deep link and every browser refresh returns 404 —
+  the same `not_found_handling` the ventas Worker already sets.
 - Of the three services `packages/database/supabase/README.md` originally assumed would be Edge Functions,
   two now live in `services/api` (`routes/redirect.js`, `routes/webhooks.js`) and are not planned as
   separate functions. Only `sync-reviews` (the daily Google Business Profile job that fills

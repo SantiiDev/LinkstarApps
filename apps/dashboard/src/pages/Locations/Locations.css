@@ -9,6 +9,21 @@
   margin: 0 auto;
 }
 
+/* Dentro de la pestaña "Gestión local" la página ya vive adentro de
+   .settings-page, que trae su propio padding: sumados dejaban la tabla contra
+   el centro de la pantalla y en un teléfono se comían 2rem de ancho útil.
+
+   `margin: 0` no es cosmético: .settings-panel es un flex en columna y un
+   margen lateral `auto` cancela el estirado del ítem, que entonces se
+   dimensiona al ancho de su contenido — el de la tabla, 976px. Con eso la
+   pestaña entera medía ~1010px adentro de una pantalla de 494 y todo (KPIs,
+   buscador, filtros) salía por la derecha. */
+.loc-page--embedded {
+  padding: 0;
+  margin: 0;
+  max-width: none;
+}
+
 /* ── Page Header ── */
 .loc-page__header {
   display: flex;
@@ -731,8 +746,11 @@
   flex-shrink: 0;
 }
 
-.loc-table__name { font-weight: 700; line-height: 1.2; }
-.loc-table__address { font-size: 0.7rem; color: var(--color-text-secondary); }
+/* nowrap: la tabla ya se desliza dentro de .loc-table-wrap, así que dejar que
+   la columna crezca es preferible a partir "Sucursal de Prueba" en tres
+   renglones para ganar unos píxeles que igual hay que scrollear. */
+.loc-table__name { font-weight: 700; line-height: 1.2; white-space: nowrap; }
+.loc-table__address { font-size: 0.7rem; color: var(--color-text-secondary); white-space: nowrap; }
 
 .loc-table__badge-status {
   display: inline-flex;
@@ -801,6 +819,7 @@
   width: 100%;
   max-width: 620px;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
   animation: scaleIn var(--transition-bounce) both;
   position: relative;
@@ -1204,7 +1223,20 @@
 }
 
 @media (max-width: 480px) {
-  .loc-filters { display: none; }
+  /* Los filtros se deslizan en horizontal en vez de desaparecer: con
+     display:none no había forma de filtrar desde el teléfono. */
+  .loc-filters {
+    flex-wrap: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .loc-filters::-webkit-scrollbar { display: none; }
+
+  .loc-filter-tab { flex-shrink: 0; }
+
   .loc-stats   { grid-template-columns: 1fr 1fr; }
   .loc-modal__stats { grid-template-columns: 1fr 1fr 1fr; }
 

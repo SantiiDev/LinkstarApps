@@ -539,7 +539,7 @@ export default function EmployeesPage({ embedded = false }) {
   }
 
   return (
-    <div className="emp-page">
+    <div className={`emp-page ${embedded ? 'emp-page--embedded' : ''}`}>
 
       {/* ── Header ── */}
       {!embedded && (

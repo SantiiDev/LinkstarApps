@@ -1,13 +1,11 @@
-import { useState, Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
+import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { CartProvider } from './context/CartContext';
 import Navbar from './components/layout/Navbar/Navbar';
-import Hero from './components/sections/Hero/Hero';
-import Features from './components/sections/Features/Features';
-import HowItWorks from './components/sections/HowItWorks/HowItWorks';
-import ReviewsCTA from './components/sections/ReviewsCTA/ReviewsCTA';
-import FAQ from './components/sections/FAQ/FAQ';
 import Footer from './components/layout/Footer/Footer';
 import Cart from './components/common/Cart/Cart';
+import Home from './pages/Home/Home';
+import { ROUTES } from './lib/routes';
 
 // Cargadas sólo cuando se navega a esa página: no hace falta que el bundle
 // inicial de la home incluya el checkout, el shop o las páginas legales.
@@ -21,119 +19,86 @@ const Terms = lazy(() => import('./pages/Info/Terms'));
 const Warranty = lazy(() => import('./pages/Info/Warranty'));
 const About = lazy(() => import('./pages/Info/About'));
 
+/* Cada ruta arranca desde arriba. Antes cada `goToX` hacía su propio
+ * window.scrollTo; ahora que la navegación pasa por el router, el scroll se
+ * resetea en un solo lugar. 'instant' y no 'smooth': la página ya cambió,
+ * animar el viaje sólo muestra la nueva pasando de largo. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname]);
+  return null;
+}
+
+/* Layout del sitio: navbar arriba, página en el medio, footer abajo. El
+ * checkout queda fuera a propósito — es un embudo de compra y no lleva ni
+ * navbar ni footer, igual que antes. */
+function SiteLayout() {
+  return (
+    <>
+      <Navbar />
+      <Suspense fallback={<div className="page-loading" />}>
+        <Outlet />
+      </Suspense>
+      <Footer />
+    </>
+  );
+}
+
+function CheckoutRoute() {
+  const navigate = useNavigate();
+  return (
+    <Suspense fallback={<div className="page-loading" />}>
+      <Checkout onBack={() => navigate(ROUTES.home)} />
+    </Suspense>
+  );
+}
+
+function ShopRoute() {
+  const navigate = useNavigate();
+  return <Shop onBack={() => navigate(ROUTES.home)} />;
+}
+
+function LinkstarAppRoute() {
+  const navigate = useNavigate();
+  return (
+    <LinkstarApp
+      onShop={() => navigate(ROUTES.shop)}
+      onContact={() => navigate(ROUTES.contact)}
+    />
+  );
+}
+
 export default function App() {
-  const [page, setPage] = useState('home'); // 'home' | 'shop' | 'contact' | 'checkout'
-
-  const goToShop = () => {
-    setPage('shop');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const goHome = () => {
-    setPage('home');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const goToContact = () => {
-    setPage('contact');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const goToCheckout = () => {
-    setPage('checkout');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const goToLinkstarApp = () => {
-    setPage('linkstarapp');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const navigateTo = (pageName) => {
-    setPage(pageName);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
   return (
     <CartProvider>
-      {page !== 'checkout' && (
-        <Navbar onShop={goToShop} onHome={goHome} onContact={goToContact} onLinkstarApp={goToLinkstarApp} currentPage={page} />
-      )}
+      <ScrollToTop />
 
-      <Suspense fallback={<div className="page-loading" />}>
-      {page === 'checkout' && <Checkout onBack={goHome} />}
+      <Routes>
+        <Route element={<SiteLayout />}>
+          <Route path={ROUTES.home} element={<Home />} />
+          <Route path={ROUTES.shop} element={<ShopRoute />} />
+          <Route path={ROUTES.linkstarapp} element={<LinkstarAppRoute />} />
+          <Route path={ROUTES.contact} element={<Contact />} />
+          <Route path={ROUTES.about} element={<About />} />
+          <Route path={ROUTES.warranty} element={<Warranty />} />
+          <Route path={ROUTES.legal} element={<Legal />} />
+          <Route path={ROUTES.privacy} element={<Privacy />} />
+          <Route path={ROUTES.terms} element={<Terms />} />
+        </Route>
 
-      {page === 'shop' && (
-        <>
-          <Shop onBack={goHome} />
-          <Footer onContact={goToContact} onShop={goToShop} onLinkstarApp={goToLinkstarApp} onNavigate={navigateTo} />
-        </>
-      )}
+        <Route path={ROUTES.checkout} element={<CheckoutRoute />} />
 
-      {page === 'contact' && (
-        <>
-          <Contact />
-          <Footer onContact={goToContact} onShop={goToShop} onLinkstarApp={goToLinkstarApp} onNavigate={navigateTo} />
-        </>
-      )}
+        {/* Cualquier URL desconocida vuelve a la home. El sitio se sirve como
+            SPA desde el Worker, que ya responde 200 a todo, así que una página
+            de 404 propia no cambiaría el status code. */}
+        <Route path="*" element={<Navigate to={ROUTES.home} replace />} />
+      </Routes>
 
-      {page === 'linkstarapp' && (
-        <>
-          <LinkstarApp onShop={goToShop} onContact={goToContact} />
-          <Footer onContact={goToContact} onShop={goToShop} onLinkstarApp={goToLinkstarApp} onNavigate={navigateTo} />
-        </>
-      )}
-
-      {page === 'home' && (
-        <>
-          <main>
-            <Hero onShop={goToShop} onLinkstarApp={goToLinkstarApp} />
-            <ReviewsCTA onShop={goToShop} />
-            <HowItWorks onShop={goToShop} />
-            <Features onShop={goToShop} />
-            <FAQ onContact={goToContact} />
-          </main>
-          <Footer onContact={goToContact} onShop={goToShop} onLinkstarApp={goToLinkstarApp} onNavigate={navigateTo} />
-        </>
-      )}
-
-      {page === 'legal' && (
-        <>
-          <Legal />
-          <Footer onContact={goToContact} onShop={goToShop} onLinkstarApp={goToLinkstarApp} onNavigate={navigateTo} />
-        </>
-      )}
-
-      {page === 'privacy' && (
-        <>
-          <Privacy />
-          <Footer onContact={goToContact} onShop={goToShop} onLinkstarApp={goToLinkstarApp} onNavigate={navigateTo} />
-        </>
-      )}
-
-      {page === 'terms' && (
-        <>
-          <Terms />
-          <Footer onContact={goToContact} onShop={goToShop} onLinkstarApp={goToLinkstarApp} onNavigate={navigateTo} />
-        </>
-      )}
-
-      {page === 'warranty' && (
-        <>
-          <Warranty />
-          <Footer onContact={goToContact} onShop={goToShop} onLinkstarApp={goToLinkstarApp} onNavigate={navigateTo} />
-        </>
-      )}
-
-      {page === 'about' && (
-        <>
-          <About />
-          <Footer onContact={goToContact} onShop={goToShop} onLinkstarApp={goToLinkstarApp} onNavigate={navigateTo} />
-        </>
-      )}
-      </Suspense>
-
-      <Cart onCheckout={goToCheckout} />
+      {/* El carrito es un cajón, no una página: vive fuera del router para que
+          no se cierre ni se vacíe visualmente al navegar. */}
+      <Cart />
     </CartProvider>
   );
 }

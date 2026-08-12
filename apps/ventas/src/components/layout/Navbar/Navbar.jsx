@@ -1,8 +1,22 @@
 import { useState, useEffect } from 'react';
+import { Link, NavLink } from 'react-router-dom';
 import { useCart } from '../../../context/CartContext';
+import { ROUTES } from '../../../lib/routes';
 import './Navbar.css';
 
-export default function Navbar({ onShop, onHome, onContact, onLinkstarApp, currentPage }) {
+// Enlaces reales (<Link>, que renderiza un <a href>) y no botones con
+// onClick: son la navegación principal del sitio, así que tienen que poder
+// abrirse en pestaña nueva, copiarse y rastrearse por un buscador. El estado
+// activo lo resuelve NavLink contra la URL, por eso ya no hace falta el prop
+// `currentPage` que venía desde App.
+const NAV_LINKS = [
+  { label: 'Inicio', to: ROUTES.home },
+  { label: 'Tienda', to: ROUTES.shop },
+  { label: 'LinkstarApp', to: ROUTES.linkstarapp },
+  { label: 'Contacto', to: ROUTES.contact },
+];
+
+export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { totalItems, isOpen, setIsOpen } = useCart();
@@ -18,65 +32,37 @@ export default function Navbar({ onShop, onHome, onContact, onLinkstarApp, curre
     return () => { document.body.style.overflow = ''; };
   }, [menuOpen]);
 
-  const handleHome = (e) => {
-    e.preventDefault();
-    setMenuOpen(false);
-    onHome();
-  };
-
-  const handleShop = (e) => {
-    e.preventDefault();
-    setMenuOpen(false);
-    onShop();
-  };
-
-  const handleContact = (e) => {
-    e.preventDefault();
-    setMenuOpen(false);
-    onContact();
-  };
-
-  const handleLinkstarApp = (e) => {
-    e.preventDefault();
-    setMenuOpen(false);
-    onLinkstarApp();
-  };
-
-  const navLinks = [
-    { label: 'Inicio', action: handleHome, isActive: currentPage === 'home', anchor: null },
-    { label: 'Tienda', action: handleShop, isActive: currentPage === 'shop', anchor: null },
-    { label: 'LinkstarApp', action: handleLinkstarApp, isActive: currentPage === 'linkstarapp', anchor: null },
-    { label: 'Contacto', action: handleContact, isActive: currentPage === 'contact', anchor: null },
-  ];
+  const closeMenu = () => setMenuOpen(false);
 
   return (
     <nav className={`navbar ${scrolled ? 'navbar--scrolled' : ''}`}>
       <div className="navbar__inner container">
         {/* Logo */}
-        <a href="/" className="navbar__logo" onClick={handleHome}>
+        <Link to={ROUTES.home} className="navbar__logo" onClick={closeMenu}>
           <span className="navbar__logo-text">linkstar</span>
           <span className="navbar__logo-dot"></span>
-        </a>
+        </Link>
 
         {/* Navigation Links */}
         <ul className={`navbar__links ${menuOpen ? 'navbar__links--open' : ''}`}>
-          {navLinks.map((link) => (
-            <li key={link.label}>
-              <a
-                href={link.anchor || '#'}
-                className={`navbar__link ${link.isActive ? 'navbar__link--active' : ''}`}
-                onClick={(e) => { e.preventDefault(); link.action(e); }}
+          {NAV_LINKS.map((link) => (
+            <li key={link.to}>
+              <NavLink
+                to={link.to}
+                end={link.to === ROUTES.home}
+                className={({ isActive }) => `navbar__link ${isActive ? 'navbar__link--active' : ''}`}
+                onClick={closeMenu}
               >
                 {link.label}
-              </a>
+              </NavLink>
             </li>
           ))}
         </ul>
 
         {/* Actions */}
         <div className="navbar__actions">
-          <button 
-            className="navbar__cart" 
+          <button
+            className="navbar__cart"
             aria-label="Carrito de compras"
             onClick={() => setIsOpen(!isOpen)}
           >
@@ -102,7 +88,7 @@ export default function Navbar({ onShop, onHome, onContact, onLinkstarApp, curre
       </div>
 
       {/* Mobile Overlay */}
-      {menuOpen && <div className="navbar__overlay" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && <div className="navbar__overlay" onClick={closeMenu} />}
     </nav>
   );
 }

@@ -35,12 +35,16 @@
   color: var(--color-text-secondary);
 }
 
+/* El calendario mide 300px fijos: en un teléfono angosto, o cuando el campo
+   arranca cerca del borde derecho, se salía de la pantalla. Se limita al ancho
+   de la ventana y nunca se estira más allá del campo que lo abre. */
 .ls-date__panel {
   position: absolute;
   top: calc(100% + 0.5rem);
   left: 0;
   z-index: 60;
-  width: 300px;
+  width: min(300px, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
   background: var(--color-white);
   border: 1px solid var(--glass-border);
   border-radius: 1rem;

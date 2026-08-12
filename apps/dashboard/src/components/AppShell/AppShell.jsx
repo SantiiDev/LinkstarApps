@@ -1,11 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../Sidebar/Sidebar';
+import { useAuth } from '../../context/AuthContext';
+import { PUBLIC_ROUTES, pathForSection, sectionFromPath } from '../../lib/routes';
 import './AppShell.css';
 
-export default function AppShell({ activeSection, onNavigate, onLogout, children }) {
+export default function AppShell() {
   // En móvil el sidebar es un cajón que se abre por encima del contenido;
   // de 641px para arriba está siempre visible y este estado no se usa.
   const [navOpen, setNavOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+
+  // La sección activa sale de la URL, no de un estado propio: así el ítem
+  // marcado en el sidebar sigue siendo correcto si se llega por un enlace
+  // directo o con el botón atrás del navegador.
+  const activeSection = sectionFromPath(location.pathname);
 
   const closeNav = useCallback(() => setNavOpen(false), []);
 
@@ -13,10 +24,24 @@ export default function AppShell({ activeSection, onNavigate, onLogout, children
   const handleNavigate = useCallback(
     (section) => {
       setNavOpen(false);
-      onNavigate(section);
+      navigate(pathForSection(section));
     },
-    [onNavigate],
+    [navigate],
   );
+
+  const handleLogout = useCallback(async () => {
+    await signOut();
+    navigate(PUBLIC_ROUTES.landing, { replace: true });
+  }, [signOut, navigate]);
+
+  // Cada sección arranca desde arriba. Sin esto se conserva el scroll de la
+  // sección anterior y una página corta puede abrirse ya scrolleada, mostrando
+  // el pie o directamente el vacío de abajo. 'instant' y no 'smooth': el
+  // contenido ya cambió, animar el viaje sólo muestra la página nueva pasando
+  // de largo.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!navOpen) return;
@@ -38,7 +63,7 @@ export default function AppShell({ activeSection, onNavigate, onLogout, children
       <Sidebar
         activeSection={activeSection}
         onNavigate={handleNavigate}
-        onLogout={onLogout}
+        onLogout={handleLogout}
         open={navOpen}
         onClose={closeNav}
       />
@@ -62,7 +87,8 @@ export default function AppShell({ activeSection, onNavigate, onLogout, children
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
             </svg>
-            ¿Necesitás ayuda? Contáctanos — +54 11 4567-8901
+            <span className="app-shell__contact-full">¿Necesitás ayuda? Contáctanos — +54 11 4567-8901</span>
+            <span className="app-shell__contact-short">Ayuda</span>
           </a>
 
           <div className="app-shell__topbar-right">
@@ -76,7 +102,8 @@ export default function AppShell({ activeSection, onNavigate, onLogout, children
           </div>
         </div>
 
-        <main className="app-shell__content">{children}</main>
+        {/* Cada sección de /panel se renderiza acá dentro. */}
+        <main className="app-shell__content"><Outlet /></main>
       </div>
     </div>
   );

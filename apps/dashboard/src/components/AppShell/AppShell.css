@@ -2,10 +2,13 @@
    APP SHELL — sidebar + content column layout
    ============================================ */
 
+/* 100dvh además de 100vh: en móvil la barra de direcciones entra y sale, y con
+   100vh a secas la pantalla queda siempre un poco más alta que lo visible. */
 .app-shell {
   display: flex;
   align-items: flex-start;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .app-shell__main {
@@ -112,6 +115,13 @@
 
 .app-shell__content {
   min-height: calc(100vh - 44px);
+  min-height: calc(100dvh - 44px);
+}
+
+/* El teléfono sólo se muestra cuando hay lugar; abajo de 640px queda "Ayuda",
+   que sigue siendo el mismo enlace y no come toda la barra. */
+.app-shell__contact-short {
+  display: none;
 }
 
 @media (max-width: 768px) {
@@ -141,13 +151,18 @@
 
   .app-shell__content {
     min-height: calc(100vh - 52px);
+    min-height: calc(100dvh - 52px);
   }
-}
 
-@media (max-width: 480px) {
+  .app-shell__contact-full {
+    display: none;
+  }
+
+  .app-shell__contact-short {
+    display: inline;
+  }
+
   .app-shell__contact {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 0.75rem;
   }
 }

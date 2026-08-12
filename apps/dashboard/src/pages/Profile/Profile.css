@@ -31,6 +31,12 @@
   gap: 1.1rem;
 }
 
+/* min-width: 0 — sin esto el bloque de texto no baja de su ancho de contenido
+   y el mail empuja la tarjeta a lo ancho en vez de cortarse. */
+.profile-hero-body {
+  min-width: 0;
+}
+
 .profile-avatar {
   flex-shrink: 0;
   width: 64px;
@@ -51,9 +57,12 @@
   color: var(--color-navy);
 }
 
+/* Un mail largo al lado del avatar no tiene por dónde cortarse y estiraba la
+   tarjeta más allá del ancho de la pantalla. */
 .profile-hero-email {
   font-size: 0.82rem;
   color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .profile-card__title {

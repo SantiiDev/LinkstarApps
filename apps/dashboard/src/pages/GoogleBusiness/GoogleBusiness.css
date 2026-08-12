@@ -623,4 +623,20 @@
   .gb-photos-grid {
     grid-template-columns: repeat(3, 1fr);
   }
+
+  /* Término y volumen arriba, barra abajo a lo ancho: con las tres columnas
+     en línea (9rem + 4rem fijos) a la barra le quedaban ~30px de ancho útil
+     en un teléfono y el dato dejaba de leerse. Mismo criterio que la tabla
+     de palabras clave de Reportes. */
+  .gb-keyword-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "term volume"
+      "bar  bar";
+    gap: 0.4rem 0.75rem;
+  }
+
+  .gb-keyword-row__term { grid-area: term; }
+  .gb-keyword-row__bar { grid-area: bar; }
+  .gb-keyword-row__volume { grid-area: volume; }
 }
