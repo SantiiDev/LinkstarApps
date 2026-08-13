@@ -57,6 +57,14 @@ export const processPaymentSchema = z.object({
   cartItems: z.array(cartItemSchema).optional(),
 });
 
+// Suscripción mensual al dashboard. Sólo viaja el código del plan: el precio
+// y los días de prueba se leen de la tabla `plans` en el servidor. Mismo
+// criterio que lib/catalog.js para los expositores — un importe que viene del
+// body es un importe que el cliente eligió.
+export const subscriptionCheckoutSchema = z.object({
+  planCode: z.string().trim().min(1).max(40),
+});
+
 // Middleware genérico: valida req.body contra un schema de Zod. 400 con el
 // primer error legible si falla, y reemplaza req.body por los datos ya
 // parseados/coercionados (trim, etc.) si pasa.

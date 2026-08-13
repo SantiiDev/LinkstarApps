@@ -7,6 +7,7 @@ import healthRoutes from './routes/health.js';
 import authRoutes from './routes/auth.js';
 import redirectRoutes from './routes/redirect.js';
 import ordersRoutes from './routes/orders.js';
+import subscriptionRoutes from './routes/subscriptions.js';
 import webhookRoutes from './routes/webhooks.js';
 
 const app = express();
@@ -28,6 +29,7 @@ app.use(healthRoutes);
 app.use(authRoutes);
 app.use(redirectRoutes);
 app.use(ordersRoutes);
+app.use(subscriptionRoutes);
 app.use(webhookRoutes);
 
 app.listen(PORT, () => {

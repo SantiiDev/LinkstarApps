@@ -166,3 +166,55 @@
     font-size: 0.75rem;
   }
 }
+
+/* ── Aviso de suscripción ──────────────────────────────────────
+   Se renderiza entre la topbar y el contenido, sólo cuando hay algo que el
+   usuario tiene que resolver (ver SubscriptionBanner.jsx). */
+.app-shell__banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1.25rem 2rem 0;
+  padding: 0.85rem 1.15rem;
+  border-radius: 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.app-shell__banner--warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  color: var(--color-gold);
+}
+
+.app-shell__banner--danger {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  color: var(--color-danger);
+}
+
+.app-shell__banner-btn {
+  flex-shrink: 0;
+  padding: 0.45rem 1rem;
+  border-radius: var(--radius-button);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: currentColor;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid currentColor;
+  transition: all var(--transition-base);
+}
+
+.app-shell__banner-btn:hover {
+  background: #fff;
+}
+
+@media (max-width: 640px) {
+  .app-shell__banner {
+    margin: 1rem 1.15rem 0;
+    font-size: 0.8rem;
+  }
+}

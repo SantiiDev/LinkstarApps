@@ -1043,11 +1043,13 @@
 
 .landing-pricing__grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
-  max-width: 780px;
+  max-width: 1100px;
   margin: 0 auto;
+  align-items: stretch;
 }
+
 
 .landing-price-card {
   background: var(--glass-bg);
@@ -1828,5 +1830,16 @@
 
   .landing-stats__value {
     font-size: 1.5rem;
+  }
+}
+/* ── Grilla de planes en tablet ────────────────────────────────
+   Con tres tarjetas, el salto de 3 columnas a 1 que hace el bloque de
+   max-width:1024px deja una escalera larguísima en tablet. Esta regla va al
+   final del archivo a propósito: tiene la misma especificidad que aquella, así
+   que el orden de aparición es lo único que la hace ganar. */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .landing-pricing__grid {
+    grid-template-columns: repeat(2, 1fr);
+    max-width: 720px;
   }
 }

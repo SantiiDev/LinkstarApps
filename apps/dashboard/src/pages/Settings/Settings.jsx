@@ -1,11 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import Select from '../../components/Select/Select';
 import DateField from '../../components/DateField/DateField';
 import EmployeesPage from '../Employees/Employees';
 import LocationsPage from '../Locations/Locations';
-import { SETTINGS_TABS, SETTINGS_TAB_ALIASES, settingsTabPath } from '../../lib/routes';
+import { supabase } from '../../lib/supabaseClient';
+import { useAuth } from '../../context/AuthContext';
+import { useOrg } from '../../context/OrgContext';
+import { API_URL } from '../../lib/config';
+import { formatArs } from '../../lib/format';
+import { ONBOARDING_ROUTES, SETTINGS_TABS, SETTINGS_TAB_ALIASES, settingsTabPath } from '../../lib/routes';
 import './Settings.css';
 
 // Los ids son los mismos que van en la URL (/panel/configuracion/equipo), así
@@ -227,15 +232,107 @@ function TeamTab() {
 }
 
 /* ─── Facturación y suscripción ───────────────────────────────── */
-const INVOICES = [
-  { id: 1, period: '90C6901C-0045', amount: '$14.999', status: 'Pagada', date: '3 ago 2026' },
-  { id: 2, period: '90C6901C-0032', amount: '$14.999', status: 'Pagada', date: '3 jul 2026' },
-  { id: 3, period: '90C6901C-0021', amount: '$14.999', status: 'Pagada', date: '3 jun 2026' },
-];
+// Etiqueta y color de cada estado de subscription_status (0001). 'trialing' se
+// muestra como "Prueba" y no como "Activa" a propósito: es plata que todavía
+// no entró y el cliente tiene que saber que el cobro está por venir.
+const STATUS_LABELS = {
+  trialing: { label: 'Prueba', variant: 'blue' },
+  active: { label: 'Activa', variant: 'green' },
+  past_due: { label: 'Pago pendiente', variant: 'orange' },
+  paused: { label: 'Pausada', variant: 'gray' },
+  cancelled: { label: 'Cancelada', variant: 'gray' },
+  expired: { label: 'Vencida', variant: 'gray' },
+};
+
+const PAYMENT_STATUS_LABELS = {
+  approved: 'Pagado',
+  rejected: 'Rechazado',
+  pending: 'Pendiente',
+  refunded: 'Devuelto',
+  charged_back: 'Contracargo',
+};
+
+function formatDate(value) {
+  if (!value) return null;
+  return new Date(value).toLocaleDateString('es-AR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
 
 function BillingTab() {
+  const navigate = useNavigate();
+  const { session } = useAuth();
+  const { org, canManageBilling, refresh } = useOrg();
+
+  const [payments, setPayments] = useState([]);
+  const [cancelling, setCancelling] = useState(false);
+  const [error, setError] = useState('');
+
+  // Sólo owner/admin pueden leer subscription_payments (política
+  // subscription_payments_select de 0006). Para el resto la consulta vuelve
+  // vacía sin error, y la sección de historial queda sin filas.
+  useEffect(() => {
+    if (!org?.organization_id) return;
+    let cancelled = false;
+
+    (async () => {
+      const { data, error: queryError } = await supabase
+        .from('subscription_payments')
+        .select('id, status, amount, paid_at, period_start, period_end, invoice_url')
+        .eq('organization_id', org.organization_id)
+        .order('paid_at', { ascending: false, nullsFirst: false })
+        .limit(12);
+
+      if (cancelled) return;
+      if (queryError) {
+        console.error('No se pudo cargar el historial de pagos:', queryError);
+        return;
+      }
+      setPayments(data ?? []);
+    })();
+
+    return () => { cancelled = true; };
+  }, [org?.organization_id]);
+
+  async function handleCancel() {
+    // Cancelar una suscripción no se deshace con un "atrás" del navegador.
+    if (!window.confirm('¿Cancelar la suscripción? Vas a mantener el acceso hasta el fin del período ya pagado.')) {
+      return;
+    }
+
+    setError('');
+    setCancelling(true);
+
+    try {
+      const res = await fetch(`${API_URL}/api/subscriptions/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'No se pudo cancelar la suscripción');
+
+      // El estado final lo escribe el webhook; se refresca para tomarlo apenas
+      // llegue, pero puede tardar unos segundos en reflejarse.
+      await refresh();
+    } catch (err) {
+      console.error('Error cancelando la suscripción:', err);
+      setError(err.message);
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  const status = STATUS_LABELS[org?.status] ?? { label: org?.status ?? '—', variant: 'gray' };
+  const isPaid = Boolean(org?.plan_code && org.plan_code !== 'free');
+  const trialEnd = formatDate(org?.trial_ends_at);
+  const periodEnd = formatDate(org?.current_period_end);
+
   return (
     <div className="settings-panel">
+      {error && <div className="settings-alert">{error}</div>}
+
       <div className="settings-card">
         <CardHead
           icon="card"
@@ -245,54 +342,113 @@ function BillingTab() {
         />
 
         <div className="settings-plan-badges">
-          <span className="settings-badge settings-badge--orange">Plan Business</span>
-          <span className="settings-badge settings-badge--blue">Prueba</span>
+          <span className="settings-badge settings-badge--orange">Plan {org?.plan_name ?? '—'}</span>
+          <span className={`settings-badge settings-badge--${status.variant}`}>{status.label}</span>
           <span className="settings-badge settings-badge--gray">Mensual</span>
         </div>
 
-        <p className="settings-plan-detail">Período de prueba hasta el 10 ago 2026</p>
-        <p className="settings-plan-detail settings-plan-detail--muted">0 de 1 locales activos</p>
+        {org?.status === 'trialing' && trialEnd && (
+          <p className="settings-plan-detail">Período de prueba hasta el {trialEnd}</p>
+        )}
+        {org?.status === 'active' && periodEnd && (
+          <p className="settings-plan-detail">Próximo cobro el {periodEnd}</p>
+        )}
+        {org?.status === 'past_due' && (
+          <p className="settings-plan-detail">
+            El último cobro fue rechazado. Actualizá tu medio de pago en Mercado Pago
+            {formatDate(org?.grace_until) ? ` antes del ${formatDate(org.grace_until)}` : ''}.
+          </p>
+        )}
+        {org?.cancel_at_period_end && periodEnd && (
+          <p className="settings-plan-detail settings-plan-detail--muted">
+            Cancelada: mantenés el acceso hasta el {periodEnd}.
+          </p>
+        )}
+        {!isPaid && (
+          <p className="settings-plan-detail settings-plan-detail--muted">
+            Estás en el plan gratis incluido con tu expositor.
+          </p>
+        )}
 
         <div className="settings-plan-actions">
-          <button type="button" className="settings-save-btn">Cambiar plan</button>
-          <button type="button" className="settings-inline-link">Gestionar</button>
+          <button
+            type="button"
+            className="settings-save-btn"
+            onClick={() => navigate(ONBOARDING_ROUTES.plan)}
+            disabled={!canManageBilling}
+          >
+            {isPaid ? 'Cambiar plan' : 'Mejorar plan'}
+          </button>
         </div>
       </div>
 
-      <div className="settings-danger-card">
-        <div>
-          <h3 className="settings-danger-card__title">Suscripción</h3>
-          <p className="settings-danger-card__text">Cancelá tu plan Business. Vas a mantener acceso hasta el fin del período actual.</p>
+      {isPaid && canManageBilling && (
+        <div className="settings-danger-card">
+          <div>
+            <h3 className="settings-danger-card__title">Suscripción</h3>
+            <p className="settings-danger-card__text">
+              Cancelá tu plan {org?.plan_name}. Vas a mantener acceso hasta el fin del período actual.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="settings-danger-btn"
+            onClick={handleCancel}
+            disabled={cancelling}
+          >
+            {cancelling ? 'Cancelando…' : 'Cancelar suscripción'}
+          </button>
         </div>
-        <button type="button" className="settings-danger-btn">Cancelar suscripción</button>
-      </div>
+      )}
 
       <div className="settings-card">
         <CardHead
           icon="fileText"
           iconVariant="navy"
-          title="Historial de facturas"
-          subtitle={<p className="settings-card__subtitle">Tus pagos a Linkstar Business y los PDFs descargables.</p>}
+          title="Historial de pagos"
+          subtitle={<p className="settings-card__subtitle">Los cobros mensuales de tu suscripción a Linkstar.</p>}
         />
 
-        <div className="settings-invoices">
-          {INVOICES.map((inv) => (
-            <div key={inv.id} className="settings-invoice-row">
-              <div className="settings-invoice-row__icon"><Icon name="card" width={16} height={16} /></div>
-              <div className="settings-invoice-row__body">
-                <div className="settings-invoice-row__period">{inv.period}</div>
-                <div className="settings-invoice-row__date">{inv.date}</div>
+        {payments.length === 0 ? (
+          <p className="settings-plan-detail settings-plan-detail--muted">
+            Todavía no hay cobros registrados.
+          </p>
+        ) : (
+          <div className="settings-invoices">
+            {payments.map((payment) => (
+              <div key={payment.id} className="settings-invoice-row">
+                <div className="settings-invoice-row__icon"><Icon name="card" width={16} height={16} /></div>
+                <div className="settings-invoice-row__body">
+                  <div className="settings-invoice-row__period">
+                    {formatDate(payment.period_start) ?? 'Período'}
+                    {payment.period_end ? ` — ${formatDate(payment.period_end)}` : ''}
+                  </div>
+                  <div className="settings-invoice-row__date">{formatDate(payment.paid_at) ?? '—'}</div>
+                </div>
+                <span className="settings-invoice-row__status">
+                  <Icon name="check" width={13} height={13} />{' '}
+                  {PAYMENT_STATUS_LABELS[payment.status] ?? payment.status}
+                </span>
+                <span className="settings-invoice-row__amount">{formatArs(payment.amount)}</span>
+                {/* La factura electrónica (AFIP) todavía no se emite: la columna
+                    invoice_url existe en subscription_payments pero nada la
+                    completa, así que el botón sólo aparece si hay algo que
+                    descargar de verdad. */}
+                {payment.invoice_url && (
+                  <a
+                    className="settings-invoice-row__download"
+                    href={payment.invoice_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Descargar factura"
+                  >
+                    <Icon name="download" />
+                  </a>
+                )}
               </div>
-              <span className="settings-invoice-row__status">
-                <Icon name="check" width={13} height={13} /> {inv.status}
-              </span>
-              <span className="settings-invoice-row__amount">{inv.amount}</span>
-              <button type="button" className="settings-invoice-row__download" aria-label="Descargar factura">
-                <Icon name="download" />
-              </button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

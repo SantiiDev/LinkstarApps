@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:dashboard"],
+      "port": 5173
+    },
+    {
+      "name": "ventas",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:ventas"],
+      "port": 5174
+    }
+  ]
+}

@@ -534,6 +534,19 @@
 .settings-badge--blue { background: rgba(59, 130, 246, 0.12); color: #3B82F6; }
 .settings-badge--gray { background: var(--color-light); color: var(--color-text-secondary); }
 .settings-badge--soon { background: rgba(245, 158, 11, 0.12); color: var(--color-gold); }
+.settings-badge--green { background: rgba(16, 185, 129, 0.12); color: var(--color-forest); }
+
+/* Errores de una acción de esta pantalla (cancelar la suscripción, por
+   ejemplo), separados de los avisos globales del AppShell. */
+.settings-alert {
+  padding: 0.75rem 1rem;
+  border-radius: 0.6rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--color-danger);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
 
 .settings-plan-detail {
   font-size: 0.85rem;

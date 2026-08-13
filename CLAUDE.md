@@ -8,9 +8,10 @@ Linkstar sells NFC/QR "expositores" — physical cards a business puts on tables
 tap or scan them and land on the business's Google review form. Buyers then manage those devices from
 **LinkstarApp**, a multi-tenant SaaS dashboard (devices, locations, employees (soon), scan analytics).
 
-The dashboard is a **paid subscription**, billed monthly, no lock-in. It is not bundled free with the
-hardware — earlier copy on the sales site said it was, and that is no longer true anywhere in this repo.
-See "Pricing" below before touching any price or plan wording.
+The dashboard has **three plans**, and choosing one is a mandatory step between signing up and reaching
+`/panel`: `free` (bundled with the device, no card), `business` (monthly, 7-day free trial, charged by
+Mercado Pago direct debit) and `enterprise` (contact sales, not self-serve). No lock-in. See "Pricing"
+below before touching any price or plan wording, and "Subscription gate" for how the step is enforced.
 
 **Status: pre-launch.** Nothing is sold yet and nothing but the schema is deployed. There are no real
 tenants, so the schema and the API can still change shape without a migration story for production data —
@@ -69,7 +70,7 @@ Supabase (needs the `supabase` CLI installed globally):
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0012 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0014 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -96,8 +97,10 @@ more than one developer, so a new variable is only real once it's in the matchin
 to `.env`, don't rename them away.
 
 - `services/api/.env` — see `services/api/.env.example`. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-  `PORT`, `FRONTEND_URL`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `WEBHOOK_URL`, `WEB3FORMS_KEY`,
-  `REDIRECT_DOMAIN` (optional, defaults to `l.linkstar.com.ar`).
+  `PORT`, `FRONTEND_URL`, `DASHBOARD_URL`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `WEBHOOK_URL`,
+  `WEB3FORMS_KEY`, `REDIRECT_DOMAIN` (optional, defaults to `l.linkstar.com.ar`).
+  `DASHBOARD_URL` is optional too (defaults to the *second* entry of `FRONTEND_URL`) and is where the
+  subscription returns from Mercado Pago — it cannot be `FRONTEND_URL`, which points at the sales site.
   `FRONTEND_URL` is **comma-separated**: this one service serves both frontends, so CORS needs both
   origins. The first entry is the one used for Mercado Pago `back_urls`, so it must be the ventas site
   (that's where checkout lives). Missing `SUPABASE_SERVICE_ROLE_KEY` only warns at boot — writes then fail
@@ -141,7 +144,34 @@ creates a `profiles` row on signup) · `0003` catalog (`locations`, `employees`,
 `0004` events/rollups/review snapshots/audit · `0005` billing + `orders` · `0006` **all RLS policies** ·
 `0007` `resolve_scan`, `claim_device`, plan limits, nightly jobs · `0008` dashboard views
 (`security_invoker`) · `0009` webhook RPCs · `0010` `profiles.last_login_at` · `0011` `scan_events.medium`
-(`qr`/`nfc`) and the `resolve_scan` overload that takes `p_medium` · `0012` `public.rebuild_today_rollup()`.
+(`qr`/`nfc`) and the `resolve_scan` overload that takes `p_medium` · `0012` `public.rebuild_today_rollup()` ·
+`0013` subscription onboarding (real `plans` catalog, `subscriptions.plan_selected_at`, `my_org_context()`,
+`select_free_plan()`, the two preapproval webhook RPCs, and a rewritten `bootstrap_organization()`) ·
+`0014` enforcement of paid access in RLS (`private.orgs_with_access()`, rewritten select/write policies on
+the business tables, `claim_device()` gated).
+
+### Subscription gate — nobody reaches `/panel` without a plan
+
+Between signing up and the dashboard there are two forced steps: create an organization, then choose a
+plan. The state lives in **one column**, `subscriptions.plan_selected_at` (`0013`): `null` means the
+onboarding is unfinished, whatever else the row says. It is not a `subscription_status` value because
+"hasn't chosen yet" is a state of the onboarding, not of the relationship with Mercado Pago.
+
+- `bootstrap_organization()` creates every new org on `free` / `active` with `plan_selected_at = null`.
+  It used to hand out a 14-day `trialing` subscription, which let someone who never chose anything in.
+- The dashboard asks `my_org_context()` — never `subscriptions` directly. The RLS policy on that table
+  only lets owner/admin read it, so a `manager` querying it would look planless and bounce forever.
+- Free is taken with `select_free_plan()`. Business goes through `POST /api/subscriptions/checkout`,
+  which returns a Mercado Pago `init_point`; **only the webhook activates it**, never the return URL.
+- `0014` is what makes it real. `RequireActivePlan` in `App.jsx` is a convenience, not the boundary:
+  the RLS policies on `locations`, `employees`, `devices`, `scan_events`, `scan_daily_rollups` and the
+  review tables all run through `private.orgs_with_access()`, and `claim_device()` checks it too.
+  Billing tables are deliberately excluded — a lapsed customer has to be able to see their plan and pay.
+  `resolve_scan()` is also excluded: a physical device must keep redirecting no matter what.
+
+Mercado Pago subscriptions use **preapproval without an associated plan**, because the plan-linked
+checkout does not accept `external_reference`, and without it a webhook arrives with no way to tell which
+organization was charged. `plans.mp_preapproval_plan_id` therefore stays unused.
 
 ### How a scan resolves to a URL (`resolve_scan`, `0007`)
 
@@ -190,6 +220,9 @@ escape the rate limit.
   never trusts `item.price` or `formData.transaction_amount` from the body; both are checked against a
   hardcoded catalog. See "Pricing" — this file is a deliberate second copy of the ventas prices and has to
   move with them.
+- `lib/subscriptions.js` — Mercado Pago **preapproval** (the monthly dashboard subscription), not to be
+  confused with `lib/orders.js` (one-off hardware checkout). Card data never touches this service: the
+  customer authorizes at MP's `init_point` and comes back.
 - `middleware/auth.js` — `requireAuth(supabase)`, validates the Supabase JWT from `Authorization: Bearer`.
 
 Routes, one router per file, all mounted at the app root:
@@ -221,7 +254,18 @@ Routes, one router per file, all mounted at the app root:
 - `routes/webhooks.js` — `POST /api/webhook/mercadopago`. Validates `x-signature` (HMAC-SHA256, fail-closed
   if `MP_WEBHOOK_SECRET` is unset) **before** anything else, acks `200` immediately (MP requires <22s),
   then processes async. Idempotency via `record_webhook_event()`'s unique `(provider, topic, external_id)`
-  — MP retries, and this must not double-process a payment.
+  — MP retries, and this must not double-process a payment. Three topics: `payment` (hardware orders),
+  `subscription_preapproval` (the subscription was authorized/paused/cancelled — this is what opens the
+  dashboard) and `subscription_authorized_payment` (each monthly charge). The last two resolve the tenant
+  through `external_reference`, and hand off to `apply_preapproval_event()` / `record_subscription_payment()`
+  so all the period and grace arithmetic happens in one statement — the 200 already went out, so nothing
+  retries a half-written row.
+- `routes/subscriptions.js` — `POST /api/subscriptions/checkout` and `POST /api/subscriptions/cancel`,
+  both behind `requireAuth` and both owner/admin only (checked by hand against `memberships`, because the
+  `service_role` client bypasses RLS — same reasoning as the mandatory `?email=` on the order lookup).
+  The body carries **only a plan code**: price and trial length are read from `plans`, never from the
+  request. Neither route writes the subscription state — that is the webhook's job, so a failure in MP
+  can't leave a customer cut off while they are actually paying.
 - `routes/auth.js` — `POST /api/auth/login-event`, behind `requireAuth`. The only writer of
   `profiles.last_login_at`.
 - `routes/health.js` — `GET /api/health`.
@@ -250,12 +294,25 @@ split below before wiring anything — the shell is finished, the data mostly is
 - `RequireAuth` in `App.jsx` gates the whole `/panel` subtree: with no authenticated user it redirects to
   `/iniciar-sesion` carrying `state.from`, and `LoginRoute` sends the user back there after signing in.
   `/panel/empresa` is the post-login landing page.
+- Inside it, `RequireActivePlan` gates the same subtree on the onboarding: no organization → `/alta/empresa`,
+  no plan chosen or no active access → `/alta/plan`. The `/alta/*` routes live **outside** it (they have
+  their own `OnboardingStep` guard, which only checks the org exists) — a guard that also covered them would
+  redirect to itself. `pages/Onboarding/` holds the four screens: `CreateOrg`, `PlanPicker`, `PlanCheckout`
+  and `PlanResult`, all sharing `OnboardingLayout` (stepper + sign-out escape hatch).
+- `PlanResult` is a **waiting room, not a confirmation**. Coming back from Mercado Pago proves the user
+  finished operating there, nothing else; it polls `my_org_context()` until the webhook lands, and never
+  reads the query params MP appends (the customer can type those by hand).
+- `context/OrgContext.jsx` owns the active organization and subscription state, all from `my_org_context()`.
+  `useOrg()` exposes `hasOrg` / `hasChosenPlan` / `hasAccess` / `canManageBilling`, which is what the guards,
+  the billing tab and `SubscriptionBanner` read.
 - Settings tabs live in the URL (`/panel/configuracion/:tab` — `local`, `equipo`, `facturacion`, `legal`),
   which is what makes Devices' "Ver más" able to deep-link into "Gestión local". `SETTINGS_TAB_ALIASES`
   keeps the old ids (`general`, `employees`, `locations`, `team`, `billing`) working.
-- **Real vs. mock.** Only three screens read the database: `devices` (via `lib/dashboardApi.js`) and
-  `employees` / `locations` (embedded in `settings`). `profile` reads the logged-in user from
-  `AuthContext`. **Everything else is a static mock** — `company` and `reviews` off `data/reviews.js`,
+- **Real vs. mock.** The screens that read the database: `devices` (via `lib/dashboardApi.js`),
+  `employees` / `locations` (embedded in `settings`), the whole `/alta` onboarding, and the "Facturación"
+  tab of `settings` (plan and status from `OrgContext`, history from `subscription_payments`). `profile`
+  reads the logged-in user from `AuthContext`. **Everything else is a static mock** — `company` and
+  `reviews` off `data/reviews.js`,
   and `gb-*`, `reports-*`, `monthly-reports`, `automations` off arrays hardcoded in their own files
   (review counts, NPS, Google Business metrics, monthly PDFs, automation toggles). None of that has a
   backing table, and most of it can't have one until the Google Business Profile integration exists.
@@ -266,7 +323,9 @@ split below before wiring anything — the shell is finished, the data mostly is
   `Login`/`Register`.
 - `lib/supabaseClient.js` — the anon-key client, the only Supabase client on the frontend. Once logged in
   it attaches the session JWT, so PostgREST evaluates queries as `authenticated`.
-- `lib/config.js` — `REDIRECT_DOMAIN` from `VITE_REDIRECT_DOMAIN`. `lib/qr.js` — `downloadQrPng`, builds
+- `lib/config.js` — `REDIRECT_DOMAIN` from `VITE_REDIRECT_DOMAIN`, plus `API_URL` and `SALES_CONTACT_URL`
+  (the latter is used by both the landing and the plan picker, so it stopped being a `Landing.jsx`
+  constant). `lib/format.js` — `formatArs`, the one money formatter. `lib/qr.js` — `downloadQrPng`, builds
   the `https://<REDIRECT_DOMAIN>/d/<public_id>` QR client-side with the `qrcode` package (that's what the
   dependency is for). `lib/authErrors.js` — maps Supabase Auth error strings to Spanish UI copy.
 - `lib/dashboardApi.js` — reads **only** the `0008` views (`v_device_performance`,
@@ -285,9 +344,9 @@ split below before wiring anything — the shell is finished, the data mostly is
 - `pages/Company/Company.jsx` is the post-login landing and is **100% mock** (`data/reviews.js`). There is
   no `reviews` table anywhere — only aggregate daily snapshots, with no text/author/sentiment. Making it
   real needs the Google Business Profile `sync-reviews` integration, which does not exist.
-- Out of scope so far: org creation/onboarding (a user with no `organizations`/`memberships` row reaches
-  the shell and sees empty states), and an org switcher (a user in several orgs gets rows from all of them
-  mixed; `profiles.last_organization_id` exists but nothing reads or writes it).
+- Out of scope so far: an org switcher. `my_org_context()` now *reads* `profiles.last_organization_id` to
+  pick which organization to show (falling back to the oldest membership), but nothing writes it, so a user
+  in several orgs always lands on the same one and has no way to change it from the UI.
 
 ### `apps/ventas`
 
@@ -319,15 +378,18 @@ split below before wiring anything — the shell is finished, the data mostly is
 
 ## Pricing
 
-Two separate things are priced, and they don't live in the same place. All amounts are Argentine pesos, all
-hardcoded in the frontend — there is no `plans`/catalog row driving any of this yet.
+Two separate things are priced, and they don't live in the same place. All amounts are Argentine pesos.
 
-**The subscription** (dashboard, monthly): one source of truth,
-`apps/dashboard/src/pages/Landing/Landing.jsx` (`STARTER_PRICE` and the "A medida" card). `apps/ventas`
-describes the model — device paid once, platform monthly, no lock-in — but shows **no subscription amount**
-on purpose. If you put a monthly price on the sales site you've created a second source of truth that will
-drift. The old `$0 / siempre` block and the "incluido gratis / sin suscripciones" copy were removed for
-exactly this reason.
+**The subscription** (dashboard, monthly): the source of truth is the **`plans` table**, not the code.
+`price_ars`, `trial_days`, `checkout_mode` and `features.highlights` are seeded in `0013` and read at
+runtime by the plan picker (`pages/Onboarding/PlanPicker.jsx`), the checkout summary, the landing's
+pricing section and `POST /api/subscriptions/checkout`. A price change is an `update` on that table plus a
+new preapproval amount in Mercado Pago — no deploy. `Landing.jsx` keeps a `PRICING_FALLBACK` array that
+mirrors the seed and is used **only if the query fails**, so the landing never renders an empty pricing
+section; it is not a second source of truth, and it is not what anyone gets charged.
+
+`apps/ventas` describes the model — device paid once, platform monthly — but still shows **no subscription
+amount** on purpose. Putting a monthly price on the sales site creates a copy that will drift.
 
 **The hardware** (the expositores themselves): `apps/ventas/src/pages/Shop/Shop.jsx` — `UNIT_PRICE`,
 `DOUBLE_TOTAL_PRICE`, `COMBO_TOTAL_PRICE` and the tiers derived from them. These *are* shown on the sales
@@ -342,8 +404,9 @@ up — but it does mean:
 When the rebuilt checkout gets a real catalog table, `lib/catalog.js` is replaced by a query against it and
 this whole duplication goes away — that's the intended endgame, not the current state.
 
-`SALES_CONTACT_URL` in `Landing.jsx` still points at the Instagram profile from the ventas footer, because
-that's the only real contact channel in the repo. Replace it when there's a sales email or WhatsApp.
+`SALES_CONTACT_URL` (now in `apps/dashboard/src/lib/config.js`, used by the landing *and* by the Enterprise
+card of the plan picker) still points at the Instagram profile from the ventas footer, because that's the
+only real contact channel in the repo. Replace it when there's a sales email or WhatsApp.
 
 ## Deployment
 

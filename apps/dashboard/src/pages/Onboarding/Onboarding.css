@@ -1,0 +1,507 @@
+/* ============================================
+   ALTA – pasos previos al panel (Linkstar)
+
+   Se usan las mismas variables y el mismo vidrio que Login/Register: es el
+   mismo usuario, cinco segundos después de iniciar sesión, y un salto de
+   identidad visual justo antes de pedirle la tarjeta se lee como otro sitio.
+   ============================================ */
+.onb-page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2.5rem 2rem 3.5rem;
+}
+
+.onb-topbar {
+  width: 100%;
+  max-width: 1040px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.onb-logo {
+  display: flex;
+  gap: 0.15rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  letter-spacing: -0.5px;
+}
+
+.onb-logo__dot {
+  color: var(--color-orange);
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+/* Salida de emergencia. Sin esto, un usuario que no quiere elegir plan ahora
+   queda encerrado en el alta: el panel no lo deja pasar y no hay ningún otro
+   control en pantalla. */
+.onb-signout {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-button);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  transition: all var(--transition-base);
+}
+
+.onb-signout:hover {
+  color: var(--color-navy);
+}
+
+/* ── Stepper ────────────────────────────── */
+.onb-steps {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 2.25rem 0 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.onb-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.onb-step__num {
+  display: grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  background: rgba(26, 38, 57, 0.08);
+  color: var(--color-text-secondary);
+  transition: all var(--transition-base);
+}
+
+.onb-step--active .onb-step__num {
+  background: linear-gradient(135deg, var(--color-orange), #e07420);
+  color: #fff;
+  box-shadow: var(--shadow-button);
+}
+
+.onb-step--active {
+  color: var(--color-navy);
+}
+
+.onb-step--done .onb-step__num {
+  background: var(--color-forest);
+  color: #fff;
+}
+
+.onb-step__line {
+  width: 2.25rem;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(26, 38, 57, 0.12);
+}
+
+/* ── Contenido ──────────────────────────── */
+.onb-head {
+  margin-top: 1.75rem;
+  text-align: center;
+  max-width: 640px;
+}
+
+.onb-title {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  letter-spacing: -0.5px;
+}
+
+.onb-subtitle {
+  margin-top: 0.6rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.onb-body {
+  width: 100%;
+  max-width: 1040px;
+  margin-top: 2.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: fadeInUp 0.5s var(--transition-base) both;
+}
+
+.onb-card {
+  width: 100%;
+  max-width: 480px;
+  padding: 2.25rem 2rem;
+  border-radius: var(--radius-card);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-card);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.onb-error,
+.onb-notice {
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.onb-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--color-danger);
+}
+
+.onb-notice {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: var(--color-gold);
+}
+
+/* ── Formulario de empresa ──────────────── */
+.onb-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.onb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.onb-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.onb-input {
+  padding: 0.75rem 1rem;
+  border-radius: 0.6rem;
+  border: 1.5px solid rgba(26, 38, 57, 0.14);
+  background: var(--color-white);
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+  transition: border-color var(--transition-base);
+}
+
+.onb-input:focus {
+  outline: none;
+  border-color: var(--color-orange);
+}
+
+.onb-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.onb-submit {
+  margin-top: 0.5rem;
+  padding: 0.8rem 1.5rem;
+  border-radius: var(--radius-button);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-orange), #e07420);
+  box-shadow: var(--shadow-button);
+  transition: all var(--transition-base);
+}
+
+.onb-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-button-hover);
+}
+
+.onb-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* ── Selector de planes ─────────────────── */
+.onb-plans {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(275px, 1fr));
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.onb-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 2rem 1.75rem;
+  border-radius: var(--radius-card);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-card);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.onb-plan:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* El plan recomendado se destaca con borde y elevación, no con un tamaño
+   distinto: tres tarjetas de alturas distintas se leen como un error de
+   maquetación antes que como una jerarquía. */
+.onb-plan--featured {
+  border: 1.5px solid var(--color-orange);
+}
+
+.onb-plan__badge {
+  position: absolute;
+  top: -0.7rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.3rem 0.9rem;
+  border-radius: var(--radius-badge);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-orange), #e07420);
+  box-shadow: var(--shadow-button);
+  white-space: nowrap;
+}
+
+.onb-plan__name {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-navy);
+}
+
+.onb-plan__desc {
+  margin-top: 0.4rem;
+  min-height: 2.6rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.onb-plan__price {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-top: 1.25rem;
+}
+
+.onb-plan__amount {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  letter-spacing: -1px;
+}
+
+.onb-plan__amount--sm {
+  font-size: 1.4rem;
+}
+
+.onb-plan__period {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.onb-plan__note {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-gold);
+}
+
+.onb-plan__features {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 1.5rem 0;
+  flex: 1;
+}
+
+.onb-plan__feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.83rem;
+  line-height: 1.45;
+  color: var(--color-text-primary);
+}
+
+.onb-plan__check {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-top: 0.15rem;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--color-orange);
+}
+
+.onb-plan--featured .onb-plan__check {
+  background: var(--color-forest);
+}
+
+.onb-plan__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-button);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all var(--transition-base);
+}
+
+.onb-plan__btn--solid {
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-orange), #e07420);
+  box-shadow: var(--shadow-button);
+}
+
+.onb-plan__btn--solid:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-button-hover);
+}
+
+.onb-plan__btn--outline {
+  color: var(--color-navy);
+  background: transparent;
+  border: 1.5px solid rgba(26, 38, 57, 0.18);
+}
+
+.onb-plan__btn--outline:hover:not(:disabled) {
+  border-color: var(--color-orange);
+  color: var(--color-orange);
+}
+
+.onb-plan__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Resumen de pago ────────────────────── */
+.onb-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.onb-summary__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.88rem;
+  color: var(--color-text-secondary);
+}
+
+.onb-summary__row strong {
+  font-weight: 700;
+  color: var(--color-navy);
+  text-align: right;
+}
+
+.onb-summary__total {
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(26, 38, 57, 0.1);
+  font-size: 1rem;
+}
+
+.onb-summary__total strong {
+  font-size: 1.5rem;
+  letter-spacing: -0.5px;
+}
+
+.onb-legal {
+  margin-top: 1.25rem;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.onb-back {
+  margin-top: 1.25rem;
+  align-self: center;
+  background: none;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.onb-back:hover {
+  color: var(--color-orange);
+}
+
+/* ── Espera de confirmación ─────────────── */
+.onb-spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: 0 auto 1.25rem;
+  border-radius: 50%;
+  border: 3px solid rgba(245, 133, 41, 0.2);
+  border-top-color: var(--color-orange);
+  animation: onb-spin 0.8s linear infinite;
+}
+
+@keyframes onb-spin {
+  to { transform: rotate(360deg); }
+}
+
+.onb-center {
+  text-align: center;
+}
+
+/* ── Responsive ─────────────────────────── */
+@media (max-width: 720px) {
+  .onb-page {
+    padding: 1.5rem 1.15rem 2.5rem;
+  }
+
+  .onb-title {
+    font-size: 1.5rem;
+  }
+
+  /* En una columna el stepper no entra en una línea: se dejan sólo los
+     círculos numerados, que ya comunican el paso. */
+  .onb-step span:not(.onb-step__num) {
+    display: none;
+  }
+
+  .onb-step__line {
+    width: 1.5rem;
+  }
+
+  .onb-card,
+  .onb-plan {
+    padding: 1.75rem 1.35rem;
+  }
+}

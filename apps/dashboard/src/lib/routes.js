@@ -19,6 +19,18 @@ export const PUBLIC_ROUTES = {
   register: '/registro',
 };
 
+/* Alta: los pasos previos al panel. Se llega con sesión iniciada pero sin
+ * organización o sin plan elegido, así que no son públicas ni cuelgan de
+ * /panel — el guard del panel justamente redirige acá. */
+export const ONBOARDING_BASE = '/alta';
+
+export const ONBOARDING_ROUTES = {
+  org: `${ONBOARDING_BASE}/empresa`,
+  plan: `${ONBOARDING_BASE}/plan`,
+  payment: `${ONBOARDING_BASE}/pago`,
+  paymentResult: `${ONBOARDING_BASE}/pago/resultado`,
+};
+
 export const DASHBOARD_BASE = '/panel';
 
 /* id de sección -> path. El orden es el del Sidebar. */

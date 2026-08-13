@@ -25,10 +25,10 @@ insert into public.organizations (id, name, slug, created_by) values
   ('aaaaaaaa-0000-0000-0000-000000000001', 'Bar Uno', 'bar-uno', '11111111-1111-1111-1111-111111111111'),
   ('bbbbbbbb-0000-0000-0000-000000000002', 'Bar Dos', 'bar-dos', '22222222-2222-2222-2222-222222222222');
 
--- El trigger organizations_bootstrap (0007) le crea a cada org una suscripción
--- 'trial', que limita a 1 sola ubicación. Este test necesita 2 para Bar Uno,
--- así que le subimos el plan antes de sembrar los datos (no estamos probando
--- límites de plan acá, sino aislamiento entre tenants).
+-- El trigger organizations_bootstrap (0013) le crea a cada org una suscripción
+-- 'free' activa, que limita a 1 sola ubicación. Este test necesita 2 para Bar
+-- Uno, así que le subimos el plan antes de sembrar los datos (no estamos
+-- probando límites de plan acá, sino aislamiento entre tenants).
 update public.subscriptions set plan_code = 'business'
 where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
 
@@ -170,6 +170,61 @@ begin
 exception
   when insufficient_privilege then
     raise notice '  OK   anon no puede ejecutar resolve_scan';
+end;
+$$;
+
+-- =========================================================================
+-- 5. Suscripción vencida: se cortan los datos, NO la facturación (0014)
+--
+-- El caso que importa: si a Ana se le vence el plan tiene que dejar de ver
+-- ubicaciones, empleados y métricas, pero tiene que seguir viendo su
+-- organización y su suscripción — si no, no puede volver a pagar.
+-- =========================================================================
+reset role;
+
+update public.subscriptions
+set status      = 'cancelled',
+    grace_until = null
+where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+
+select pg_temp.check(
+  'Ana sin suscripción activa NO ve sus ubicaciones',
+  (select count(*) from public.locations) = 0
+);
+
+select pg_temp.check(
+  'Ana sin suscripción activa NO ve sus dispositivos',
+  (select count(*) from public.devices) = 0
+);
+
+select pg_temp.check(
+  'Ana sin suscripción activa NO ve sus métricas',
+  (select count(*) from public.scan_daily_rollups) = 0
+);
+
+select pg_temp.check(
+  'Ana SÍ sigue viendo su organización',
+  (select count(*) from public.organizations) = 1
+);
+
+select pg_temp.check(
+  'Ana SÍ sigue viendo su suscripción (para poder pagarla)',
+  (select count(*) from public.subscriptions) = 1
+);
+
+-- Tampoco puede crear ubicaciones nuevas mientras no pague.
+do $$
+declare v_rows int;
+begin
+  insert into public.locations (organization_id, name)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', 'Sucursal sin pagar');
+  get diagnostics v_rows = row_count;
+  raise exception 'FALLA: Ana pudo crear una ubicación sin suscripción activa';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   Ana no puede crear ubicaciones sin suscripción activa';
 end;
 $$;
 

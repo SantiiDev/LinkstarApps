@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { supabase } from '../../lib/supabaseClient';
+import { SALES_CONTACT_URL } from '../../lib/config';
+import { formatArs } from '../../lib/format';
 import './Landing.css';
 
 /* ───────────────── FAQ DATA ───────────────── */
@@ -585,15 +588,70 @@ function CheckIcon({ variant = 'orange' }) {
   );
 }
 
-// Único lugar del monorepo donde vive un precio. La página de LinkstarApp del
-// sitio de ventas describe el modelo (dispositivo una vez + plataforma por mes)
-// pero no repite importes, justamente para no tener dos fuentes de verdad.
-const STARTER_PRICE = '$24.900';
-
-// TODO: canal de contacto real para el plan a medida. Hoy el único que existe
-// en el repo es el Instagram del footer del sitio de ventas; cuando haya un
-// mail o un WhatsApp de ventas, cambiar esto por ese.
-const SALES_CONTACT_URL = 'https://www.instagram.com/santisiena?igsh=MWwyeW5lYmlsNWRtNQ==';
+// Los precios y los límites de cada plan salen de la tabla `plans` — la misma
+// que lee el selector del alta, así que la vitrina y lo que se cobra no pueden
+// separarse. La política plans_public_select (0006) deja leerla sin sesión,
+// que es justo lo que necesita esta página.
+//
+// PRICING_FALLBACK es sólo para cuando la consulta falla: la landing es la
+// puerta de entrada del producto y no puede quedarse sin sección de precios
+// porque Supabase tardó. Mismo criterio que las páginas del panel, que caen a
+// datos de ejemplo únicamente si la query tira error.
+const PRICING_FALLBACK = [
+  {
+    code: 'free',
+    name: 'Gratis',
+    description: 'Incluido con tu expositor. Para empezar a medir desde el primer día.',
+    price_ars: 0,
+    checkout_mode: 'free',
+    trial_days: 0,
+    features: {
+      highlights: [
+        'Hasta 3 dispositivos',
+        '1 ubicación',
+        'Escaneos y reseñas estimadas en tiempo real',
+        '30 días de historial',
+        'Soporte por email',
+      ],
+    },
+  },
+  {
+    code: 'business',
+    name: 'Business',
+    description: 'Analizá, gestioná y automatizá tu empresa.',
+    price_ars: 24900,
+    checkout_mode: 'subscription',
+    trial_days: 7,
+    features: {
+      highlights: [
+        'Hasta 25 dispositivos',
+        'Hasta 5 ubicaciones',
+        'Reportes de NPS, sentimiento y palabras clave',
+        'Automatizaciones e informes mensuales',
+        'Métricas de Google Business Profile',
+        '1 año de historial',
+        'Soporte prioritario',
+      ],
+    },
+  },
+  {
+    code: 'enterprise',
+    name: 'Enterprise',
+    description: 'A medida para empresas y cadenas con más de 30 locales.',
+    price_ars: 0,
+    checkout_mode: 'contact',
+    trial_days: 0,
+    features: {
+      highlights: [
+        'Ubicaciones y dispositivos ilimitados',
+        'Comparativas entre locales y regiones',
+        'Integraciones y exportación de datos',
+        '3 años de historial',
+        'Onboarding y soporte dedicado',
+      ],
+    },
+  },
+];
 
 const PRICING_EXTRAS = [
   {
@@ -625,7 +683,98 @@ const PRICING_EXTRAS = [
   },
 ];
 
+function PriceCard({ plan, onEnterDashboard }) {
+  const featured = plan.checkout_mode === 'subscription';
+  const highlights = plan.features?.highlights ?? [];
+  const variant = featured ? 'forest' : 'orange';
+
+  return (
+    <div className={'landing-price-card' + (featured ? ' landing-price-card--featured' : '')}>
+      {featured && plan.trial_days > 0 && (
+        <span className="landing-price-card__badge">{plan.trial_days} días gratis</span>
+      )}
+
+      <div className="landing-price-card__name">{plan.name}</div>
+      <p className="landing-price-card__desc">{plan.description}</p>
+
+      <div className="landing-price-card__price">
+        {plan.checkout_mode === 'contact' ? (
+          <span className="landing-price-card__amount landing-price-card__amount--sm">A convenir</span>
+        ) : Number(plan.price_ars) > 0 ? (
+          <>
+            <span className="landing-price-card__amount">{formatArs(plan.price_ars)}</span>
+            <span className="landing-price-card__period">/mes</span>
+          </>
+        ) : (
+          <>
+            <span className="landing-price-card__amount">$0</span>
+            <span className="landing-price-card__period">/mes</span>
+          </>
+        )}
+      </div>
+
+      {featured && plan.trial_days > 0 && (
+        <p className="landing-price-card__note">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+          Primer cobro a los {plan.trial_days} días. Sin permanencia.
+        </p>
+      )}
+
+      <div className="landing-price-card__features">
+        {highlights.map((item) => (
+          <div key={item} className="landing-price-card__feature">
+            <CheckIcon variant={variant} /> {item}
+          </div>
+        ))}
+      </div>
+
+      {plan.checkout_mode === 'contact' ? (
+        <a
+          className="landing-price-card__btn landing-price-card__btn--outline"
+          href={SALES_CONTACT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Contactar con ventas
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+        </a>
+      ) : (
+        <button
+          className={
+            'landing-price-card__btn ' +
+            (featured ? 'landing-price-card__btn--solid' : 'landing-price-card__btn--outline')
+          }
+          onClick={onEnterDashboard}
+        >
+          {featured && plan.trial_days > 0 ? `Probar ${plan.trial_days} días gratis` : 'Empezar gratis'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Pricing({ onEnterDashboard }) {
+  const [plans, setPlans] = useState(PRICING_FALLBACK);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('plans')
+        .select('code, name, description, price_ars, checkout_mode, trial_days, features')
+        .eq('is_public', true)
+        .order('sort_order', { ascending: true });
+
+      // Ante error o catálogo vacío se deja el fallback: mostrar una sección
+      // de precios en blanco es peor que mostrar precios de hace un deploy.
+      if (cancelled || error || !data?.length) return;
+      setPlans(data);
+    })();
+
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <RevealSection className="landing-pricing" id="pricing" bg="dark">
       <span className="landing-section-tag">Planes</span>
@@ -635,65 +784,14 @@ function Pricing({ onEnterDashboard }) {
       </p>
 
       <div className="landing-pricing__grid">
-        {/* Starter */}
-        <div className="landing-price-card">
-          <div className="landing-price-card__name">Starter</div>
-          <p className="landing-price-card__desc">Ideal para un solo local con pocos dispositivos.</p>
-          <div className="landing-price-card__price">
-            <span className="landing-price-card__amount">{STARTER_PRICE}</span>
-            <span className="landing-price-card__period">/mes</span>
-          </div>
-          <p className="landing-price-card__note">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
-            Se cobra cada mes, sin letra chica ni permanencia.
-          </p>
-          <div className="landing-price-card__features">
-            <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Hasta 5 dispositivos</div>
-            <div className="landing-price-card__feature"><CheckIcon variant="orange" /> 1 ubicación</div>
-            <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Dashboard en tiempo real</div>
-            <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Respuestas con IA básicas</div>
-            <div className="landing-price-card__feature"><CheckIcon variant="orange" /> Soporte por email</div>
-          </div>
-          <button className="landing-price-card__btn landing-price-card__btn--outline" onClick={onEnterDashboard}>
-            Probar gratis
-          </button>
-        </div>
-
-        {/* A medida */}
-        <div className="landing-price-card landing-price-card--featured">
-          <span className="landing-price-card__badge">Varios locales</span>
-          <div className="landing-price-card__enterprise-head">
-            <span className="landing-price-card__enterprise-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><path d="M9 9h1M9 13h1M14 9h1M14 13h1M10 21v-4h4v4" /></svg>
-            </span>
-            <div className="landing-price-card__name">A medida</div>
-          </div>
-          <p className="landing-price-card__desc">Para negocios con varios locales y equipos.</p>
-          <div className="landing-price-card__price">
-            <span className="landing-price-card__amount landing-price-card__amount--sm">A convenir</span>
-          </div>
-          <a
-            className="landing-price-card__btn landing-price-card__btn--solid"
-            href={SALES_CONTACT_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Contactar con ventas
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-          </a>
-          <div className="landing-price-card__divider" />
-          <div className="landing-price-card__features">
-            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Todo lo de Starter</div>
-            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Dispositivos y ubicaciones según tu operación</div>
-            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Ranking de empleados</div>
-            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> IA con tono personalizado</div>
-            <div className="landing-price-card__feature"><CheckIcon variant="forest" /> Soporte prioritario</div>
-          </div>
-        </div>
+        {plans.map((plan) => (
+          <PriceCard key={plan.code} plan={plan} onEnterDashboard={onEnterDashboard} />
+        ))}
       </div>
 
       <p className="landing-pricing__fine-print">
-        No necesitás tarjeta para probarlo. Cancelás cuando quieras, sin permanencia.
+        El plan gratis viene incluido con tu expositor y no pide tarjeta. Los planes pagos arrancan con
+        días de prueba sin cargo y se cancelan cuando quieras.
       </p>
 
       <div className="landing-pricing__extra">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../Sidebar/Sidebar';
+import SubscriptionBanner from './SubscriptionBanner';
 import { useAuth } from '../../context/AuthContext';
 import { PUBLIC_ROUTES, pathForSection, sectionFromPath } from '../../lib/routes';
 import './AppShell.css';
@@ -101,6 +102,10 @@ export default function AppShell() {
             </button>
           </div>
         </div>
+
+        {/* Va arriba del contenido y dentro del scroll de la página: es un
+            aviso, no una barra fija que le coma alto a todas las secciones. */}
+        <SubscriptionBanner />
 
         {/* Cada sección de /panel se renderiza acá dentro. */}
         <main className="app-shell__content"><Outlet /></main>

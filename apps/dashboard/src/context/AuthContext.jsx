@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { API_URL } from '../lib/config';
 
 const AuthContext = createContext(null);
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 minutos
 const ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
 const LAST_ACTIVITY_KEY = 'linkstar_last_activity';

@@ -18,9 +18,15 @@ import DevicesPage from './pages/Devices/Devices';
 import Landing from './pages/Landing/Landing';
 import Login from './pages/Login/Login';
 import Register from './pages/Register/Register';
+import CreateOrg from './pages/Onboarding/CreateOrg';
+import PlanPicker from './pages/Onboarding/PlanPicker';
+import PlanCheckout from './pages/Onboarding/PlanCheckout';
+import PlanResult from './pages/Onboarding/PlanResult';
 import { useAuth } from './context/AuthContext';
+import { useOrg } from './context/OrgContext';
 import {
   PUBLIC_ROUTES,
+  ONBOARDING_ROUTES,
   DASHBOARD_BASE,
   SECTION_PATHS,
   DEFAULT_SECTION,
@@ -42,6 +48,50 @@ function RequireAuth({ children }) {
 
   if (!user) {
     return <Navigate to={PUBLIC_ROUTES.login} replace state={{ from: location }} />;
+  }
+  return children;
+}
+
+/* ─── Guarda de alta ───────────────────────────────────────────
+   Tener sesión no alcanza para entrar al panel: hace falta una empresa y un
+   plan elegido. Va POR DENTRO de RequireAuth y envuelve sólo a /panel — las
+   rutas /alta/* quedan afuera, porque un guard que también las cubriera se
+   redirigiría a sí mismo en un bucle.
+
+   `has_access` viene de org_has_access() en la base (0005), así que también
+   frena a quien canceló o se le venció el período de gracia: en ese caso la
+   salida es volver a elegir plan, no una pantalla de error. */
+function RequireActivePlan({ children }) {
+  const { loading, hasOrg, hasChosenPlan, hasAccess } = useOrg();
+  const location = useLocation();
+
+  if (loading) {
+    return <div className="app-loading">Cargando…</div>;
+  }
+  if (!hasOrg) {
+    return <Navigate to={ONBOARDING_ROUTES.org} replace state={{ from: location }} />;
+  }
+  if (!hasChosenPlan || !hasAccess) {
+    return <Navigate to={ONBOARDING_ROUTES.plan} replace state={{ from: location }} />;
+  }
+  return children;
+}
+
+/* Los pasos del alta necesitan su propia guarda, en el otro sentido: no se
+   puede elegir plan sin empresa, ni crear una segunda empresa desde el paso 1
+   cuando ya hay una. El selector de planes NO redirige a quien ya tiene plan:
+   se llega ahí a propósito para cambiarlo. */
+function OnboardingStep({ children, requiresOrg = true, redirectIfOrg = false }) {
+  const { loading, hasOrg } = useOrg();
+
+  if (loading) {
+    return <div className="app-loading">Cargando…</div>;
+  }
+  if (redirectIfOrg && hasOrg) {
+    return <Navigate to={ONBOARDING_ROUTES.plan} replace />;
+  }
+  if (requiresOrg && !hasOrg) {
+    return <Navigate to={ONBOARDING_ROUTES.org} replace />;
   }
   return children;
 }
@@ -123,13 +173,59 @@ export default function App() {
       <Route path={PUBLIC_ROUTES.login} element={<LoginRoute />} />
       <Route path={PUBLIC_ROUTES.register} element={<RegisterRoute />} />
 
+      {/* Alta: con sesión, sin panel todavía. Se renderizan sueltas (sin
+          AppShell) igual que login y registro — mostrar el sidebar de un panel
+          al que todavía no se puede entrar sería mentirle al usuario. */}
+      <Route
+        path={ONBOARDING_ROUTES.org}
+        element={
+          <RequireAuth>
+            <OnboardingStep requiresOrg={false} redirectIfOrg>
+              <CreateOrg />
+            </OnboardingStep>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path={ONBOARDING_ROUTES.plan}
+        element={
+          <RequireAuth>
+            <OnboardingStep>
+              <PlanPicker />
+            </OnboardingStep>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path={ONBOARDING_ROUTES.payment}
+        element={
+          <RequireAuth>
+            <OnboardingStep>
+              <PlanCheckout />
+            </OnboardingStep>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path={ONBOARDING_ROUTES.paymentResult}
+        element={
+          <RequireAuth>
+            <OnboardingStep>
+              <PlanResult />
+            </OnboardingStep>
+          </RequireAuth>
+        }
+      />
+
       {/* El shell (sidebar + topbar) es la ruta padre: se monta una sola vez y
           las secciones se renderizan adentro, en su <Outlet />. */}
       <Route
         path={DASHBOARD_BASE}
         element={
           <RequireAuth>
-            <AppShell />
+            <RequireActivePlan>
+              <AppShell />
+            </RequireActivePlan>
           </RequireAuth>
         }
       >
