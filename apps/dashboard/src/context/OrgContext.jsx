@@ -56,7 +56,13 @@ export function OrgProvider({ children }) {
     /* Atajos, para que las pantallas no repitan la misma lógica de estado. */
     hasOrg: Boolean(context?.organization_id),
     hasChosenPlan: Boolean(context?.plan_selected_at),
+    /* hasAccess = la suscripción está vigente. isActivated = eso Y, si el plan
+       es gratis, hay un expositor vinculado. Son dos cosas distintas y el
+       guard las usa para decidir a qué paso mandar al usuario: al selector de
+       planes o a vincular su expositor. */
     hasAccess: Boolean(context?.has_access),
+    hasDevices: Boolean(context?.has_devices),
+    isActivated: Boolean(context?.is_activated),
     canManageBilling: context?.role === 'owner' || context?.role === 'admin',
     loading: authLoading || loading,
     error,

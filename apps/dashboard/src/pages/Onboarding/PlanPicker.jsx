@@ -19,7 +19,7 @@ function CheckIcon() {
 
 export default function PlanPicker() {
   const navigate = useNavigate();
-  const { org, canManageBilling, refresh } = useOrg();
+  const { org, canManageBilling, hasDevices, refresh } = useOrg();
 
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +73,12 @@ export default function PlanPicker() {
     }
 
     await refresh();
-    navigate(SECTION_PATHS[DEFAULT_SECTION], { replace: true });
+    // El gratis todavía no abre el panel: falta vincular el expositor
+    // (org_is_activated, 0015). El guard igual redirigiría, pero mandarlo
+    // derecho evita el rebote visible.
+    navigate(hasDevices ? SECTION_PATHS[DEFAULT_SECTION] : ONBOARDING_ROUTES.device, {
+      replace: true,
+    });
   }
 
   function handleSubscription(code) {
@@ -133,6 +138,13 @@ export default function PlanPicker() {
                   <p className="onb-plan__note">
                     Primer cobro a los {plan.trial_days} días. Cancelás cuando quieras.
                   </p>
+                )}
+
+                {/* Decirlo acá y no después: el gratis no se abre sin
+                    expositor, y enterarse recién en la pantalla siguiente se
+                    siente como una trampa. */}
+                {plan.checkout_mode === 'free' && !hasDevices && (
+                  <p className="onb-plan__note">Necesitás vincular tu expositor para activarlo.</p>
                 )}
 
                 <div className="onb-plan__features">

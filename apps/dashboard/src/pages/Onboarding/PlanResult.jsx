@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { useOrg } from '../../context/OrgContext';
+import { API_URL } from '../../lib/config';
 import { ONBOARDING_ROUTES, SECTION_PATHS, DEFAULT_SECTION } from '../../lib/routes';
 import OnboardingLayout from './OnboardingLayout';
 
@@ -21,11 +23,35 @@ const MAX_ATTEMPTS = 10; // ~30 segundos
 
 export default function PlanResult() {
   const navigate = useNavigate();
+  const { session } = useAuth();
   const { org, refresh } = useOrg();
   const [attempts, setAttempts] = useState(0);
+  const [syncing, setSyncing] = useState(false);
 
   const confirmed = Boolean(org?.plan_selected_at && org?.has_access);
   const exhausted = attempts >= MAX_ATTEMPTS;
+
+  /* Reintento manual. No se limita a volver a leer la base: le pide al backend
+     que le pregunte a Mercado Pago cómo quedó la suscripción y lo aplique.
+     Si el webhook nunca llegó — se perdió, apuntaba a otra URL, el servicio
+     estaba caído — refrescar solo no cambiaría nada nunca y el cliente
+     quedaría acá para siempre habiendo pagado. */
+  async function handleRetry() {
+    setSyncing(true);
+    try {
+      await fetch(`${API_URL}/api/subscriptions/sync`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+    } catch (err) {
+      // Da igual el detalle: si falló, el refresh de abajo deja todo como estaba
+      // y el usuario puede volver a intentar.
+      console.error('No se pudo sincronizar con Mercado Pago:', err);
+    }
+    await refresh();
+    setSyncing(false);
+    setAttempts(0);
+  }
 
   useEffect(() => {
     if (confirmed) {
@@ -54,9 +80,10 @@ export default function PlanResult() {
             type="button"
             className="onb-submit"
             style={{ width: '100%' }}
-            onClick={() => setAttempts(0)}
+            onClick={handleRetry}
+            disabled={syncing}
           >
-            Volver a consultar
+            {syncing ? 'Consultando…' : 'Volver a consultar'}
           </button>
         </div>
 

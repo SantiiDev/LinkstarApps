@@ -37,3 +37,7 @@ Thumbs.db
 
 # Varios
 *.local
+
+# Artefactos del CLI de Supabase (estado del link local, versiones del stack).
+# Se regeneran solos con `supabase link` / `supabase start`.
+**/supabase/.temp/

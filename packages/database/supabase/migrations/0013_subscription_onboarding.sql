@@ -206,11 +206,16 @@ $$;
 -- No hay selector de organizaciones todavía; esto sólo evita que un usuario
 -- con dos orgs vea una distinta en cada login.
 -- ---------------------------------------------------------------------------
+-- organization_slug se declara `text` y no `citext` a propósito. citext vive en
+-- el schema `extensions` (0001), que no está en el search_path de esta función
+-- ni en el de quien corre las migraciones, así que declararlo acá falla con
+-- "type citext does not exist". Además al frontend le llega un string igual: la
+-- insensibilidad a mayúsculas importa en la tabla, no en la respuesta.
 create or replace function public.my_org_context()
 returns table (
   organization_id   uuid,
   organization_name text,
-  organization_slug citext,
+  organization_slug text,
   role              public.org_role,
   plan_code         text,
   plan_name         text,
@@ -230,7 +235,7 @@ as $$
   select
     o.id,
     o.name,
-    o.slug,
+    o.slug::text,
     m.role,
     s.plan_code,
     p.name,

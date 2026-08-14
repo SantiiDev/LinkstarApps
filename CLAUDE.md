@@ -70,7 +70,7 @@ Supabase (needs the `supabase` CLI installed globally):
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0014 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0015 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -148,13 +148,15 @@ creates a `profiles` row on signup) · `0003` catalog (`locations`, `employees`,
 `0013` subscription onboarding (real `plans` catalog, `subscriptions.plan_selected_at`, `my_org_context()`,
 `select_free_plan()`, the two preapproval webhook RPCs, and a rewritten `bootstrap_organization()`) ·
 `0014` enforcement of paid access in RLS (`private.orgs_with_access()`, rewritten select/write policies on
-the business tables, `claim_device()` gated).
+the business tables, `claim_device()` gated) · `0015` `org_is_activated()` — the free plan also needs a
+linked device.
 
 ### Subscription gate — nobody reaches `/panel` without a plan
 
-Between signing up and the dashboard there are two forced steps: create an organization, then choose a
-plan. The state lives in **one column**, `subscriptions.plan_selected_at` (`0013`): `null` means the
-onboarding is unfinished, whatever else the row says. It is not a `subscription_status` value because
+Between signing up and the dashboard there are forced steps: create an organization, choose a plan, and —
+**on the free plan only** — link a device. The plan state lives in **one column**,
+`subscriptions.plan_selected_at` (`0013`): `null` means the onboarding is unfinished, whatever else the
+row says. It is not a `subscription_status` value because
 "hasn't chosen yet" is a state of the onboarding, not of the relationship with Mercado Pago.
 
 - `bootstrap_organization()` creates every new org on `free` / `active` with `plan_selected_at = null`.
@@ -169,9 +171,46 @@ onboarding is unfinished, whatever else the row says. It is not a `subscription_
   Billing tables are deliberately excluded — a lapsed customer has to be able to see their plan and pay.
   `resolve_scan()` is also excluded: a physical device must keep redirecting no matter what.
 
+**Two access checks, and confusing them locks people out** (`0015`). `org_has_access()` answers "is the
+subscription current?". `org_is_activated()` answers that *and*, when the plan is `free`, "is there a
+device linked?" — because the free plan is what ships bundled with the hardware, so an account with no
+device is not a customer. The RLS policies and the `RequireActivePlan` guard use `org_is_activated()`;
+**`claim_device()` deliberately still uses `org_has_access()`**, because gating it on activation would
+mean you need a linked device in order to link your first device. Paid plans never hit this check: someone
+who already authorized the monthly debit gets in while their device is still in the mail.
+
 Mercado Pago subscriptions use **preapproval without an associated plan**, because the plan-linked
 checkout does not accept `external_reference`, and without it a webhook arrives with no way to tell which
 organization was charged. `plans.mp_preapproval_plan_id` therefore stays unused.
+
+**Two things about `external_reference` that cost an afternoon to find**, both handled in
+`lib/subscriptions.js`:
+
+1. MP's WAF rejects a value in **UUID format** — `POST /preapproval` answers `400 Request contains invalid
+   or disallowed content` — while the same 32 hex characters without hyphens go through. So the org id
+   travels through `toMpReference()` (strip hyphens) and comes back through `fromMpReference()`. Verified
+   against the live API: with hyphens 400, without them the request passes validation.
+2. It is a fallback, not the primary lookup. `resolveOrgId()` in `routes/webhooks.js` first matches
+   `subscriptions.mp_preapproval_id`, which we wrote ourselves when the checkout was created, so
+   attributing a payment never depends on MP echoing our data back.
+
+**`back_url` cannot be localhost.** MP validates it when the preapproval is created and answers
+`400 Invalid value for back_url, must be a valid URL`, which surfaces in the dashboard as a generic
+"no se pudo iniciar la suscripción". So testing locally needs the *dashboard* exposed through a tunnel
+too, not just the API — `DASHBOARD_URL` has to be that public URL, and `lib/config.js` warns at boot if
+it still points at localhost. `apps/dashboard/vite.config.js` allows `.trycloudflare.com` hosts for the
+same reason.
+
+**`notification_url` is accepted per preapproval**, and `lib/subscriptions.js` sends it from
+`WEBHOOK_URL`. That is on top of whatever the MP panel has configured: in development the tunnel URL
+changes on every restart, and sending it in the request avoids reconfiguring the panel each time.
+
+Testing the flow needs **two** Mercado Pago test users. The seller token can be a test user's, but
+`payer_email` must belong to a *different* real or test MP account: any other address answers
+`400 Both payer and collector must be real or test users`, and an unregistered `@testuser.com` address
+gets a `500` from MP. Note this only bites in test mode — `payer_email` comes from the logged-in user's
+Supabase account, and in production MP accepts any address and asks the payer to log in. To test the real
+code path, the Supabase test account's email has to *be* the MP test buyer's.
 
 ### How a scan resolves to a URL (`resolve_scan`, `0007`)
 
@@ -297,8 +336,11 @@ split below before wiring anything — the shell is finished, the data mostly is
 - Inside it, `RequireActivePlan` gates the same subtree on the onboarding: no organization → `/alta/empresa`,
   no plan chosen or no active access → `/alta/plan`. The `/alta/*` routes live **outside** it (they have
   their own `OnboardingStep` guard, which only checks the org exists) — a guard that also covered them would
-  redirect to itself. `pages/Onboarding/` holds the four screens: `CreateOrg`, `PlanPicker`, `PlanCheckout`
-  and `PlanResult`, all sharing `OnboardingLayout` (stepper + sign-out escape hatch).
+  redirect to itself. `pages/Onboarding/` holds the five screens: `CreateOrg`, `PlanPicker`, `PlanCheckout`,
+  `PlanResult` and `ClaimDevice`, all sharing `OnboardingLayout` (stepper + sign-out escape hatch). The
+  stepper's last step differs by path — "Pago" for Business, "Expositor" for free — which is why it takes a
+  `steps` prop instead of a module constant. `ClaimDevice` always offers a way out to the paid plans: a free
+  user whose device hasn't arrived yet would otherwise be trapped with nothing but sign-out.
 - `PlanResult` is a **waiting room, not a confirmation**. Coming back from Mercado Pago proves the user
   finished operating there, nothing else; it polls `my_org_context()` until the webhook lands, and never
   reads the query params MP appends (the customer can type those by hand).

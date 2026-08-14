@@ -26,11 +26,12 @@ insert into public.organizations (id, name, slug, created_by) values
   ('bbbbbbbb-0000-0000-0000-000000000002', 'Bar Dos', 'bar-dos', '22222222-2222-2222-2222-222222222222');
 
 -- El trigger organizations_bootstrap (0013) le crea a cada org una suscripción
--- 'free' activa, que limita a 1 sola ubicación. Este test necesita 2 para Bar
--- Uno, así que le subimos el plan antes de sembrar los datos (no estamos
--- probando límites de plan acá, sino aislamiento entre tenants).
-update public.subscriptions set plan_code = 'business'
-where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+-- 'free' activa, que limita a 1 sola ubicación y que además exige un expositor
+-- vinculado para dar acceso (org_is_activated, 0015). Este test no prueba ni
+-- límites de plan ni activación, sino aislamiento entre tenants, así que las
+-- dos organizaciones arrancan en un plan pago. La activación se prueba aparte,
+-- en la sección 5.
+update public.subscriptions set plan_code = 'business';
 
 -- Caro es manager de Bar Uno, acotada a una sola sucursal.
 insert into public.memberships (id, organization_id, user_id, role) values
@@ -227,6 +228,54 @@ exception
     raise notice '  OK   Ana no puede crear ubicaciones sin suscripción activa';
 end;
 $$;
+
+-- =========================================================================
+-- 6. Plan gratis sin expositor vinculado: tampoco entra (0015)
+--
+-- La suscripción está perfecta (gratis, activa) pero no hay ningún
+-- dispositivo, así que org_is_activated() es falso y el panel queda cerrado.
+-- Al vincular uno, se abre. Este es el caso que separa org_has_access() de
+-- org_is_activated().
+-- =========================================================================
+reset role;
+
+update public.subscriptions
+set plan_code        = 'free',
+    status           = 'active',
+    grace_until      = null,
+    plan_selected_at = now()
+where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+select pg_temp.check(
+  'Plan gratis SIN expositor: org_has_access sí, org_is_activated no',
+  public.org_has_access('aaaaaaaa-0000-0000-0000-000000000001')
+  and not public.org_is_activated('aaaaaaaa-0000-0000-0000-000000000001')
+);
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+
+select pg_temp.check(
+  'Ana en gratis sin expositor NO ve sus ubicaciones',
+  (select count(*) from public.locations) = 0
+);
+
+-- Vincula el expositor y se abre el panel.
+reset role;
+
+insert into public.devices (organization_id, kind, form_factor, status, claimed_at)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 'google_review', 'nfc_stand', 'active', now());
+
+select pg_temp.check(
+  'Con un expositor vinculado, la organización queda activada',
+  public.org_is_activated('aaaaaaaa-0000-0000-0000-000000000001')
+);
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+
+select pg_temp.check(
+  'Ana en gratis CON expositor vuelve a ver sus ubicaciones',
+  (select count(*) from public.locations) = 2
+);
 
 reset role;
 

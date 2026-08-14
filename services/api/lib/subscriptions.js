@@ -24,6 +24,23 @@ const MP_TIMEOUT_MS = 8000;
 // pantalla de espera, no de confirmación: la verdad la trae el webhook.
 export const SUBSCRIPTION_BACK_URL = `${DASHBOARD_URL}/alta/pago/resultado`;
 
+// El id de organización viaja a Mercado Pago SIN guiones.
+//
+// No es cosmético: el WAF de MP rechaza un external_reference con formato UUID
+// con un 400 "Request contains invalid or disallowed content", mientras que
+// los mismos 32 caracteres hexadecimales pasan sin problema. Sin normalizar,
+// ninguna suscripción se llegaría a crear.
+export const toMpReference = (uuid) => String(uuid).replace(/-/g, '');
+
+// La vuelta, para el webhook: 32 hex -> uuid canónico.
+export function fromMpReference(reference) {
+  const hex = String(reference || '').replace(/-/g, '');
+  if (!/^[0-9a-f]{32}$/i.test(hex)) return null;
+  return [
+    hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20),
+  ].join('-');
+}
+
 /**
  * Crea la suscripción de una organización a un plan y devuelve el init_point
  * al que hay que mandar al cliente para que la autorice.
@@ -60,8 +77,12 @@ export async function createSubscriptionPreapproval({ plan, orgId, payerEmail })
         back_url: SUBSCRIPTION_BACK_URL,
         payer_email: payerEmail,
         // El puente entre Mercado Pago y nuestra base: todo webhook de esta
-        // suscripción vuelve con este valor.
-        external_reference: orgId,
+        // suscripción vuelve con este valor. Sin guiones, ver toMpReference.
+        external_reference: toMpReference(orgId),
+        // OJO: acá NO va notification_url. /preapproval lo acepta sin quejarse
+        // (responde 200) pero no lo guarda — la respuesta no lo devuelve. Las
+        // notificaciones de suscripción salen únicamente a la URL configurada
+        // en el panel de Mercado Pago. Verificado contra la API en vivo.
         status: 'pending',
       },
     }),

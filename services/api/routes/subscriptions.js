@@ -3,7 +3,11 @@ import rateLimit from 'express-rate-limit';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validateBody, subscriptionCheckoutSchema } from '../lib/validation.js';
-import { createSubscriptionPreapproval, cancelPreapproval } from '../lib/subscriptions.js';
+import {
+  createSubscriptionPreapproval,
+  cancelPreapproval,
+  getPreapproval,
+} from '../lib/subscriptions.js';
 
 const router = Router();
 
@@ -156,6 +160,70 @@ router.post(
       }
       console.error('Error cancelando la suscripción:', err);
       res.status(500).json({ error: 'No se pudo cancelar la suscripción' });
+    }
+  }
+);
+
+// ──────────────────────────────────────────────────────────
+// POST /api/subscriptions/sync
+//
+// Le pregunta a Mercado Pago el estado real de la suscripción y lo aplica con
+// la MISMA RPC que usa el webhook. No es un atajo ni una segunda fuente de
+// verdad: es la misma escritura, disparada por otro lado.
+//
+// Existe porque el webhook es una entrega best-effort. Si Mercado Pago no lo
+// manda, lo manda a una URL vieja, o el servicio estaba caído en ese momento,
+// el cliente autorizó el débito y queda encerrado para siempre en la pantalla
+// de espera — pagando y sin poder entrar. Este endpoint es la salida: lo llama
+// el botón "Volver a consultar" de PlanResult.
+//
+// El webhook sigue siendo el camino principal (llega solo, sin que nadie mire
+// la pantalla). Esto es la red abajo.
+// ──────────────────────────────────────────────────────────
+router.post(
+  '/api/subscriptions/sync',
+  subscriptionLimiter,
+  requireAuth(supabase),
+  async (req, res) => {
+    try {
+      const { orgId } = await requireOrgAdmin(req.user.id);
+
+      const { data: sub, error } = await supabase
+        .from('subscriptions')
+        .select('mp_preapproval_id, plan_code, pending_plan_code')
+        .eq('organization_id', orgId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!sub?.mp_preapproval_id) {
+        // No hay nada que reconciliar: nunca se inició un checkout.
+        return res.json({ synced: false, reason: 'sin_suscripcion' });
+      }
+
+      const pre = await getPreapproval(sub.mp_preapproval_id);
+
+      const { error: rpcError } = await supabase.rpc('apply_preapproval_event', {
+        p_preapproval_id: String(sub.mp_preapproval_id),
+        p_org: orgId,
+        p_plan_code: sub.pending_plan_code ?? sub.plan_code ?? 'free',
+        p_mp_status: pre.status,
+        p_payer_email: pre.payer_email ?? null,
+        p_payer_id: pre.payer_id != null ? String(pre.payer_id) : null,
+        p_amount: pre.auto_recurring?.transaction_amount ?? null,
+        p_next_payment_date: pre.next_payment_date ?? null,
+      });
+      if (rpcError) throw rpcError;
+
+      console.log(
+        `🔄 Sync manual: suscripción ${sub.mp_preapproval_id} → ${pre.status} (org ${orgId})`
+      );
+      res.json({ synced: true, status: pre.status });
+    } catch (err) {
+      if (err.status && err.status < 500) {
+        return res.status(err.status).json({ error: err.message });
+      }
+      console.error('Error sincronizando la suscripción:', err);
+      res.status(500).json({ error: 'No se pudo consultar el estado de la suscripción' });
     }
   }
 );

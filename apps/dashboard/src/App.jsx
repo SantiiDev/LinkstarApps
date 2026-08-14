@@ -22,6 +22,7 @@ import CreateOrg from './pages/Onboarding/CreateOrg';
 import PlanPicker from './pages/Onboarding/PlanPicker';
 import PlanCheckout from './pages/Onboarding/PlanCheckout';
 import PlanResult from './pages/Onboarding/PlanResult';
+import ClaimDevice from './pages/Onboarding/ClaimDevice';
 import { useAuth } from './context/AuthContext';
 import { useOrg } from './context/OrgContext';
 import {
@@ -62,7 +63,7 @@ function RequireAuth({ children }) {
    frena a quien canceló o se le venció el período de gracia: en ese caso la
    salida es volver a elegir plan, no una pantalla de error. */
 function RequireActivePlan({ children }) {
-  const { loading, hasOrg, hasChosenPlan, hasAccess } = useOrg();
+  const { loading, hasOrg, hasChosenPlan, hasAccess, isActivated } = useOrg();
   const location = useLocation();
 
   if (loading) {
@@ -73,6 +74,12 @@ function RequireActivePlan({ children }) {
   }
   if (!hasChosenPlan || !hasAccess) {
     return <Navigate to={ONBOARDING_ROUTES.plan} replace state={{ from: location }} />;
+  }
+  /* Suscripción vigente pero todavía sin activar: es el plan gratis sin
+     expositor vinculado. El orden importa — primero se resuelve el plan y
+     recién después el dispositivo, porque un plan pago ni pasa por acá. */
+  if (!isActivated) {
+    return <Navigate to={ONBOARDING_ROUTES.device} replace state={{ from: location }} />;
   }
   return children;
 }
@@ -212,6 +219,16 @@ export default function App() {
           <RequireAuth>
             <OnboardingStep>
               <PlanResult />
+            </OnboardingStep>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path={ONBOARDING_ROUTES.device}
+        element={
+          <RequireAuth>
+            <OnboardingStep>
+              <ClaimDevice />
             </OnboardingStep>
           </RequireAuth>
         }

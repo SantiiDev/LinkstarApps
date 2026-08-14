@@ -25,6 +25,25 @@ export const FRONTEND_URL = FRONTEND_URLS[0];
 export const DASHBOARD_URL =
   process.env.DASHBOARD_URL || FRONTEND_URLS[1] || FRONTEND_URLS[0];
 
+// Mercado Pago valida el back_url al crear el preapproval y rechaza localhost
+// con un escueto 400 "Invalid value for back_url, must be a valid URL" — que
+// desde el dashboard se ve como "no se pudo iniciar la suscripción" y no dice
+// nada. El aviso al arrancar convierte media tarde de debug en una línea.
+if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(DASHBOARD_URL)) {
+  console.warn(
+    `⚠️  DASHBOARD_URL apunta a ${DASHBOARD_URL}. Mercado Pago rechaza back_urls en localhost, ` +
+    'así que POST /api/subscriptions/checkout va a fallar con 400. Para probar en local, exponé ' +
+    'el dashboard con un túnel (cloudflared) y poné esa URL acá.'
+  );
+}
+
+// URL pública a la que Mercado Pago manda las notificaciones. Se adjunta a
+// cada preapproval como notification_url, además de lo que esté configurado en
+// el panel de MP. Vale la redundancia: en desarrollo la URL es un túnel que
+// cambia en cada reinicio, y mandarla en el request evita tener que reconfigurar
+// el panel cada vez. Si no está definida, MP usa sólo la del panel.
+export const WEBHOOK_URL = process.env.WEBHOOK_URL || null;
+
 // Dominio corto grabado en el NFC / impreso en el QR: https://<REDIRECT_DOMAIN>/d/<public_id>
 // (ver comentario de devices.public_id en packages/database/supabase/migrations/0003_catalog.sql).
 export const REDIRECT_DOMAIN = process.env.REDIRECT_DOMAIN || 'l.linkstar.com.ar';

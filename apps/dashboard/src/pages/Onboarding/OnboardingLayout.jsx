@@ -1,18 +1,20 @@
 import { useAuth } from '../../context/AuthContext';
 import './Onboarding.css';
 
-const STEPS = [
+/* El último paso depende del plan: el pago en Business, vincular el expositor
+ * en Gratis. Por eso es un prop y no una constante del módulo. */
+const DEFAULT_STEPS = [
   { n: 1, label: 'Empresa' },
   { n: 2, label: 'Plan' },
   { n: 3, label: 'Pago' },
 ];
 
-/* Marco común de los tres pasos previos al panel.
+/* Marco común de los pasos previos al panel.
  *
  * `step` marca en cuál está: los anteriores quedan en verde (hechos) y el
  * actual en naranja. Es la única señal de "cuánto falta" que tiene el usuario
  * en un flujo donde recién al final se le pide la tarjeta. */
-export default function OnboardingLayout({ step, title, subtitle, children }) {
+export default function OnboardingLayout({ step, title, subtitle, steps = DEFAULT_STEPS, children }) {
   const { signOut } = useAuth();
 
   return (
@@ -27,7 +29,7 @@ export default function OnboardingLayout({ step, title, subtitle, children }) {
       </div>
 
       <div className="onb-steps">
-        {STEPS.map((s, i) => (
+        {steps.map((s, i) => (
           <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {i > 0 && <div className="onb-step__line" />}
             <div

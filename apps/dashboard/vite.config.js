@@ -11,5 +11,13 @@ export default defineConfig({
     // Ventas usa 5174.
     port: 5173,
     strictPort: true,
+
+    // Probar la suscripción de Mercado Pago exige que el dashboard sea
+    // alcanzable desde afuera: MP valida el back_url al crear el preapproval y
+    // rechaza localhost con "Invalid value for back_url, must be a valid URL".
+    // La forma de conseguirlo en desarrollo es un túnel (cloudflared), y Vite
+    // bloquea por Host header cualquier dominio que no conozca. Esto sólo
+    // afecta al server de desarrollo; el build no lo mira.
+    allowedHosts: ['.trycloudflare.com'],
   },
 })

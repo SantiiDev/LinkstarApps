@@ -29,6 +29,9 @@ export const ONBOARDING_ROUTES = {
   plan: `${ONBOARDING_BASE}/plan`,
   payment: `${ONBOARDING_BASE}/pago`,
   paymentResult: `${ONBOARDING_BASE}/pago/resultado`,
+  // Último paso del plan gratis: sin expositor vinculado no hay panel (0015).
+  // Los planes pagos no pasan por acá.
+  device: `${ONBOARDING_BASE}/dispositivo`,
 };
 
 export const DASHBOARD_BASE = '/panel';

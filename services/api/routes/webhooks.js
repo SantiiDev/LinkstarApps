@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { Payment } from 'mercadopago';
 import { supabase } from '../lib/supabase.js';
 import { mpClient, withTimeout, isValidMpSignature } from '../lib/mercadopago.js';
-import { getPreapproval, getAuthorizedPayment } from '../lib/subscriptions.js';
+import { getPreapproval, getAuthorizedPayment, fromMpReference } from '../lib/subscriptions.js';
 
 const router = Router();
 
@@ -20,14 +20,34 @@ const router = Router();
 // escritura de una sola vez, porque a esta altura ya respondimos 200 y nadie
 // va a reintentar si esto se cae por la mitad.
 // ──────────────────────────────────────────────────────────
+/**
+ * A qué organización pertenece una suscripción de Mercado Pago.
+ *
+ * Se pregunta PRIMERO a nuestra propia tabla: el id del preapproval se guarda
+ * al crear el checkout, así que no dependemos de que MP nos devuelva nada.
+ * external_reference queda como respaldo, para una suscripción creada por
+ * fuera de nuestro checkout (a mano desde el panel de MP, por ejemplo).
+ */
+async function resolveOrgId(preapprovalId, externalReference) {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('organization_id')
+    .eq('mp_preapproval_id', String(preapprovalId))
+    .maybeSingle();
+  if (error) throw error;
+  if (data?.organization_id) return data.organization_id;
+
+  return fromMpReference(externalReference);
+}
+
 async function handlePreapprovalEvent(preapprovalId) {
   const pre = await getPreapproval(preapprovalId);
-  const orgId = pre?.external_reference;
+  const orgId = await resolveOrgId(preapprovalId, pre?.external_reference);
 
   if (!orgId) {
-    // Sin external_reference no hay forma de saber de quién es. Pasa si la
-    // suscripción se creó a mano desde el panel de Mercado Pago.
-    console.warn(`Preapproval ${preapprovalId} sin external_reference: se ignora`);
+    // Ni en nuestra tabla ni en external_reference: no hay forma de saber de
+    // quién es. Se registra y se sigue — nunca se adivina un tenant.
+    console.warn(`Preapproval ${preapprovalId} sin organización asociada: se ignora`);
     return;
   }
 
@@ -64,12 +84,13 @@ async function planCodeFor(orgId) {
 async function handleAuthorizedPayment(authorizedPaymentId) {
   const ap = await getAuthorizedPayment(authorizedPaymentId);
 
-  // external_reference no siempre viaja en el cobro; cuando falta, se sube al
-  // preapproval que lo generó, que sí lo tiene.
-  let orgId = ap?.external_reference;
+  // El cobro trae el preapproval que lo generó, que es con lo que resolvemos
+  // el tenant contra nuestra propia tabla. Si ni eso alcanza, se sube al
+  // preapproval en MP a buscar su external_reference.
+  let orgId = await resolveOrgId(ap?.preapproval_id, ap?.external_reference);
   if (!orgId && ap?.preapproval_id) {
     const pre = await getPreapproval(ap.preapproval_id);
-    orgId = pre?.external_reference;
+    orgId = fromMpReference(pre?.external_reference);
   }
   if (!orgId) {
     console.warn(`Cobro ${authorizedPaymentId} sin organización asociada: se ignora`);
@@ -104,7 +125,19 @@ router.post('/api/webhook/mercadopago', async (req, res) => {
   const signatureValid = isValidMpSignature(req);
 
   if (!signatureValid) {
-    console.warn('Webhook MP rechazado: firma inválida (o MP_WEBHOOK_SECRET sin configurar)');
+    // TEMPORAL (diagnóstico): sin esto, "firma inválida" tapa tres causas muy
+    // distintas — secreto equivocado, notificación legacy sin data.id, o topic
+    // que ni siquiera firmamos. Sacar cuando el flujo esté verificado.
+    console.warn(
+      'Webhook MP rechazado: firma inválida.',
+      JSON.stringify({
+        query: req.query,
+        bodyType: type ?? null,
+        bodyAction: req.body?.action ?? null,
+        tieneSignature: Boolean(req.headers['x-signature']),
+        tieneRequestId: Boolean(req.headers['x-request-id']),
+      })
+    );
     return res.sendStatus(401);
   }
 

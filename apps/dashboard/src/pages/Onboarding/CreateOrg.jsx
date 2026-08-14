@@ -54,6 +54,12 @@ export default function CreateOrg() {
     // organizations_insert exige created_by = auth.uid(), y el trigger
     // organizations_bootstrap crea en la misma transacción la membresía de
     // owner y la suscripción inicial (plan gratis, sin elegir todavía).
+    //
+    // OJO: no encadenar .select() acá. Pediría la fila de vuelta con RETURNING,
+    // que se evalúa ANTES de que corra el trigger AFTER INSERT — o sea, antes
+    // de que exista la membresía que la política organizations_select necesita
+    // para dejarte ver la fila. Falla con 42501 aunque el insert haya andado.
+    // Los datos de la organización se leen después, con refresh().
     const { error: insertError } = await supabase.from('organizations').insert({
       name: name.trim(),
       slug: finalSlug,
