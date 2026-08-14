@@ -1,11 +1,27 @@
 import PageHeader from '../../components/PageHeader/PageHeader';
 import StatCard from '../../components/StatCard/StatCard';
 import TrendChart from '../../components/TrendChart/TrendChart';
+import PieChart from '../../components/PieChart/PieChart';
+import { CHART_COLORS } from '../../lib/chartColors';
+import { sharesOf } from '../../lib/shares';
 import { ALL_REVIEWS, REVIEW_STATS } from '../../data/reviews';
 import './Reports.css';
 
 const SENTIMENT_TREND = [68, 71, 70, 74, 75, 77];
 const MONTHS = ['Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago'];
+
+/* Tres bandas en vez de dos. Con el umbral único en 60 la barra saltaba de
+   rojo a verde entre 59% y 61%: un cambio visual enorme para dos puntos de
+   diferencia. La banda del medio absorbe ese salto, y los tres tonos son el
+   mismo trío verificado que usan el anillo y las tarjetas (lib/chartColors.js).
+
+   Sigue habiendo cortes — lo que los elimina del todo es una rampa continua,
+   pero eso cambia bastante el aspecto de la tarjeta. */
+function themeTone(positivePct) {
+  if (positivePct >= 66) return 'forest';   // mayoría clara de menciones positivas
+  if (positivePct >= 34) return 'gold';     // mezclado
+  return 'danger';                          // mayoría clara de menciones negativas
+}
 
 const THEMES = [
   { label: 'Atención al cliente', positive: 89, mentions: 42 },
@@ -28,12 +44,20 @@ function Icon({ name, ...rest }) {
 
 export default function ReportsSentiment() {
   const total = ALL_REVIEWS.length;
-  const positive = ALL_REVIEWS.filter((r) => r.sentiment === 'positive').length;
-  const neutral = ALL_REVIEWS.filter((r) => r.sentiment === 'neutral').length;
+  const countBy = (s) => ALL_REVIEWS.filter((r) => r.sentiment === s).length;
 
-  const positivePct = Math.round((positive / total) * 100);
-  const neutralPct = Math.round((neutral / total) * 100);
-  const negativePct = 100 - positivePct - neutralPct;
+  /* Los tres porcentajes salen de un único reparto que suma 100. Antes el
+     negativo se calculaba como `100 - positivo - neutro`, lo que le encajaba
+     todo el error de redondeo de los otros dos a una sola categoría (y con
+     pocas reseñas podía llegar a darle un valor negativo). */
+  const SENTIMENTS = [
+    { key: 'positive', label: 'Positivo', color: CHART_COLORS.good },
+    { key: 'neutral',  label: 'Neutro',   color: CHART_COLORS.warning },
+    { key: 'negative', label: 'Negativo', color: CHART_COLORS.bad },
+  ].map((s) => ({ ...s, count: countBy(s.key) }));
+
+  const shares = sharesOf(SENTIMENTS.map((s) => s.count));
+  const [positivePct, neutralPct, negativePct] = shares;
 
   return (
     <div className="reports-page">
@@ -44,9 +68,10 @@ export default function ReportsSentiment() {
       />
 
       <div className="reports-stat-grid">
+        {/* Mismo color que su porción en el anillo de "Distribución". */}
         <StatCard icon={<Icon name="smile" />} value={`${positivePct}%`} label="Sentimiento positivo" trend="+3%" color="forest" />
         <StatCard icon={<Icon name="meh" />} value={`${neutralPct}%`} label="Sentimiento neutro" color="gold" />
-        <StatCard icon={<Icon name="frown" />} value={`${negativePct}%`} label="Sentimiento negativo" trendDirection="down" trend="-1%" color="navy" />
+        <StatCard icon={<Icon name="frown" />} value={`${negativePct}%`} label="Sentimiento negativo" trendDirection="down" trend="-1%" color="danger" />
         <StatCard icon={<Icon name="tag" />} value={THEMES.length} label="Temas detectados" color="orange" />
       </div>
 
@@ -58,7 +83,18 @@ export default function ReportsSentiment() {
               <span className="reports-card__subtitle">Últimos 6 meses · {REVIEW_STATS.totalReviews} reseñas analizadas</span>
             </div>
           </div>
-          <TrendChart data={SENTIMENT_TREND} labels={MONTHS} color="orange" />
+          {/* Es un porcentaje que se mueve entre 68 y 77: con la escala forzada
+              a 0-100 se vería como una recta pegada al borde de arriba. */}
+          <TrendChart
+            data={SENTIMENT_TREND}
+            labels={MONTHS}
+            color="orange"
+            seriesName="Reseñas positivas"
+            xLabel="Mes"
+            yLabel="% positivo"
+            baseline="auto"
+            formatValue={(v) => `${v}%`}
+          />
         </div>
 
         <div className="reports-card">
@@ -68,18 +104,12 @@ export default function ReportsSentiment() {
               <span className="reports-card__subtitle">{total} reseñas clasificadas</span>
             </div>
           </div>
-          <div className="reports-sentiment-split">
-            <div className="reports-sentiment-split__bar">
-              <div className="reports-sentiment-split__seg reports-sentiment-split__seg--forest" style={{ width: `${positivePct}%` }} />
-              <div className="reports-sentiment-split__seg reports-sentiment-split__seg--gold" style={{ width: `${neutralPct}%` }} />
-              <div className="reports-sentiment-split__seg reports-sentiment-split__seg--danger" style={{ width: `${negativePct}%` }} />
-            </div>
-            <div className="reports-sentiment-split__legend">
-              <span><i className="reports-sentiment-split__dot reports-sentiment-split__dot--forest" />Positivo {positivePct}%</span>
-              <span><i className="reports-sentiment-split__dot reports-sentiment-split__dot--gold" />Neutro {neutralPct}%</span>
-              <span><i className="reports-sentiment-split__dot reports-sentiment-split__dot--danger" />Negativo {negativePct}%</span>
-            </div>
-          </div>
+          <PieChart
+            data={SENTIMENTS.map((s) => ({ ...s, value: s.count }))}
+            centerValue={total}
+            centerLabel="reseñas"
+            unit="reseñas"
+          />
         </div>
       </div>
 
@@ -99,8 +129,8 @@ export default function ReportsSentiment() {
               </div>
               <div className="reports-theme-row__bar">
                 <div
-                  className={`reports-theme-row__fill ${t.positive >= 60 ? 'reports-theme-row__fill--forest' : 'reports-theme-row__fill--danger'}`}
-                  style={{ width: `${t.positive}%` }}
+                  className={`reports-theme-row__fill reports-theme-row__fill--${themeTone(t.positive)}`}
+                  style={{ width: `max(3px, ${t.positive}%)` }}
                 />
               </div>
               <span className="reports-theme-row__pct">{t.positive}% positivo</span>

@@ -91,36 +91,69 @@
 }
 
 /* ── Metrics: search-type comparison bars ── */
-.gb-compare {
+/* ── Partición en una sola barra apilada ──
+   Directa y descubrimiento suman 100%: son UNA cosa partida en dos, no dos
+   medidores independientes. Con un riel propio cada uno, 62% y 38% se leían
+   como dos magnitudes sueltas y se perdía que son complementarias. */
+.gb-split__bar {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.gb-compare__top {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.8rem;
-  color: var(--color-navy);
-  font-weight: 600;
-  margin-bottom: 0.4rem;
-}
-
-.gb-compare__bar {
-  height: 9px;
-  border-radius: 6px;
-  background: rgba(26, 38, 57, 0.07);
+  height: 14px;
+  border-radius: 7px;
   overflow: hidden;
+  margin-bottom: 1rem;
 }
 
-.gb-compare__fill {
+/* La separación de 2px entre tramos hace de segunda codificación: el corte
+   distingue dos categorías contiguas aunque no se perciba el cambio de color. */
+.gb-split__seg {
   height: 100%;
-  border-radius: 6px;
   transition: width 0.6s ease;
 }
 
-.gb-compare__fill--orange { background: linear-gradient(90deg, var(--color-gold), var(--color-orange)); }
-.gb-compare__fill--navy { background: var(--color-navy); }
+.gb-split__seg + .gb-split__seg {
+  margin-left: 2px;
+}
+
+.gb-split__legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  list-style: none;
+}
+
+.gb-split__legend-item {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.gb-split__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transform: translateY(1px);
+}
+
+.gb-split__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.gb-split__hint {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.gb-split__pct {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  font-variant-numeric: tabular-nums;
+}
 
 /* ── Metrics: interaction list ── */
 .gb-interactions {
@@ -148,16 +181,38 @@
 }
 
 .gb-interaction__label {
-  flex: 1;
+  flex: 0 0 108px;
   font-size: 0.8rem;
   color: var(--color-text-secondary);
   font-weight: 600;
 }
 
+/* La barra es lo que hace comparable el ranking: los valores van de 37 a 940,
+   y como texto suelto esa diferencia de 25× no se percibía. El largo se mide
+   contra el máximo — es un ranking, no una parte de un todo. */
+.gb-interaction__bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 5px;
+  background: rgba(26, 38, 57, 0.07);
+  overflow: hidden;
+}
+
+.gb-interaction__fill {
+  height: 100%;
+  border-radius: 5px;
+  background: var(--color-orange);
+  transition: width 0.6s ease;
+}
+
 .gb-interaction__value {
+  flex: 0 0 auto;
+  min-width: 38px;
+  text-align: right;
   font-size: 0.85rem;
   font-weight: 800;
   color: var(--color-navy);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Profile preview card ── */

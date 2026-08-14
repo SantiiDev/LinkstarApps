@@ -32,17 +32,6 @@
   color: var(--color-orange);
 }
 
-.company-btn--dark {
-  background: var(--color-navy);
-  color: white;
-  font-weight: 700;
-}
-
-.company-btn--dark:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(26, 38, 57, 0.25);
-}
-
 /* ── Connect Google banner ── */
 .company-banner {
   display: flex;
@@ -323,7 +312,7 @@
 
 .star-dist__row {
   display: grid;
-  grid-template-columns: 34px 1fr 34px;
+  grid-template-columns: 34px 1fr 34px 34px;
   align-items: center;
   gap: 0.6rem;
 }
@@ -348,11 +337,22 @@
   transition: width 0.6s ease;
 }
 
+/* El conteo crudo va junto al porcentaje: es lo que hace legible cuál es el
+   denominador, en vez de dejarlo implícito en el subtítulo de la tarjeta. */
+.star-dist__count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-navy);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .star-dist__pct {
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--color-text-secondary);
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Sentiment teaser card ── */

@@ -1,0 +1,171 @@
+/* El anillo y su leyenda se centran COMO GRUPO dentro de la tarjeta. Antes la
+   leyenda tenía `flex: 1` y se estiraba hasta llenar el ancho, lo que empujaba
+   el anillo contra el borde izquierdo. */
+.pie-chart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.pie-chart--empty {
+  justify-content: center;
+  padding: 2rem 0;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+
+.pie-chart__ring {
+  position: relative;
+  flex: 0 0 auto;
+  width: 168px;
+  height: 168px;
+}
+
+.pie-chart__svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.pie-chart__slice {
+  transition: opacity var(--transition-base);
+  cursor: default;
+}
+
+.pie-chart__slice--dim {
+  opacity: 0.35;
+}
+
+/* ── Titular dentro del anillo ── */
+.pie-chart__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  text-align: center;
+  padding: 0 1.6rem;
+}
+
+.pie-chart__center-value {
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--color-navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.pie-chart__center--solo .pie-chart__center-value {
+  font-size: 2.4rem;
+}
+
+.pie-chart__center-label {
+  margin-top: 0.25rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.pie-chart__center-note {
+  margin-top: 0.15rem;
+  font-size: 0.6rem;
+  color: var(--color-text-secondary);
+}
+
+/* ── Tooltip ── */
+.pie-chart__tooltip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.5rem;
+  background: var(--color-white);
+  border: 1px solid rgba(26, 38, 57, 0.08);
+  box-shadow: 0 6px 20px rgba(26, 38, 57, 0.16);
+  font-size: 0.72rem;
+  color: var(--color-navy);
+  white-space: nowrap;
+}
+
+.pie-chart__tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Leyenda ── */
+.pie-chart__legend {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  list-style: none;
+}
+
+.pie-chart__legend-item {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+  transition: background var(--transition-base);
+}
+
+.pie-chart__legend-item--on {
+  background: rgba(26, 38, 57, 0.045);
+}
+
+.pie-chart__legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.pie-chart__legend-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.pie-chart__legend-hint {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.pie-chart__legend-share {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.pie-chart__legend-count {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 66px;
+  text-align: right;
+}
+
+@media (max-width: 520px) {
+  .pie-chart {
+    justify-content: center;
+  }
+
+  .pie-chart__legend-count {
+    min-width: 0;
+  }
+}

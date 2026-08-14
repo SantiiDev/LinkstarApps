@@ -1,20 +1,36 @@
 import PageHeader from '../../components/PageHeader/PageHeader';
 import StatCard from '../../components/StatCard/StatCard';
 import TrendChart from '../../components/TrendChart/TrendChart';
+import { SPLIT_2 } from '../../lib/chartColors';
 import './GoogleBusiness.css';
+
+/* Las dos formas de llegar a la ficha suman 100%: es una partición, no dos
+   medidas sueltas. Se guarda sólo el porcentaje porque es el único dato que
+   hay — inventarle conteos para que "cierre" con las vistas de arriba sería
+   fabricar números en una pantalla que todavía es mock. */
+const SEARCH_SPLIT = [
+  { label: 'Búsqueda directa', hint: 'te buscan por tu nombre', pct: 62, color: SPLIT_2[0] },
+  { label: 'Por descubrimiento', hint: 'te encuentran por rubro o zona', pct: 38, color: SPLIT_2[1] },
+];
 
 const VIEWS_TREND = [4200, 4650, 5100, 5480, 6120, 6900, 7640, 8412];
 const WEEKS = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8'];
 
 /* Interacciones que no se solapan con las 4 KPI cards de arriba
    (vistas, llamadas, cómo llegar, sitio web) — para no repetir los
-   mismos números en dos lugares distintos de la misma pantalla. */
+   mismos números en dos lugares distintos de la misma pantalla.
+
+   Ordenadas de mayor a menor: es un ranking, y con 25× de diferencia entre
+   la primera y la última una lista de números sueltos no dejaba ver eso. */
 const INTERACTIONS = [
   { label: 'Enviar mensaje', value: 64, icon: 'message' },
   { label: 'Guardar ficha', value: 128, icon: 'bookmark' },
   { label: 'Ver fotos', value: 940, icon: 'image' },
   { label: 'Compartir ficha', value: 37, icon: 'share' },
-];
+].sort((a, b) => b.value - a.value);
+
+const MAX_INTERACTION = Math.max(...INTERACTIONS.map((i) => i.value));
+const NUM_FORMAT = new Intl.NumberFormat('es-AR');
 
 function Icon({ name, ...rest }) {
   const props = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', ...rest };
@@ -55,7 +71,14 @@ export default function GoogleMetrics() {
               <span className="gb-card__subtitle">Últimas 8 semanas</span>
             </div>
           </div>
-          <TrendChart data={VIEWS_TREND} labels={WEEKS} color="navy" />
+          <TrendChart
+            data={VIEWS_TREND}
+            labels={WEEKS}
+            color="orange"
+            seriesName="Vistas del perfil"
+            xLabel="Semana"
+            yLabel="Vistas"
+          />
         </div>
 
         <div className="gb-side-col">
@@ -66,21 +89,38 @@ export default function GoogleMetrics() {
                 <span className="gb-card__subtitle">Directa vs. descubrimiento</span>
               </div>
             </div>
-            <div className="gb-compare">
-              <div className="gb-compare__row">
-                <div className="gb-compare__top">
-                  <span>Búsqueda directa</span>
-                  <strong>62%</strong>
-                </div>
-                <div className="gb-compare__bar"><div className="gb-compare__fill gb-compare__fill--orange" style={{ width: '62%' }} /></div>
+            <div className="gb-split">
+              <div
+                className="gb-split__bar"
+                role="img"
+                aria-label={SEARCH_SPLIT.map((s) => `${s.label} ${s.pct}%`).join(', ')}
+              >
+                {SEARCH_SPLIT.map((s) => (
+                  <div
+                    key={s.label}
+                    className="gb-split__seg"
+                    /* Se le descuenta a cada tramo su parte del corte de 2px,
+                       para que la suma siga midiendo exactamente el 100% del
+                       riel y el último no quede recortado. */
+                    style={{
+                      width: `calc(${s.pct}% - ${(2 * (SEARCH_SPLIT.length - 1)) / SEARCH_SPLIT.length}px)`,
+                      background: s.color,
+                    }}
+                  />
+                ))}
               </div>
-              <div className="gb-compare__row">
-                <div className="gb-compare__top">
-                  <span>Búsqueda por descubrimiento</span>
-                  <strong>38%</strong>
-                </div>
-                <div className="gb-compare__bar"><div className="gb-compare__fill gb-compare__fill--navy" style={{ width: '38%' }} /></div>
-              </div>
+              <ul className="gb-split__legend">
+                {SEARCH_SPLIT.map((s) => (
+                  <li key={s.label} className="gb-split__legend-item">
+                    <span className="gb-split__dot" style={{ background: s.color }} />
+                    <span className="gb-split__label">
+                      {s.label}
+                      <span className="gb-split__hint">{s.hint}</span>
+                    </span>
+                    <span className="gb-split__pct">{s.pct}%</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
 
@@ -88,15 +128,25 @@ export default function GoogleMetrics() {
             <div className="gb-card__header">
               <div>
                 <h3 className="gb-card__title">Interacciones</h3>
-                <span className="gb-card__subtitle">Acciones sobre tu ficha</span>
+                <span className="gb-card__subtitle">Acciones sobre tu ficha, de mayor a menor</span>
               </div>
             </div>
+            {/* Una sola medida (cantidad de acciones) repartida entre cuatro
+                categorías: barras de un mismo color, porque la categoría ya la
+                dice la etiqueta. Darle un color distinto a cada fila sugeriría
+                que el color significa algo, y acá no significa nada. */}
             <div className="gb-interactions">
               {INTERACTIONS.map((i) => (
                 <div key={i.label} className="gb-interaction">
                   <div className="gb-interaction__icon"><Icon name={i.icon} width={16} height={16} /></div>
                   <span className="gb-interaction__label">{i.label}</span>
-                  <span className="gb-interaction__value">{i.value}</span>
+                  <div className="gb-interaction__bar">
+                    <div
+                      className="gb-interaction__fill"
+                      style={{ width: `max(3px, ${(i.value / MAX_INTERACTION) * 100}%)` }}
+                    />
+                  </div>
+                  <span className="gb-interaction__value">{NUM_FORMAT.format(i.value)}</span>
                 </div>
               ))}
             </div>

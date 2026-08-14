@@ -808,7 +808,7 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
         <div className="devices-activity__header">
           <div>
             <h3 className="devices-activity__title">Actividad de Dispositivos</h3>
-            <span className="devices-activity__subtitle">Escaneos únicos en el período seleccionado</span>
+            <span className="devices-activity__subtitle">Escaneos totales por día en el período seleccionado</span>
           </div>
           <Select
             value={activityPeriod}
@@ -817,7 +817,14 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
             triggerClassName="devices-period-select"
           />
         </div>
-        <TrendChart data={dailyScans.totals} labels={dailyScans.labels} color="orange" />
+        <TrendChart
+          data={dailyScans.totals}
+          labels={dailyScans.labels}
+          color="orange"
+          seriesName="Escaneos"
+          xLabel="Día"
+          yLabel="Escaneos"
+        />
       </div>
 
       {/* ── Ranking de ubicaciones ── */}

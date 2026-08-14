@@ -1149,35 +1149,6 @@
   color: var(--color-orange);
 }
 
-.landing-price-card__enterprise-head {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  margin-bottom: 0.35rem;
-}
-
-.landing-price-card__enterprise-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: rgba(26, 38, 57, 0.06);
-  color: var(--color-navy);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.landing-price-card__enterprise-head .landing-price-card__name {
-  margin-bottom: 0;
-}
-
-.landing-price-card__divider {
-  height: 1px;
-  background: rgba(26, 38, 57, 0.08);
-  margin: 1.5rem 0;
-}
-
 .landing-price-card__features {
   display: flex;
   flex-direction: column;

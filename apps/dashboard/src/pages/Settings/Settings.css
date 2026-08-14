@@ -145,16 +145,6 @@
   text-underline-offset: 2px;
 }
 
-.settings-section-label {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
-  margin-bottom: 0.6rem;
-}
-
 /* ── Buttons ── */
 .settings-btn {
   display: inline-flex;
@@ -219,20 +209,10 @@
 }
 
 /* ── Forms ── */
-.settings-form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
 .settings-field {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-}
-
-.settings-field--full {
-  grid-column: 1 / -1;
 }
 
 .settings-field span {
@@ -272,27 +252,6 @@
   border-color: var(--color-orange);
 }
 
-.settings-checkbox-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.settings-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 0.85rem;
-  color: var(--color-navy);
-  font-weight: 500;
-}
-
-.settings-checkbox input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--color-orange);
-}
-
 /* ── Empty states ── */
 .settings-empty-state {
   display: flex;
@@ -304,10 +263,6 @@
   padding: 2.5rem 1rem;
   border-radius: 0.85rem;
   background: var(--color-light);
-}
-
-.settings-empty-state--compact {
-  padding: 1.5rem 1rem;
 }
 
 .settings-empty-state__icon {
@@ -684,10 +639,6 @@
 }
 
 @media (max-width: 768px) {
-  .settings-form-grid {
-    grid-template-columns: 1fr;
-  }
-
   .settings-activity-filters {
     grid-template-columns: 1fr;
   }

@@ -476,8 +476,7 @@
   .sidebar__item-label,
   .sidebar__item-badge,
   .sidebar__chevron,
-  .sidebar__user-info,
-  .sidebar__logout-icon {
+  .sidebar__user-info {
     display: none;
   }
 

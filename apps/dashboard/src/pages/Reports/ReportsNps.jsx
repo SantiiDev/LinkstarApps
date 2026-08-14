@@ -1,16 +1,24 @@
 import PageHeader from '../../components/PageHeader/PageHeader';
 import StatCard from '../../components/StatCard/StatCard';
 import TrendChart from '../../components/TrendChart/TrendChart';
+import PieChart from '../../components/PieChart/PieChart';
+import { CHART_COLORS } from '../../lib/chartColors';
+import { sharesOf } from '../../lib/shares';
 import './Reports.css';
 
-const NPS_SCORE = 68;
+/* Sólo se guardan los conteos: el porcentaje de cada grupo y el puntaje NPS
+   se derivan de acá. Antes convivían un `pct` escrito a mano y un NPS_SCORE
+   de 68 que no se correspondían — el NPS es promotores% − detractores%, o
+   sea 66 con estos mismos datos. */
 const BREAKDOWN = [
-  { label: 'Promotores', pct: 72, count: 153, color: 'forest' },
-  { label: 'Pasivos', pct: 22, count: 47, color: 'gold' },
-  { label: 'Detractores', pct: 6, count: 13, color: 'danger' },
+  { label: 'Promotores',  hint: '9-10', count: 153, color: CHART_COLORS.good },
+  { label: 'Pasivos',     hint: '7-8',  count: 47,  color: CHART_COLORS.warning },
+  { label: 'Detractores', hint: '0-6',  count: 13,  color: CHART_COLORS.bad },
 ];
 
-const NPS_TREND = [58, 60, 63, 65, 64, 68];
+/* El último punto es el NPS de hoy, así que tiene que coincidir con el que
+   sale del desglose (66). Estaba en 68 y la misma pantalla se contradecía. */
+const NPS_TREND = [58, 60, 63, 65, 64, 66];
 const MONTHS = ['Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago'];
 
 function Icon({ name, ...rest }) {
@@ -26,7 +34,9 @@ function Icon({ name, ...rest }) {
 
 export default function ReportsNps() {
   const totalResponses = BREAKDOWN.reduce((s, b) => s + b.count, 0);
-  const level = NPS_SCORE >= 70 ? 'Excelente' : NPS_SCORE >= 50 ? 'Muy bueno' : NPS_SCORE >= 0 ? 'Aceptable' : 'A mejorar';
+  const shares = sharesOf(BREAKDOWN.map((b) => b.count));
+  const npsScore = shares[0] - shares[2];
+  const level = npsScore >= 70 ? 'Excelente' : npsScore >= 50 ? 'Muy bueno' : npsScore >= 0 ? 'Aceptable' : 'A mejorar';
 
   return (
     <div className="reports-page">
@@ -36,26 +46,24 @@ export default function ReportsNps() {
         subtitle="Qué tan probable es que tus clientes te recomienden a otras personas"
       />
 
-      <div className="reports-two-col reports-two-col--narrow-first">
-        <div className="reports-card reports-nps-card">
-          <span className="reports-nps-card__level">{level}</span>
-          <div className="reports-nps-card__score">
-            {NPS_SCORE}
-            <span className="reports-nps-card__scale">/100</span>
+      <div className="reports-two-col">
+        <div className="reports-card">
+          <div className="reports-card__header">
+            <div>
+              <h3 className="reports-card__title">Composición de respuestas</h3>
+              <span className="reports-card__subtitle">{totalResponses} respuestas clasificadas</span>
+            </div>
+            <span className="reports-nps-level">{level}</span>
           </div>
-          <div className="reports-nps-bar">
-            {BREAKDOWN.map((b) => (
-              <div key={b.label} className={`reports-nps-bar__seg reports-nps-bar__seg--${b.color}`} style={{ width: `${b.pct}%` }} />
-            ))}
-          </div>
-          <div className="reports-nps-legend">
-            {BREAKDOWN.map((b) => (
-              <div key={b.label} className="reports-nps-legend__item">
-                <span className={`reports-nps-legend__dot reports-nps-legend__dot--${b.color}`} />
-                {b.label} <strong>{b.pct}%</strong>
-              </div>
-            ))}
-          </div>
+          {/* El puntaje va solo en el hueco del anillo. Ya no dice "/100": el
+              NPS se mueve entre −100 y +100, así que "68/100" hacía leer que
+              faltaban 32 puntos para el máximo cuando en realidad faltan 34.
+              El signo + es lo que marca que la escala admite negativos. */}
+          <PieChart
+            data={BREAKDOWN.map((b) => ({ ...b, value: b.count }))}
+            centerValue={npsScore > 0 ? `+${npsScore}` : `${npsScore}`}
+            unit="resp."
+          />
         </div>
 
         <div className="reports-card">
@@ -65,14 +73,27 @@ export default function ReportsNps() {
               <span className="reports-card__subtitle">Últimos 6 meses</span>
             </div>
           </div>
-          <TrendChart data={NPS_TREND} labels={MONTHS} color="forest" />
+          {/* baseline="auto": el NPS va de −100 a 100, así que el 0 no es su
+              piso natural y forzarlo aplastaría la variación contra el techo. */}
+          <TrendChart
+            data={NPS_TREND}
+            labels={MONTHS}
+            color="orange"
+            seriesName="Puntaje NPS"
+            xLabel="Mes"
+            yLabel="NPS"
+            baseline="auto"
+          />
         </div>
       </div>
 
       <div className="reports-stat-grid">
+        {/* El color de cada tarjeta es el mismo que el de su porción en el
+            anillo de arriba. Detractores estaba en navy mientras su porción era
+            roja: la misma categoría con dos colores en la misma pantalla. */}
         <StatCard icon={<Icon name="smile" />} value={BREAKDOWN[0].count} label="Promotores (9-10)" trend="+8%" color="forest" />
         <StatCard icon={<Icon name="meh" />} value={BREAKDOWN[1].count} label="Pasivos (7-8)" color="gold" trendDirection="down" trend="-2%" />
-        <StatCard icon={<Icon name="frown" />} value={BREAKDOWN[2].count} label="Detractores (0-6)" color="navy" trendDirection="down" trend="-3%" />
+        <StatCard icon={<Icon name="frown" />} value={BREAKDOWN[2].count} label="Detractores (0-6)" color="danger" trendDirection="down" trend="-3%" />
         <StatCard icon={<Icon name="users" />} value={totalResponses} label="Respuestas totales" color="orange" />
       </div>
     </div>

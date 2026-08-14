@@ -57,6 +57,10 @@
 .stat-card--gold::before { background: var(--color-gold); }
 .stat-card--forest::before { background: var(--color-forest); }
 .stat-card--navy::before { background: var(--color-navy); }
+/* `danger` existe para las tarjetas cuyo número ES el estado malo (detractores,
+   sentimiento negativo). Sin él quedaban en navy, contradiciendo a la porción
+   roja del mismo dato en el gráfico de al lado. Ver src/lib/chartColors.js. */
+.stat-card--danger::before { background: var(--color-danger); }
 
 .stat-card__header {
   display: flex;
@@ -79,6 +83,7 @@
 .stat-card__icon-wrapper--gold { background: rgba(245, 158, 11, 0.1); color: var(--color-gold); }
 .stat-card__icon-wrapper--forest { background: rgba(16, 185, 129, 0.1); color: var(--color-forest); }
 .stat-card__icon-wrapper--navy { background: rgba(26, 38, 57, 0.1); color: var(--color-navy); }
+.stat-card__icon-wrapper--danger { background: rgba(239, 68, 68, 0.1); color: var(--color-danger); }
 
 .stat-card__badge {
   display: inline-flex;

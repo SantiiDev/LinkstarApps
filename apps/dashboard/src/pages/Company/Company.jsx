@@ -2,6 +2,7 @@ import { useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import StatCard from '../../components/StatCard/StatCard';
 import TrendChart from '../../components/TrendChart/TrendChart';
+import { sharesOf } from '../../lib/shares';
 import { ALL_REVIEWS, REVIEW_STATS } from '../../data/reviews';
 import './Company.css';
 
@@ -102,7 +103,7 @@ export default function Company({ onNavigate }) {
   const negativeUnresponded = ALL_REVIEWS.filter((r) => r.sentiment === 'negative' && !r.responded);
   const recentReviews = ALL_REVIEWS.slice(0, 5);
   const totalDist = REVIEW_STATS.distribution.reduce((sum, d) => sum + d.count, 0);
-  const maxDist = Math.max(...REVIEW_STATS.distribution.map((d) => d.count));
+  const distShares = sharesOf(REVIEW_STATS.distribution.map((d) => d.count));
 
   const today = new Date();
   const formattedDate = today.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -195,7 +196,14 @@ export default function Company({ onNavigate }) {
               <span className="company-card__subtitle">Últimas 8 semanas</span>
             </div>
           </div>
-          <TrendChart data={TREND_DATA} labels={TREND_WEEKS} color="orange" />
+          <TrendChart
+            data={TREND_DATA}
+            labels={TREND_WEEKS}
+            color="orange"
+            seriesName="Reseñas nuevas"
+            xLabel="Semana"
+            yLabel="Reseñas"
+          />
         </div>
 
         <div className="company-side-col">
@@ -206,14 +214,24 @@ export default function Company({ onNavigate }) {
                 <span className="company-card__subtitle">{REVIEW_STATS.totalReviews} reseñas en total</span>
               </div>
             </div>
+            {/* La barra y el porcentaje se miden contra el MISMO denominador
+                (el total de reseñas). Antes el ancho iba contra el balde más
+                grande y el número contra el total, así que 5★ se dibujaba al
+                100% y decía 74%: dos escalas distintas en la misma fila. */}
             <div className="star-dist">
-              {REVIEW_STATS.distribution.map((d) => (
+              {REVIEW_STATS.distribution.map((d, i) => (
                 <div key={d.stars} className="star-dist__row">
                   <span className="star-dist__label">{d.stars} ★</span>
                   <div className="star-dist__bar">
-                    <div className="star-dist__fill" style={{ width: `${(d.count / maxDist) * 100}%` }} />
+                    {/* max(3px, …) para que un balde con pocas reseñas se vea:
+                        al 0,9% del riel la barra mide 2px y parece vacío. */}
+                    <div
+                      className="star-dist__fill"
+                      style={{ width: d.count > 0 ? `max(3px, ${(d.count / totalDist) * 100}%)` : 0 }}
+                    />
                   </div>
-                  <span className="star-dist__pct">{Math.round((d.count / totalDist) * 100)}%</span>
+                  <span className="star-dist__count">{d.count}</span>
+                  <span className="star-dist__pct">{distShares[i]}%</span>
                 </div>
               ))}
             </div>
