@@ -288,6 +288,12 @@ begin
   update public.subscriptions
   set plan_code            = 'free',
       status               = 'active',
+      -- pending_plan_code NO se limpia acá, aunque quede colgado el intento de
+      -- un checkout pago abandonado. Es deliberado: si el cliente sí llegó a
+      -- autorizar en Mercado Pago y volvió al selector antes de que entrara el
+      -- webhook, ese valor es lo único que le dice al 'authorized' a qué plan
+      -- activar. Borrarlo cambiaría un campo sucio por un cliente al que MP le
+      -- cobra Business mientras el panel lo deja en Gratis.
       plan_selected_at     = coalesce(plan_selected_at, now()),
       current_period_start = coalesce(current_period_start, now())
   where organization_id = p_org
@@ -390,12 +396,28 @@ begin
     -- pending: se deja rastro del intento (incluido QUÉ plan se estaba
     -- contratando) para poder retomarlo y para que el webhook de autorización
     -- sepa a qué plan activar. Nada de esto habilita nada todavía.
+    --
+    -- Mercado Pago no garantiza el orden de las notificaciones: el 'pending'
+    -- de un preapproval puede llegar DESPUÉS de su propio 'authorized'. Por eso
+    -- pending_plan_code no se escribe cuando el evento es de un preapproval que
+    -- ya está autorizado — si no, quedaría marcado como pendiente un plan que
+    -- en realidad ya se activó y se cobró.
+    --
+    -- La condición mira el preapproval y no sólo el status a propósito: una
+    -- organización que pasa de Gratis a Business ya está 'active' cuando abre
+    -- el checkout, así que filtrar por status a secas dejaría ese upgrade sin
+    -- anotar y el 'authorized' posterior la reactivaría en Gratis.
     else
       update public.subscriptions
       set mp_preapproval_id      = coalesce(p_preapproval_id, mp_preapproval_id),
           mp_preapproval_plan_id = coalesce(p_preapproval_plan_id, mp_preapproval_plan_id),
           mp_payer_email         = coalesce(p_payer_email, mp_payer_email),
-          pending_plan_code      = coalesce(p_plan_code, pending_plan_code)
+          pending_plan_code      = case
+            when mp_preapproval_id is not distinct from p_preapproval_id
+                 and status in ('trialing', 'active')
+            then pending_plan_code
+            else coalesce(p_plan_code, pending_plan_code)
+          end
       where organization_id = p_org;
   end case;
 end;
@@ -459,7 +481,10 @@ begin
     update public.subscriptions
     set status               = 'active',
         current_period_start = coalesce(p_paid_at, now()),
-        current_period_end   = p_next_payment_date,
+        -- coalesce y no asignación directa: si MP no manda next_payment_date
+        -- en este cobro, se conserva el fin de período que ya había. Pisarlo
+        -- con NULL deja la pestaña de Facturación sin período que mostrar.
+        current_period_end   = coalesce(p_next_payment_date, current_period_end),
         amount_ars           = coalesce(p_amount, amount_ars),
         failed_payment_count = 0,
         grace_until          = null
