@@ -73,7 +73,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0016 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0017 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -167,7 +167,15 @@ creates a `profiles` row on signup) · `0003` catalog (`locations`, `employees`,
 `0014` enforcement of paid access in RLS (`private.orgs_with_access()`, rewritten select/write policies on
 the business tables, `claim_device()` gated) · `0015` `org_is_activated()` — the free plan also needs a
 linked device · `0016` per-entity daily series views (`v_device_scans_daily`, `v_location_scans_daily`,
-`v_employee_scans_daily`) — pure projections of `scan_daily_rollups`, no new capture.
+`v_employee_scans_daily`) — pure projections of `scan_daily_rollups`, no new capture ·
+`0017` corrective: re-applies the two `0013` RPC fixes that never reached Postgres (see below).
+
+**Everything up to `0017` is applied in production.** Correcting an already-applied migration by editing
+its file changes nothing in the database — `db push` skips migrations already in the history table. That
+is exactly how `0017` came to exist: `0013` was fixed in place on the reasonable assumption that it had
+not shipped yet, it shipped in between, and for a while the file and Postgres disagreed with nobody
+noticing. From here on, every correction is a new migration. To check what actually runs in the database
+rather than what the files say, query `pg_proc.prosrc` / `information_schema` directly — not the repo.
 
 ### Subscription gate — nobody reaches `/panel` without a plan
 
