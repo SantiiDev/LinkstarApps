@@ -4,10 +4,15 @@ import {
   fetchLocationPerformance,
   fetchDevicePerformance,
   fetchEmployeeLeaderboard,
+  fetchLocationScansSeries,
   formatRelativeTime,
   colorForIndex,
+  lastNDayLabels,
 } from '../../lib/dashboardApi';
 import './Locations.css';
+
+// Largo de las sparklines de esta pantalla.
+const SPARKLINE_DAYS = 7;
 
 /* ─── Helpers ──────────────────────────────────────────────── */
 function pct(current, goal) {
@@ -23,7 +28,7 @@ function stat(value, suffix = '') {
 // encargado, teléfono, zonas ni meta mensual — esos campos no existen a ese
 // grano en el schema. Se cruza con v_device_performance/v_employee_leaderboard
 // para armar listas reales de dispositivos/empleados y la última actividad.
-function mapLocationRow(row, { devicesByLocation, employeesByLocation, index }) {
+function mapLocationRow(row, { devicesByLocation, employeesByLocation, scansSeries, index }) {
   const myDevices = devicesByLocation.get(row.location_id) || [];
   const myEmployees = employeesByLocation.get(row.location_id) || [];
   const lastScanAt = myDevices.reduce((latest, d) => {
@@ -52,8 +57,13 @@ function mapLocationRow(row, { devicesByLocation, employeesByLocation, index }) 
     avgConversion: row.conversion_rate,
     avgRating: row.average_rating,
     monthlyGoal: 100,
-    weeklyScans: Array(7).fill(0),
-    weeklyReviews: Array(7).fill(0),
+    weeklyScans: scansSeries?.get(row.location_id) ?? Array(SPARKLINE_DAYS).fill(0),
+    // Sin serie diaria de reseñas: review_deltas tiene el dato por día, pero
+    // lo llena compute_review_deltas() a partir de location_review_snapshots,
+    // que hoy no escribe nadie (falta la integración sync-reviews de Google).
+    // Mientras tanto son ceros de verdad, no un placeholder: es lo mismo que
+    // ya devuelve new_reviews_30d en las tarjetas de arriba.
+    weeklyReviews: Array(SPARKLINE_DAYS).fill(0),
     zones: [],
     devices: myDevices.map(d => d.label),
     employees: myEmployees.map(e => e.full_name),
@@ -68,7 +78,10 @@ function LocationModal({ location, onClose }) {
   const maxScans = Math.max(...location.weeklyScans, 1);
   const maxReviews = Math.max(...location.weeklyReviews, 1);
   const progress = pct(location.totalReviews, location.monthlyGoal);
-  const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+  // Los últimos N días terminando hoy, no una semana calendario: rotular esto
+  // con L-M-X-J-V-S-D asumía que la serie arrancaba un lunes y desalineaba
+  // cada barra con su fecha real.
+  const days = lastNDayLabels(location.weeklyScans.length);
 
   return (
     <div className="loc-modal-overlay" onClick={onClose}>
@@ -213,26 +226,30 @@ function LocationModal({ location, onClose }) {
           {/* Weekly charts */}
           <div className="loc-modal__charts-row">
             <div className="loc-modal__chart-block">
-              <div className="loc-modal__chart-title">Escaneos — últimos 7 días</div>
+              <div className="loc-modal__chart-title">
+                Escaneos — últimos {location.weeklyScans.length} días
+              </div>
               <div className="loc-modal__chart">
                 {location.weeklyScans.map((v, i) => (
                   <div
                     key={i}
                     className="loc-modal__chart-bar loc-modal__chart-bar--scans"
-                    style={{ height: `${(v / maxScans) * 100}%` }}
+                    style={{ height: `max(2px, ${(v / maxScans) * 100}%)` }}
                     title={`${days[i]}: ${v} escaneos`}
                   />
                 ))}
               </div>
             </div>
             <div className="loc-modal__chart-block">
-              <div className="loc-modal__chart-title">Reseñas — últimos 7 días</div>
+              <div className="loc-modal__chart-title">
+                Reseñas — últimos {location.weeklyReviews.length} días
+              </div>
               <div className="loc-modal__chart">
                 {location.weeklyReviews.map((v, i) => (
                   <div
                     key={i}
                     className="loc-modal__chart-bar loc-modal__chart-bar--reviews"
-                    style={{ height: `${(v / maxReviews) * 100}%` }}
+                    style={{ height: `max(2px, ${(v / maxReviews) * 100}%)` }}
                     title={`${days[i]}: ${v} reseñas`}
                   />
                 ))}
@@ -348,7 +365,7 @@ function LocationCardGrid({ locations, onSelect }) {
                   <div
                     key={i}
                     className="loc-card__spark-bar"
-                    style={{ height: `${(v / maxScans) * 100}%` }}
+                    style={{ height: `max(2px, ${(v / maxScans) * 100}%)` }}
                   />
                 ))}
               </div>
@@ -515,10 +532,17 @@ export default function LocationsPage({ embedded = false }) {
     let cancelled = false;
     (async () => {
       try {
-        const [locationRows, deviceRows, employeeRows] = await Promise.all([
+        const [locationRows, deviceRows, employeeRows, scansSeries] = await Promise.all([
           fetchLocationPerformance(),
           fetchDevicePerformance(),
           fetchEmployeeLeaderboard(),
+          // Catch propio: si falta la migración 0016 la sparkline queda plana,
+          // pero el resto de la pantalla conserva sus datos reales en vez de
+          // caerse entera al mock.
+          fetchLocationScansSeries(SPARKLINE_DAYS).catch(err => {
+            console.error('No se pudo cargar la serie diaria por local, las sparklines quedan en cero:', err);
+            return new Map();
+          }),
         ]);
         if (cancelled) return;
 
@@ -537,7 +561,7 @@ export default function LocationsPage({ embedded = false }) {
         });
 
         setLocations(locationRows.map((row, index) =>
-          mapLocationRow(row, { devicesByLocation, employeesByLocation, index })
+          mapLocationRow(row, { devicesByLocation, employeesByLocation, scansSeries, index })
         ));
       } catch (err) {
         console.error('No se pudieron cargar las ubicaciones reales, muestro datos de ejemplo:', err);

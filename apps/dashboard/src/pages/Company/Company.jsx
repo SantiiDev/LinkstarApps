@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useOrg } from '../../context/OrgContext';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import StatCard from '../../components/StatCard/StatCard';
 import TrendChart from '../../components/TrendChart/TrendChart';
@@ -100,6 +101,10 @@ const QUICK_LINKS = [
 
 export default function Company({ onNavigate }) {
   const [alertDismissed, setAlertDismissed] = useState(false);
+  // El plan real sale de my_org_context() vía OrgContext. Acá decía "Pro"
+  // hardcodeado, y `pro` es un plan que el 0013 sacó de circulación cuando
+  // sembró el catálogo definitivo (free / business / enterprise).
+  const { org } = useOrg();
   const negativeUnresponded = ALL_REVIEWS.filter((r) => r.sentiment === 'negative' && !r.responded);
   const recentReviews = ALL_REVIEWS.slice(0, 5);
   const totalDist = REVIEW_STATS.distribution.reduce((sum, d) => sum + d.count, 0);
@@ -147,7 +152,7 @@ export default function Company({ onNavigate }) {
           <Icon name="check" width={14} height={14} /> Perfil de Google Business conectado
         </div>
         <div className="company-chip">
-          <Icon name="award" width={14} height={14} /> Plan actual: <strong>Pro</strong>
+          <Icon name="award" width={14} height={14} /> Plan actual: <strong>{org?.plan_name ?? '—'}</strong>
         </div>
         <div className="company-chip">
           Ficha completada al <strong>92%</strong>

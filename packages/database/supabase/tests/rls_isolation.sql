@@ -277,6 +277,154 @@ select pg_temp.check(
   (select count(*) from public.locations) = 2
 );
 
+-- =========================================================================
+-- 7. Las vistas del dashboard tampoco filtran de menos (0008 y 0016)
+--
+-- Por defecto una vista de Postgres corre con los permisos de QUIEN LA CREÓ,
+-- no de quien la consulta: ignora el RLS de las tablas de abajo y le devuelve
+-- a cualquier usuario logueado los datos de todos los clientes. Es la fuga
+-- multi-tenant más silenciosa que hay — el RLS está perfecto, todos los
+-- asserts de las secciones anteriores pasan, y la vista filtra igual.
+--
+-- `security_invoker = on` es lo que lo evita. Esta sección existe para que, si
+-- alguien recrea una vista y se olvida el flag, el test falle en vez de que se
+-- entere un cliente.
+-- =========================================================================
+reset role;
+
+-- Las dos organizaciones vuelven a un plan pago: esta sección prueba
+-- aislamiento, no límites de plan (la sección 6 dejó a Bar Uno en gratis, que
+-- tope 3 dispositivos).
+update public.subscriptions set plan_code = 'business', status = 'active';
+
+insert into public.employees (id, organization_id, location_id, full_name) values
+  ('ffffffff-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'dddddddd-0000-0000-0000-000000000001', 'Mozo Uno'),
+  ('ffffffff-0000-0000-0000-000000000002', 'bbbbbbbb-0000-0000-0000-000000000002',
+   'dddddddd-0000-0000-0000-000000000003', 'Mozo Dos');
+
+insert into public.devices (id, organization_id, location_id, employee_id, kind, form_factor, status, claimed_at) values
+  ('eeeeeeee-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'dddddddd-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000001',
+   'google_review', 'nfc_stand', 'active', now()),
+  ('eeeeeeee-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'dddddddd-0000-0000-0000-000000000002', null,
+   'google_review', 'nfc_stand', 'active', now()),
+  ('eeeeeeee-0000-0000-0000-000000000003', 'bbbbbbbb-0000-0000-0000-000000000002',
+   'dddddddd-0000-0000-0000-000000000003', 'ffffffff-0000-0000-0000-000000000002',
+   'google_review', 'nfc_stand', 'active', now());
+
+-- Métricas de un día, con bots incluidos para poder verificar human_scans.
+insert into public.scan_daily_rollups
+  (organization_id, day, location_id, device_id, employee_id, kind, scans, unique_scans, bot_scans)
+values
+  -- Bar Uno / Centro — la única sucursal que Caro tiene asignada
+  ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 'dddddddd-0000-0000-0000-000000000001',
+   'eeeeeeee-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000001',
+   'google_review', 10, 4, 2),
+  -- Bar Uno / Pichincha — Caro NO la tiene asignada
+  ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 'dddddddd-0000-0000-0000-000000000002',
+   'eeeeeeee-0000-0000-0000-000000000002', null,
+   'google_review', 7, 3, 1),
+  -- Bar Dos
+  ('bbbbbbbb-0000-0000-0000-000000000002', current_date, 'dddddddd-0000-0000-0000-000000000003',
+   'eeeeeeee-0000-0000-0000-000000000003', 'ffffffff-0000-0000-0000-000000000002',
+   'google_review', 99, 50, 9);
+
+-- --- Ana (owner de Bar Uno) ve sus dos dispositivos y ninguno de Bar Dos ---
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+
+select pg_temp.check(
+  'v_device_scans_daily: Ana ve sus 2 dispositivos y ninguno ajeno',
+  (select count(*) from public.v_device_scans_daily) = 2
+);
+
+select pg_temp.check(
+  'v_device_scans_daily: Ana NO ve el dispositivo de Bar Dos por id directo',
+  (select count(*) from public.v_device_scans_daily
+   where device_id = 'eeeeeeee-0000-0000-0000-000000000003') = 0
+);
+
+select pg_temp.check(
+  'v_location_scans_daily: Ana ve sus 2 ubicaciones',
+  (select count(*) from public.v_location_scans_daily) = 2
+);
+
+select pg_temp.check(
+  'v_employee_scans_daily: Ana ve sólo a su empleado',
+  (select count(*) from public.v_employee_scans_daily) = 1
+);
+
+-- Los 99 escaneos de Bar Dos no pueden aparecer en ningún total de Ana.
+select pg_temp.check(
+  'Ana no ve ni un escaneo de Bar Dos en los totales',
+  (select coalesce(sum(scans), 0) from public.v_device_scans_daily) = 17
+);
+
+-- human_scans = scans - bot_scans, que es el número que el panel llama
+-- "Escaneos". Centro: 10 toques, 2 de bots -> 8 humanos.
+select pg_temp.check(
+  'human_scans descuenta los bots (10 - 2 = 8)',
+  (select human_scans from public.v_device_scans_daily
+   where device_id = 'eeeeeeee-0000-0000-0000-000000000001') = 8
+);
+
+-- --- Caro (manager acotada a Centro) ve una sola sucursal, también en vistas ---
+select pg_temp.login('33333333-3333-3333-3333-333333333333', 'caro@bar-uno.test');
+
+select pg_temp.check(
+  'v_location_scans_daily: Caro ve sólo la sucursal que tiene asignada',
+  (select count(*) from public.v_location_scans_daily) = 1
+);
+
+select pg_temp.check(
+  'v_device_scans_daily: Caro no ve el dispositivo de la sucursal ajena',
+  (select count(*) from public.v_device_scans_daily) = 1
+);
+
+-- --- Beto (owner de Bar Dos) ve lo suyo y nada de Bar Uno ---
+select pg_temp.login('22222222-2222-2222-2222-222222222222', 'beto@bar-dos.test');
+
+select pg_temp.check(
+  'v_device_scans_daily: Beto ve sólo su dispositivo',
+  (select count(*) from public.v_device_scans_daily) = 1
+);
+
+select pg_temp.check(
+  'Beto ve sus 99 escaneos y ninguno de Bar Uno',
+  (select coalesce(sum(scans), 0) from public.v_device_scans_daily) = 99
+);
+
+-- --- Un anónimo no ve absolutamente nada en ninguna de las tres ---
+select set_config('role', 'anon', true);
+select set_config('request.jwt.claims', null, true);
+
+select pg_temp.check(
+  'anon no ve nada en v_device_scans_daily',
+  (select count(*) from public.v_device_scans_daily) = 0
+);
+
+select pg_temp.check(
+  'anon no ve nada en v_location_scans_daily',
+  (select count(*) from public.v_location_scans_daily) = 0
+);
+
+select pg_temp.check(
+  'anon no ve nada en v_employee_scans_daily',
+  (select count(*) from public.v_employee_scans_daily) = 0
+);
+
+-- Las vistas del 0008 corren sobre las mismas tablas y el mismo riesgo.
+select pg_temp.check(
+  'anon no ve nada en v_device_performance (0008)',
+  (select count(*) from public.v_device_performance) = 0
+);
+
+select pg_temp.check(
+  'anon no ve nada en v_scans_daily (0008)',
+  (select count(*) from public.v_scans_daily) = 0
+);
+
 reset role;
 
 do $$ begin

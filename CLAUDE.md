@@ -73,7 +73,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0015 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0016 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -127,8 +127,9 @@ accidentally undo:
 1. **Attribution is a snapshot, not a JOIN.** `scan_events` copies `location_id`/`employee_id`/`kind` at
    scan time. Deriving attribution via JOIN means reassigning a device retroactively zeroes out the
    previous employee's history.
-2. **The dashboard never reads `scan_events` directly.** It reads `scan_daily_rollups`, rebuilt nightly
-   with an idempotent `DELETE + INSERT` per day, so any day can be safely recomputed.
+2. **The dashboard never reads `scan_events` directly.** It reads `scan_daily_rollups`, rebuilt with an
+   idempotent `DELETE + INSERT` per day, so any day can be safely recomputed. ("Nightly" is the design,
+   not the current state — see below.)
 3. **`resolve_scan()` is never granted to `anon`.** Only the `service_role` backend may call it — `anon`
    reaching it directly would let anyone pollute another tenant's metrics with a known `public_id`.
 4. **Devices are never created client-side.** Provisioned with `status = 'unassigned'` + a printed
@@ -141,6 +142,19 @@ accidentally undo:
    (`location_review_snapshots`); day-over-day deltas (`review_deltas`) are the only real signal.
    Anything finer (per employee, per device) is a prorated estimate and must stay labeled "estimado".
 
+**Nothing schedules the nightly jobs yet.** `private.rebuild_daily_rollups()`,
+`compute_review_deltas()`, `expire_subscriptions()` and `purge_old_scan_events()` all exist in `0007`, but
+the four `cron.schedule(...)` calls at the bottom of that file are **commented out** and `pg_cron` has not
+been enabled. So `scan_daily_rollups` only fills when someone runs
+`services/api/scripts/rebuild-today-rollup.js` by hand — and since the dashboard reads exclusively from the
+rollups (invariant 2), every view in `0008` reports zero until that happens. Before debugging "the
+dashboard shows no data", check this first; it is far more likely than an RLS problem. Enabling `pg_cron`
+and uncommenting those lines is a tracked pending in `packages/database/supabase/README.md`.
+
+A second consequence, easy to miss: the rollup runs for *yesterday*, so a scan is invisible until the next
+run. `0012`'s `public.rebuild_today_rollup()` exists to close that gap, and nothing calls it either —
+whether it runs on dashboard load, on a short interval, or not at all is still undecided.
+
 Migration responsibilities: `0001` extensions/enums/ID & IP-hash helpers · `0002` tenancy
 (`organizations`, `profiles`, `memberships`, `invitations`, plus the `on_auth_user_created` trigger that
 creates a `profiles` row on signup) · `0003` catalog (`locations`, `employees`, `devices`) ·
@@ -152,7 +166,8 @@ creates a `profiles` row on signup) · `0003` catalog (`locations`, `employees`,
 `select_free_plan()`, the two preapproval webhook RPCs, and a rewritten `bootstrap_organization()`) ·
 `0014` enforcement of paid access in RLS (`private.orgs_with_access()`, rewritten select/write policies on
 the business tables, `claim_device()` gated) · `0015` `org_is_activated()` — the free plan also needs a
-linked device.
+linked device · `0016` per-entity daily series views (`v_device_scans_daily`, `v_location_scans_daily`,
+`v_employee_scans_daily`) — pure projections of `scan_daily_rollups`, no new capture.
 
 ### Subscription gate — nobody reaches `/panel` without a plan
 
@@ -378,6 +393,16 @@ split below before wiring anything — the shell is finished, the data mostly is
   `scan_daily_rollups` (invariant 2). Exports `ESTIMATED_LABEL` — any number derived from `review_deltas`
   must be labeled "estimado" (invariant 6). `v_dashboard_kpis` and `v_recent_activity` exist but nothing
   consumes them yet.
+- **Per-entity daily series** come from the `0016` views (`v_device_scans_daily`,
+  `v_location_scans_daily`, `v_employee_scans_daily`) via `fetchDeviceScansSeries` /
+  `fetchLocationScansSeries` / `fetchEmployeeScansSeries`, which return a `Map<id, number[]>` already
+  densified to the requested window. Neither the views nor `v_scans_daily` bound the day range or fill
+  gaps — a view takes no parameters, so the window and the zero-fill are the client's job.
+  `lastNDayLabels()` builds the matching labels and must stay the labelling path: the sparklines used to
+  be rotulated `['L','M','X','J','V','S','D']`, which assumes the series starts on a Monday when it is
+  really the last N days ending today. `v_employee_scans_daily` has no consumer yet.
+  Bars use a `max(2px, …)` height floor — an all-zero series (any new org) otherwise renders as an empty
+  strip that reads as a broken chart rather than as "no activity".
 - `pages/Devices/`, `pages/Employees/`, `pages/Locations/` read real data with the same pattern: fall back
   to `data/*.js` mock **only if the query throws**; an empty result (new org) renders as-is. Fields with no
   backing in the views render `'—'` instead of being fabricated.

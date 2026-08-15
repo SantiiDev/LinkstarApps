@@ -1,7 +1,8 @@
 import { supabase } from './supabaseClient';
 
-// Capa de fetching del dashboard. Lee EXCLUSIVAMENTE las vistas de
-// supabase/migrations/0008_dashboard_views.sql — nunca scan_events ni
+// Capa de fetching del dashboard. Lee EXCLUSIVAMENTE vistas —
+// supabase/migrations/0008_dashboard_views.sql y las series por entidad del
+// 0016_entity_daily_series.sql — nunca scan_events ni
 // scan_daily_rollups directo (decisión 2 de CLAUDE.md). Las vistas tienen
 // security_invoker = on, así que RLS filtra sola: con el cliente logueado
 // (anon key + sesión del usuario) cada query devuelve sólo lo que ese
@@ -44,6 +45,96 @@ export async function fetchScansDaily(days = 7) {
 
   if (error) throw error;
   return data ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// Series diarias POR ENTIDAD (0016_entity_daily_series.sql)
+//
+// Las vistas del 0016 devuelven una fila por (entidad, día) y sólo para los
+// días que tuvieron escaneos: una entidad sin actividad el martes no tiene
+// fila para el martes. Densificar con ceros es trabajo del cliente, porque es
+// el cliente el que elige la ventana (7 días, 30 días) y una vista de Postgres
+// no toma parámetros.
+//
+// Devuelven un Map<id, number[]> con un array de largo `days`, del día más
+// viejo al más nuevo, listo para pasarle a una sparkline. Una entidad sin
+// ninguna fila en el rango no aparece en el Map — quien lo consume decide si
+// eso es un array de ceros o "sin datos".
+// ---------------------------------------------------------------------------
+
+// Claves ISO (YYYY-MM-DD) de los últimos N días, de la más vieja a la más
+// nueva. Usa UTC igual que `day` en scan_daily_rollups, que la escribe el
+// rollup con el current_date de Postgres — mezclar husos acá desalinearía la
+// serie un día para quien mire el panel de noche.
+function lastNDayKeys(days) {
+  const today = new Date();
+  const keys = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    keys.push(date.toISOString().slice(0, 10));
+  }
+  return keys;
+}
+
+// Etiquetas legibles para esa misma ventana, en el mismo orden. Vive acá y no
+// en la pantalla a propósito: si las etiquetas se arman por separado terminan
+// desalineadas con la serie, que es justo lo que pasaba cuando el modal de
+// Dispositivos rotulaba las barras con ['L','M','X','J','V','S','D'] — eso
+// asume que la semana arranca un lunes, pero la serie son los últimos N días
+// terminando hoy.
+export function lastNDayLabels(days) {
+  return lastNDayKeys(days).map(key => {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d))
+      .toLocaleDateString('es-AR', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+      .replace('.', '');
+  });
+}
+
+async function fetchEntitySeries(view, idColumn, days) {
+  const keys = lastNDayKeys(days);
+
+  const { data, error } = await supabase
+    .from(view)
+    .select(`${idColumn}, day, scans`)
+    .gte('day', keys[0])
+    .order('day', { ascending: true });
+
+  if (error) throw error;
+
+  // Primero indexo por (entidad, día) y después recorro la ventana completa,
+  // en vez de empujar cada fila a su posición: así los días sin fila quedan en
+  // 0 sin tener que calcular índices a partir de fechas.
+  const byEntityDay = new Map();
+  for (const row of data ?? []) {
+    const id = row[idColumn];
+    if (!id) continue;
+    let byDay = byEntityDay.get(id);
+    if (!byDay) {
+      byDay = new Map();
+      byEntityDay.set(id, byDay);
+    }
+    byDay.set(row.day, (byDay.get(row.day) ?? 0) + (row.scans ?? 0));
+  }
+
+  const series = new Map();
+  for (const [id, byDay] of byEntityDay) {
+    series.set(id, keys.map(key => byDay.get(key) ?? 0));
+  }
+  return series;
+}
+
+export function fetchDeviceScansSeries(days = 7) {
+  return fetchEntitySeries('v_device_scans_daily', 'device_id', days);
+}
+
+export function fetchLocationScansSeries(days = 7) {
+  return fetchEntitySeries('v_location_scans_daily', 'location_id', days);
+}
+
+export function fetchEmployeeScansSeries(days = 7) {
+  return fetchEntitySeries('v_employee_scans_daily', 'employee_id', days);
 }
 
 // Decisión 6 de CLAUDE.md: Google no avisa reseñas nuevas, sólo se puede

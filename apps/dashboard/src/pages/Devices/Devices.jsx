@@ -7,20 +7,31 @@ import Select from '../../components/Select/Select';
 import {
   fetchDevicePerformance,
   fetchLocationPerformance,
+  fetchDeviceScansSeries,
   fetchScansDaily,
   formatRelativeTime,
   colorForIndex,
+  lastNDayLabels,
 } from '../../lib/dashboardApi';
 import { REDIRECT_DOMAIN } from '../../lib/config';
 import { downloadQrPng } from '../../lib/qr';
 import './Devices.css';
+
+// Largo de la sparkline de cada tarjeta. Es independiente del selector de
+// 7/30 días del gráfico grande de abajo: ese recarga, éste viaja con la carga
+// inicial de los dispositivos.
+const SPARKLINE_DAYS = 7;
 
 // v_device_performance (0008_dashboard_views.sql) no expone "reseñas" ni
 // "conversión" por dispositivo — esa atribución no existe a ese grano en el
 // schema (decisión 6: la atribución por dispositivo es un prorrateo que
 // todavía no calcula ninguna vista). Se muestra "—" en vez de inventar un
 // número.
-function mapDeviceRow(row) {
+// `series` es el Map<device_id, number[]> de fetchDeviceScansSeries (0016). Un
+// dispositivo sin escaneos en la ventana no está en el Map: siete ceros es la
+// respuesta correcta ahí, porque el dato existe y es cero — a diferencia de
+// `reviews`/`conversion`, que se dejan en null porque no hay de dónde sacarlos.
+function mapDeviceRow(row, series) {
   return {
     id: row.device_id,
     publicId: row.public_id,
@@ -33,7 +44,7 @@ function mapDeviceRow(row) {
     conversion: null,
     lastScan: formatRelativeTime(row.last_scan_at),
     activeSince: null,
-    weeklyScans: Array(7).fill(0),
+    weeklyScans: series?.get(row.device_id) ?? Array(SPARKLINE_DAYS).fill(0),
   };
 }
 
@@ -114,6 +125,11 @@ function DeviceTypeIcon({ type, size = 24 }) {
 const TYPE_LABELS = { google: 'Expositor Google Maps', instagram: 'Expositor Instagram' };
 
 /* ─── Sparkline bar mini-chart ──────────────────────────────── */
+/* max(2px, …) para que un día sin escaneos siga dibujando una barra al ras.
+   Con datos reales una organización nueva tiene la serie entera en cero, y sin
+   ese piso las barras desaparecen: la franja queda vacía y se lee como un
+   gráfico roto en vez de como "no hubo actividad". Mismo criterio que la
+   distribución por estrellas de Mi Empresa. */
 function SparkLine({ data, inactive, className = '' }) {
   const max = Math.max(...data, 1);
   return (
@@ -122,7 +138,7 @@ function SparkLine({ data, inactive, className = '' }) {
         <div
           key={i}
           className={`device-full-card__spark-bar ${inactive ? 'device-full-card__spark-bar--inactive' : ''}`}
-          style={{ height: `${(v / max) * 100}%` }}
+          style={{ height: `max(2px, ${(v / max) * 100}%)` }}
         />
       ))}
     </div>
@@ -136,7 +152,7 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
 
   if (!device) return null;
   const max = Math.max(...device.weeklyScans, 1);
-  const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+  const days = lastNDayLabels(device.weeklyScans.length);
 
   function startEditing() {
     setForm({ name: device.name, location: device.location, type: device.type });
@@ -252,13 +268,15 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
               </div>
 
               {/* Mini chart */}
-              <div className="device-modal__chart-title">Escaneos últimos 7 días</div>
+              <div className="device-modal__chart-title">
+                Escaneos últimos {device.weeklyScans.length} días
+              </div>
               <div className="device-modal__sparkline">
                 {device.weeklyScans.map((v, i) => (
                   <div
                     key={i}
                     className="device-modal__spark-bar"
-                    style={{ height: `${(v / max) * 100}%` }}
+                    style={{ height: `max(2px, ${(v / max) * 100}%)` }}
                     title={`${days[i]}: ${v}`}
                   />
                 ))}
@@ -594,12 +612,21 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
     let cancelled = false;
     (async () => {
       try {
-        const [deviceRows, locationRows] = await Promise.all([
+        const [deviceRows, locationRows, deviceSeries] = await Promise.all([
           fetchDevicePerformance(),
           fetchLocationPerformance(),
+          // La serie tiene su propio catch a propósito: si falla (típicamente
+          // porque la migración 0016 todavía no se aplicó en este entorno),
+          // las sparklines quedan planas pero el resto de la pantalla sigue
+          // mostrando datos reales. Sin esto, una vista faltante tiraba toda
+          // la carga al mock y escondía totales que sí eran verdaderos.
+          fetchDeviceScansSeries(SPARKLINE_DAYS).catch(err => {
+            console.error('No se pudo cargar la serie diaria por dispositivo, las sparklines quedan en cero:', err);
+            return new Map();
+          }),
         ]);
         if (cancelled) return;
-        setDevices(deviceRows.map(mapDeviceRow));
+        setDevices(deviceRows.map(row => mapDeviceRow(row, deviceSeries)));
         setLocations(locationRows.map(mapLocationForRanking));
       } catch (err) {
         console.error('No se pudieron cargar los dispositivos reales, muestro datos de ejemplo:', err);
