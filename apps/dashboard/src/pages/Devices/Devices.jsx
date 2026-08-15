@@ -878,9 +878,13 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
           </svg>
         </span>
         <span className="devices-teaser__body">
+          {/* Sin badge "Próximamente": este botón navega a la pestaña Equipo,
+              donde la pantalla de Empleados existe y lee v_employee_leaderboard
+              de verdad desde la fase 1. El cartel quedó de cuando el destino era
+              un placeholder, y anunciar como futuro algo a lo que el mismo click
+              te lleva es peor que no decir nada. */}
           <span className="devices-teaser__title">
             Ranking de Empleados
-            <span className="devices-teaser__badge">Próximamente</span>
           </span>
           <span className="devices-teaser__text">Controlá qué empleado consigue más reseñas en Google con cada dispositivo Linkstar.</span>
         </span>

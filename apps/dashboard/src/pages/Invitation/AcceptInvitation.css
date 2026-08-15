@@ -1,0 +1,101 @@
+/* ============================================
+   ACEPTAR INVITACIÓN
+   ============================================
+   Pantalla suelta, sin AppShell: el invitado todavía no es miembro de ninguna
+   organización, así que mostrarle el sidebar de un panel al que no puede entrar
+   sería mentirle. Mismo criterio que las pantallas de /alta. */
+
+.invite {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 1.5rem;
+}
+
+.invite__card {
+  width: 100%;
+  max-width: 30rem;
+  padding: 2.25rem 2rem;
+  border-radius: var(--radius-card);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-card);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  text-align: center;
+}
+
+.invite__brand {
+  display: block;
+  margin-bottom: 1.25rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-orange);
+}
+
+.invite__title {
+  margin-bottom: 0.75rem;
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--color-navy);
+  text-wrap: balance;
+}
+
+.invite__text {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.invite__text + .invite__text {
+  margin-top: 0.75rem;
+}
+
+.invite__text--error {
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.7rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.invite__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
+
+.invite__btn {
+  flex: 1 1 10rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: var(--radius-button);
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-navy);
+  transition: border-color var(--transition-base), background-color var(--transition-base);
+}
+
+.invite__btn:hover {
+  border-color: var(--color-orange);
+}
+
+.invite__btn--primary {
+  background: var(--color-orange);
+  border-color: transparent;
+  color: var(--color-white);
+  box-shadow: var(--shadow-button);
+}
+
+.invite__btn--primary:hover {
+  box-shadow: var(--shadow-button-hover);
+}

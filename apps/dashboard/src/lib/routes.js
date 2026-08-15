@@ -17,7 +17,19 @@ export const PUBLIC_ROUTES = {
   landing: '/',
   login: '/iniciar-sesion',
   register: '/registro',
+  /* Aceptar una invitación al equipo. Es pública en el sentido de que el
+   * invitado llega sin sesión y con el token en la URL, pero no se puede
+   * resolver sin iniciar sesión: accept_invitation() compara el email de la
+   * invitación contra el del JWT, así que la pantalla manda a registrarse y
+   * vuelve acá. Fuera de /panel a propósito — el invitado todavía no es
+   * miembro de ninguna organización y el guard del panel lo expulsaría. */
+  invitation: '/invitacion/:token',
 };
+
+/* El path concreto, para armar el link que se copia. */
+export function invitationPath(token) {
+  return `/invitacion/${encodeURIComponent(token)}`;
+}
 
 /* Alta: los pasos previos al panel. Se llega con sesión iniciada pero sin
  * organización o sin plan elegido, así que no son públicas ni cuelgan de

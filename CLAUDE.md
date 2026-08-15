@@ -73,7 +73,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0019 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0020 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -188,10 +188,15 @@ linked device · `0016` per-entity daily series views (`v_device_scans_daily`, `
 `0017` corrective: re-applies the two `0013` RPC fixes that never reached Postgres (see below) ·
 `0018` `human_scans` / `bot_scans` on the five aggregating `0008` views, so every screen counts the same
 thing (see "Scans are human taps" below) · `0019` corrective: `insert into employees` had failed **since
-`0003`** (see below).
+`0003`** (see below) · `0020` team & access (`invite_member()`, `list_org_members()`, `set_member_role()`,
+`private.active_org_id()`, and the `max_members` enforcement that never existed — see "Team" below).
 
 **Everything up to `0019` is applied in production** (pushed 15 Aug 2026, verified with
-`supabase migration list`). Correcting an already-applied migration by editing
+`supabase migration list`). **`0020` is written but NOT applied anywhere and has never been executed** —
+it was authored with no local Supabase stack running, so it has not even been syntax-checked against
+Postgres. Everything the dashboard's "Equipo" tab does depends on it, so that screen will error until
+someone runs `npm run db:push`. Applying it needs the Supabase project, which not every developer here
+has. Correcting an already-applied migration by editing
 its file changes nothing in the database — `db push` skips migrations already in the history table. That
 is exactly how `0017` came to exist: `0013` was fixed in place on the reasonable assumption that it had
 not shipped yet, it shipped in between, and for a while the file and Postgres disagreed with nobody
@@ -258,6 +263,53 @@ Testing the flow needs **two** Mercado Pago test users. The seller token can be 
 gets a `500` from MP. Note this only bites in test mode — `payer_email` comes from the logged-in user's
 Supabase account, and in production MP accepts any address and asks the payer to log in. To test the real
 code path, the Supabase test account's email has to *be* the MP test buyer's.
+
+### Team — two different things are called "equipo", and mixing them is the trap
+
+`memberships` + `invitations` (`0002`) are **people who log into the dashboard** — owner / admin /
+manager / viewer. `employees` (`0003`) are the waiter and the cashier: they never log in, they have no
+user, and they exist so a scan can be attributed to someone (`v_employee_leaderboard`). The "Equipo" tab
+of Settings renders **both**, members first, and each block says which is which — the word alone is
+ambiguous in this product, and the phase 3 work was nearly built against the wrong table because of it.
+
+`0020` is what made members usable. Four things worth not undoing:
+
+- **`max_members` was never enforced.** `enforce_plan_limit()` (`0007`) only has triggers for `locations`
+  and `employees`, and its inner `case` doesn't even have a `'members'` branch — hanging a trigger on it
+  would pass NULL to `format('%I')` and error. Members get `private.enforce_member_limit()` instead, also
+  because `memberships` has no `deleted_at` and the `0007` one filters on that column.
+- **The first owner must never be blocked.** `bootstrap_organization()` inserts the owner membership
+  *before* the subscription row, so `plan_limit()` finds nothing and returns NULL. The limit function
+  treats NULL as unlimited, which covers both enterprise and that ordering. Reorder the bootstrap and
+  creating an organization starts failing.
+- **Two different counts, on purpose.** The `memberships` trigger counts only memberships, because
+  `accept_invitation()` inserts the membership while the invitation is still `pending` — counting pending
+  invitations there would make the invitation count itself and the last seat unusable. `invite_member()`
+  *does* add pending invitations, so you can't issue ten invites on a two-seat plan. It also expires any
+  previous pending invitation for that email **before** the limit check, or re-inviting someone would be
+  blocked by their own outstanding invitation.
+- **The token is emitted server-side and returned exactly once.** `invite_member()` generates it with
+  `gen_random_bytes` and stores only its sha256, which is what `accept_invitation()` compares against.
+  There is no way to read it again — losing the link means revoke and re-invite. Don't add a "resend"
+  that reads the token back; there is nothing to read.
+
+`private.active_org_id()` extracts the org-selection rule that `my_org_context()` had inline
+(`profiles.last_organization_id`, else oldest membership). Three functions now need to answer "which org
+is this user operating on" and they must agree — if `invite_member()` picked a different org than the
+panel displays, someone would invite people into an account they aren't looking at.
+
+**Invitations travel as a copyable link, not email.** There is no transactional email provider yet (phase
+7 brings one, which also needs it for automations); Web3Forms is for notifying *us* of a sale. The owner
+copies the link and sends it however they want. When email lands it sends this same link — `AcceptInvitation`
+and the RPCs don't change. `PUBLIC_ROUTES.invitation` lives outside both `RequireAuth` and
+`RequireActivePlan`: the invitee arrives with no session and no organization, and either guard would
+divert them before they could redeem the token. `RegisterRoute` honors `state.from` for the same reason.
+
+**The activity log is real now.** `audit_log` (`0004`) existed from the start but only `claim_device()`
+ever wrote to it, so the "Registro de actividad" card was a three-row hardcoded array — with a real
+teammate's name and email in it — that phase 2 missed because it was embedded in `Settings.jsx` rather
+than being its own screen. `0020` adds `member.invited` and `member.role_changed`. A new account sees
+almost nothing there, and that is correct: it means nothing has happened, not that nothing is measured.
 
 ### How a scan resolves to a URL (`resolve_scan`, `0007`)
 
@@ -411,6 +463,33 @@ split below before wiring anything — the shell is finished, the data mostly is
   saying what it used to fake and which roadmap phase feeds it; the original mock markup and its CSS are
   still in git (and the CSS files are deliberately left in place — they are the design target for when the
   data arrives).
+- **The mock JSX is a deliverable, not discarded history — and it does not come back on its own.** The tag
+  `maquetas-pre-fase-2` points at the last commit where those ten screens were still drawing their grids,
+  tables and charts, and every converted file's header repeats the `git show` line that recovers its own
+  screen. Connecting Google flips no switch: the JSX is gone from the working tree, so a connected account
+  still renders the placeholder until somebody rewrites the screen against the real data. Budget that
+  front-end work into phase 4 alongside the API work. Two consequences that look like dead code and are
+  not: `components/PieChart/` (plus `lib/shares.js`) and `lib/chartColors.js` have no importer today
+  **only because** the screens that used them — `reports-nps`, `reports-sentiment`, `gb-metrics` — were the
+  ones converted. Same for the now-unused CSS in `GoogleBusiness.css`, `Reviews.css`, `Reports.css`,
+  `Automations.css` and `MonthlyReports.css`. None of it gets swept in a dead-code pass.
+- **Scroll performance: the glass look is expensive, so the cheap frames are load-bearing.** The design is
+  glassmorphism — around sixty surfaces carry `backdrop-filter: var(--glass-blur)`, and each one re-blurs
+  whatever is behind it. That only stays affordable because the backdrop itself is cheap, which took three
+  fixes and each is easy to undo by accident:
+  1. The brand background lives on a fixed `body::before` layer, **not** on `background-attachment: fixed`
+     over `body`. With `fixed`, the five radial gradients repaint at full viewport size on every scroll
+     frame and every blur re-samples that repaint; it was the main reason the panel scrolled in steps.
+  2. Nothing animates `backdrop-filter`. `.stat-card` used `transition: all` while its `:hover` raised the
+     blur 18px → 24px, so the browser recomputed the blur for the whole transition, per hovered card.
+     `--glass-blur-hover` is kept in `index.css` but deliberately unused; the hover reads as glass through
+     the `--glass-bg` opacity step, which is a free color transition.
+  3. `AuthContext`'s inactivity listeners are `{ passive: true }` and the whole handler is throttled, not
+     just its `localStorage` write — `mousemove` and `scroll` fire tens of times a second and the limit
+     they guard is 30 minutes.
+  Adding a screen is fine; adding one that animates a blur, or moving the background back onto `body`, puts
+  the jank back. Note `transition: all` is still all over the rest of the CSS — harmless where nothing
+  expensive changes on hover, but it is why rule 2 has to be checked per component.
 - `context/AuthContext.jsx` wraps `App` and owns all Supabase Auth state. Its `onAuthStateChange` listener
   is the single place that calls `POST /api/auth/login-event` on `SIGNED_IN` — don't duplicate that inside
   `Login`/`Register`.
@@ -468,9 +547,19 @@ split below before wiring anything — the shell is finished, the data mostly is
   yet — `location_review_snapshots` has no writer until `sync-reviews` exists. The gate is
   `hasReviewData`, derived from whether any location has a non-null `total_reviews`, so the numbers appear
   on their own once the first snapshot lands and nobody has to remember to edit this file.
-- Out of scope so far: an org switcher. `my_org_context()` now *reads* `profiles.last_organization_id` to
-  pick which organization to show (falling back to the oldest membership), but nothing writes it, so a user
-  in several orgs always lands on the same one and has no way to change it from the UI.
+- `pages/Settings/TeamMembers.jsx` + `lib/teamApi.js` are the members UI (invite by link, change role,
+  remove, revoke a pending invitation); `pages/Settings/ActivityLog.jsx` reads `audit_log`. Both live under
+  the "Equipo" tab, above the employees screen. See "Team" under Architecture before changing either — the
+  two meanings of "equipo" and the seat-counting rules are the parts that bite.
+  `pages/Invitation/AcceptInvitation.jsx` is the redeem screen and is deliberately outside the `/panel`
+  guards. It guards its own RPC call with a `useRef` latch: `accept_invitation()` is not usefully
+  idempotent (the second call sees the token already `accepted` and reports "inválida o vencida"), and
+  StrictMode runs effects twice in development, so without the latch the happy path shows an error.
+- Out of scope so far: an org switcher. `my_org_context()` and `private.active_org_id()` (`0020`) *read*
+  `profiles.last_organization_id` to pick which organization to show (falling back to the oldest
+  membership), but nothing writes it, so a user in several orgs always lands on the same one and has no way
+  to change it from the UI. `0020` made this sharper rather than worse: invites and the member list now go
+  through the same helper as the panel, so whatever org the switcher eventually sets, all three follow it.
 
 ### `apps/ventas`
 

@@ -1,0 +1,321 @@
+/* ============================================
+   EQUIPO — miembros de la cuenta e invitaciones
+   ============================================
+   Las personas que INICIAN SESIÓN en el panel, no los empleados: los empleados
+   viven en Employees.css y se renderizan justo abajo, en la misma pestaña.
+
+   Se apoya en las clases de Settings.css (.settings-card, .settings-field,
+   .settings-icon-box) porque este bloque vive dentro de esa pestaña y tiene que
+   verse como una tarjeta más, no como un injerto. */
+
+.team-seats {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.team-subhead {
+  margin: 1.5rem 0 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.8rem;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.team-row--pending {
+  border-style: dashed;
+  background: transparent;
+}
+
+.team-row__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(245, 133, 41, 0.12);
+  color: var(--color-orange);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.team-row__avatar--pending {
+  background: rgba(26, 38, 57, 0.08);
+  color: var(--color-text-secondary);
+}
+
+/* min-width: 0 para que un email largo se recorte en vez de empujar el rol y el
+   botón fuera de la tarjeta. */
+.team-row__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.team-row__name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.87rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.team-row__email {
+  font-size: 0.76rem;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-row__you {
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius-badge);
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--color-forest);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.team-row__role {
+  flex-shrink: 0;
+  padding: 0.25rem 0.7rem;
+  border-radius: var(--radius-badge);
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(26, 38, 57, 0.07);
+  color: var(--color-navy);
+}
+
+.team-row__role--owner {
+  background: rgba(245, 133, 41, 0.13);
+  color: var(--color-orange);
+}
+
+/* Envuelve al <Select>, que renderiza su propio <div class="ls-select">. El
+   ancho va acá y no en `triggerClassName`, porque eso último aterriza en el
+   <button> de adentro y el que la fila dimensiona es el envoltorio.
+
+   El `.ls-select` de adentro se estira al 100% de este span; el botón ya trae
+   `width: 100%` de .settings-select y se apoya en él. */
+.team-row__role-select {
+  flex-shrink: 0;
+  width: 10.5rem;
+}
+
+.team-row__role-select .ls-select {
+  width: 100%;
+}
+
+.team-row__action {
+  flex-shrink: 0;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-button);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  transition: color var(--transition-base), border-color var(--transition-base);
+}
+
+.team-row__action:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.team-row__action--danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* Ocupa el lugar del botón que no se dibuja (uno mismo, el propietario) para
+   que las filas no queden desalineadas entre sí. */
+.team-row__action-spacer {
+  flex-shrink: 0;
+  width: 4.5rem;
+}
+
+/* ── Invitar ── */
+.team-invite {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.team-invite__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.team-invite__email {
+  flex: 1 1 16rem;
+}
+
+.team-invite__role {
+  flex: 0 1 12rem;
+}
+
+.team-invite__submit {
+  padding: 0.65rem 1.3rem;
+  border-radius: var(--radius-button);
+  background: var(--color-orange);
+  color: var(--color-white);
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-button);
+  transition: box-shadow var(--transition-base), opacity var(--transition-base);
+}
+
+.team-invite__submit:hover:not(:disabled) {
+  box-shadow: var(--shadow-button-hover);
+}
+
+.team-invite__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.team-invite__note {
+  margin-top: 0.6rem;
+}
+
+.team-limit,
+.team-error {
+  margin-top: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.team-limit {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  color: var(--color-gold);
+}
+
+.team-error {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--color-danger);
+}
+
+/* ── El link recién creado ──
+   Se muestra una sola vez: en la base queda el sha256 del token, no el token. */
+.team-invite-result {
+  margin-bottom: 1rem;
+  padding: 0.95rem 1.1rem;
+  border-radius: 0.8rem;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+.team-invite-result__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--color-navy);
+}
+
+.team-invite-result__close {
+  background: transparent;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--color-text-secondary);
+}
+
+.team-invite-result__text,
+.team-invite-result__hint {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.team-invite-result__row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.team-invite-result__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  font-family: var(--font-family);
+  font-size: 0.78rem;
+  color: var(--color-navy);
+}
+
+.team-invite-result__copy {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  padding: 0.55rem 0.95rem;
+  border-radius: 0.6rem;
+  background: var(--color-forest);
+  color: var(--color-white);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  /* El rol y el botón bajan a su propia línea: en un teléfono, mantenerlos en
+     la misma fila que el nombre deja el email recortado a tres caracteres. */
+  .team-row {
+    flex-wrap: wrap;
+  }
+
+  .team-row__identity {
+    flex: 1 1 60%;
+  }
+
+  .team-row__role-select {
+    width: auto;
+    flex: 1 1 100%;
+  }
+
+  .team-invite__email,
+  .team-invite__role,
+  .team-invite__submit {
+    flex: 1 1 100%;
+  }
+}

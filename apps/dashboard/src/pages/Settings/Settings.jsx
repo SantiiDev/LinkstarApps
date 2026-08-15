@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import Select from '../../components/Select/Select';
-import DateField from '../../components/DateField/DateField';
 import EmployeesPage from '../Employees/Employees';
 import LocationsPage from '../Locations/Locations';
+import TeamMembers from './TeamMembers';
+import ActivityLog from './ActivityLog';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { useOrg } from '../../context/OrgContext';
@@ -164,69 +165,24 @@ function LocalTab() {
 }
 
 /* ─── Equipo ──────────────────────────────────────────────────── */
-const ACTIVITY_LOG = [
-  { id: 1, date: '05/08/2026 09:42', actor: 'santinogallo', text: 'Actualizó el email de contacto para reseñas negativas', email: 'santinogallo61@gmail.com' },
-  { id: 2, date: '04/08/2026 18:05', actor: 'santinogallo', text: 'Cambió el plan a Business', email: 'santinogallo61@gmail.com' },
-  { id: 3, date: '03/08/2026 21:17', actor: 'santinogallo', text: 'Desconectó su cuenta de Google', email: 'santinogallo61@gmail.com' },
-];
-
-const ACTIVITY_CATEGORY_OPTIONS = [{ value: 'all', label: 'Todas las categorías' }];
-
 function TeamTab() {
-  const [activityCategory, setActivityCategory] = useState('all');
-  const [dateFrom, setDateFrom] = useState(null);
-  const [dateTo, setDateTo] = useState(null);
-
   return (
     <div className="settings-panel">
-      {/* Empleados reales (v_employee_leaderboard). Mismo caso que Ubicaciones
-          en la pestaña "Gestión local": la página existía y leía datos reales,
-          pero acá había un placeholder "Próximamente" y ningún camino hasta
-          ella. Se renderiza con `embedded` para no repetir encabezado y pie.
-          Invitar/permisos sigue sin existir — eso necesita `invitations` y
-          `memberships` del 0002, que todavía no tiene UI. */}
+      {/* Dos cosas distintas, una arriba de la otra, y el orden importa:
+          primero quién tiene ACCESO a la cuenta (memberships/invitations del
+          0002, cableado en la 0020) y después los empleados, que no inician
+          sesión y existen para atribuirles escaneos
+          (v_employee_leaderboard). Los dos subtítulos aclaran cuál es cuál,
+          porque "equipo" a secas es ambiguo en este producto. */}
+      <TeamMembers />
+
+      {/* Empleados reales. Mismo caso que Ubicaciones en la pestaña "Gestión
+          local": la página existía y leía datos reales, pero acá había un
+          placeholder "Próximamente" y ningún camino hasta ella. Se renderiza
+          con `embedded` para no repetir encabezado y pie. */}
       <EmployeesPage embedded />
 
-      <div className="settings-card">
-        <CardHead
-          icon="activity"
-          iconVariant="navy"
-          title="Registro de actividad"
-          subtitle={<p className="settings-card__subtitle">Quién hizo qué en tu cuenta</p>}
-        />
-
-        <div className="settings-activity-filters">
-          <div className="settings-field">
-            <span>Categoría</span>
-            <Select
-              value={activityCategory}
-              onChange={setActivityCategory}
-              options={ACTIVITY_CATEGORY_OPTIONS}
-              triggerClassName="settings-select"
-            />
-          </div>
-          <div className="settings-field">
-            <span>Desde</span>
-            <DateField value={dateFrom} onChange={setDateFrom} triggerClassName="settings-select" />
-          </div>
-          <div className="settings-field">
-            <span>Hasta</span>
-            <DateField value={dateTo} onChange={setDateTo} triggerClassName="settings-select" />
-          </div>
-        </div>
-
-        <div className="settings-activity-log">
-          {ACTIVITY_LOG.map((entry) => (
-            <div key={entry.id} className="settings-activity-row">
-              <span className="settings-activity-row__date">{entry.date}</span>
-              <span className="settings-activity-row__actor">{entry.actor}</span>
-              <span className="settings-activity-row__text">{entry.text}</span>
-              <span className="settings-activity-row__email">{entry.email}</span>
-            </div>
-          ))}
-          <div className="settings-activity-log__end">— fin del registro —</div>
-        </div>
-      </div>
+      <ActivityLog />
     </div>
   );
 }

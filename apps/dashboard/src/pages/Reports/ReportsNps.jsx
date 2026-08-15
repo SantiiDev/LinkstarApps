@@ -16,6 +16,17 @@ import './Reports.css';
  * de lo que se vende.
  */
 
+/* Recuperar la maqueta ─────────────────────────────────────────
+ * El JSX que había acá no se perdió: está completo —incluido el PieChart— en
+ * el tag `maquetas-pre-fase-2`, y el CSS de esta pantalla sigue en el repo sin
+ * tocar. Los dos juntos son el punto de partida para rehacerla.
+ *
+ *   git show maquetas-pre-fase-2:apps/dashboard/src/pages/Reports/ReportsNps.jsx
+ *
+ * Que la fuente de datos exista NO devuelve esta pantalla sola: hay que volver
+ * a escribir el JSX contra el dato real. El tag es de dónde copiarlo.
+ */
+
 export default function ReportsNps() {
   return (
     <div className="reports-page">

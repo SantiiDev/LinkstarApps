@@ -21,6 +21,10 @@
   --glass-border: rgba(255, 255, 255, 0.75);
   --glass-border-inner: rgba(255, 255, 255, 0.4);
   --glass-blur: blur(18px) saturate(180%);
+  /* Sin usar a propósito. Animar el desenfoque en :hover obliga a rehacer el
+     backdrop-filter en cada frame de la transición y se notaba como saltos al
+     pasar el mouse por las tarjetas (ver StatCard.css). El efecto de hover lo
+     da --glass-bg-hover, que es una transición de color y sale gratis. */
   --glass-blur-hover: blur(24px) saturate(200%);
   --glass-shadow: 0 8px 32px rgba(26, 38, 57, 0.10), 0 1.5px 8px rgba(245,133,41,0.06), inset 0 1px 0 rgba(255,255,255,0.85);
   --glass-shadow-hover: 0 20px 50px rgba(26, 38, 57, 0.14), 0 4px 16px rgba(245,133,41,0.10), inset 0 1.5px 0 rgba(255,255,255,0.95);
@@ -70,6 +74,36 @@ html {
 
 body {
   font-family: var(--font-family);
+  /* Color plano de respaldo: pinta antes que la capa de abajo y evita el
+     destello blanco del primer frame. */
+  background-color: #dde3f0;
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* El fondo de la marca vive en una capa fija propia, NO en un
+   `background-attachment: fixed` sobre el body.
+
+   Con `fixed`, el fondo no scrollea junto con el contenido, así que el browser
+   tiene que repintar los cinco gradientes a viewport completo en CADA frame de
+   scroll. Y encima de ese repintado, las ~60 superficies con `backdrop-filter`
+   del panel tienen que volver a desenfocar lo que quedó atrás. Esa combinación
+   era la causa principal de que el panel scrolleara a saltos.
+
+   Como pseudo-elemento fijo el resultado visual es idéntico —el fondo sigue
+   quieto respecto del viewport— pero es una capa que el compositor sube una vez
+   y después reutiliza, en vez de repintarla por frame.
+
+   `z-index: -1` lo manda detrás de #root sin sacarlo del fondo del body. Ojo si
+   alguna vez se le pone `transform`, `filter` u `opacity` al body: cualquiera de
+   esas crea un contexto de apilado y el fondo taparía la app. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-color: #dde3f0;
   background-image:
     radial-gradient(ellipse at 15% 20%, rgba(245, 133, 41, 0.18) 0%, transparent 55%),
@@ -77,10 +111,6 @@ body {
     radial-gradient(ellipse at 70% 75%, rgba(26, 38, 57, 0.12) 0%, transparent 55%),
     radial-gradient(ellipse at 5% 85%, rgba(16, 185, 129, 0.12) 0%, transparent 50%),
     radial-gradient(ellipse at 50% 50%, rgba(99, 102, 241, 0.07) 0%, transparent 70%);
-  background-attachment: fixed;
-  color: var(--color-text-primary);
-  line-height: 1.6;
-  overflow-x: hidden;
 }
 
 a {

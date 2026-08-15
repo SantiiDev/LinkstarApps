@@ -18,6 +18,17 @@ import './GoogleBusiness.css';
  * cuando haya datos, y está en el historial de git de todos modos.
  */
 
+/* Recuperar la maqueta ─────────────────────────────────────────
+ * El JSX que había acá no se perdió: está completo —grillas, tablas y
+ * gráficos— en el tag `maquetas-pre-fase-2`, y el CSS de esta pantalla sigue
+ * en el repo sin tocar. Los dos juntos son el punto de partida para rehacerla.
+ *
+ *   git show maquetas-pre-fase-2:apps/dashboard/src/pages/GoogleBusiness/GoogleSeoLocal.jsx
+ *
+ * Que la fuente de datos se conecte NO devuelve esta pantalla sola: hay que
+ * volver a escribir el JSX contra el dato real. El tag es de dónde copiarlo.
+ */
+
 export default function GoogleSeoLocal() {
   return (
     <div className="gb-page">

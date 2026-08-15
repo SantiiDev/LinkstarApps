@@ -7,9 +7,11 @@ const AuthContext = createContext(null);
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 minutos
 const ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
 const LAST_ACTIVITY_KEY = 'linkstar_last_activity';
-// Cuánto se tarda entre escrituras de la marca de actividad a localStorage —
-// mousemove dispara decenas de veces por segundo, no hace falta persistir en cada uno.
-const ACTIVITY_WRITE_THROTTLE_MS = 5000;
+// Cada cuánto, como mucho, se procesa un evento de actividad. `mousemove` y
+// `scroll` disparan decenas de veces por segundo y el límite de inactividad es
+// de 30 minutos: registrar la actividad con 5 segundos de resolución adelanta el
+// vencimiento 5 segundos en el peor caso, que no le cambia nada a nadie.
+const ACTIVITY_THROTTLE_MS = 5000;
 
 function markActivity() {
   localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
@@ -77,27 +79,42 @@ export function AuthProvider({ children }) {
     if (!session) return;
 
     let timeoutId;
-    let lastWrite = 0;
-    const resetTimer = () => {
+    let lastSeen = 0;
+
+    const armTimer = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         setSessionExpired(true);
         supabase.auth.signOut();
       }, INACTIVITY_LIMIT_MS);
-
-      const now = Date.now();
-      if (now - lastWrite > ACTIVITY_WRITE_THROTTLE_MS) {
-        lastWrite = now;
-        markActivity();
-      }
     };
 
-    resetTimer();
-    ACTIVITY_EVENTS.forEach((event) => window.addEventListener(event, resetTimer));
+    // El handler corre en CADA evento, y `mousemove` y `scroll` disparan decenas
+    // de veces por segundo mientras el usuario usa el panel. Rearmar un timeout
+    // de 30 minutos con esa frecuencia es trabajo tirado: adelantar el
+    // vencimiento unos segundos no cambia nada para nadie. Así que todo el
+    // cuerpo —no sólo la escritura a localStorage— pasa por el mismo throttle,
+    // y entre toque y toque el listener sale en la primera línea.
+    const onActivity = () => {
+      const now = Date.now();
+      if (now - lastSeen < ACTIVITY_THROTTLE_MS) return;
+      lastSeen = now;
+      armTimer();
+      markActivity();
+    };
+
+    // `passive: true` le promete al browser que esto nunca llama a
+    // preventDefault(), así que puede seguir scrolleando sin esperar a que el
+    // handler termine. Ninguno de estos listeners cancela nada.
+    armTimer();
+    lastSeen = Date.now();
+    ACTIVITY_EVENTS.forEach((event) =>
+      window.addEventListener(event, onActivity, { passive: true }),
+    );
 
     return () => {
       clearTimeout(timeoutId);
-      ACTIVITY_EVENTS.forEach((event) => window.removeEventListener(event, resetTimer));
+      ACTIVITY_EVENTS.forEach((event) => window.removeEventListener(event, onActivity));
     };
   }, [session]);
 

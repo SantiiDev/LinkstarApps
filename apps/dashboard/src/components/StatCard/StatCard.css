@@ -10,7 +10,15 @@
   border-radius: var(--radius-card);
   padding: 1.5rem;
   box-shadow: var(--glass-shadow);
-  transition: all var(--transition-base);
+  /* Propiedades explícitas y no `all`: con `all`, el cambio de desenfoque del
+     :hover de abajo entraba en la transición y el browser recalculaba el
+     backdrop-filter durante los ~18 frames de la animación, por cada tarjeta
+     bajo el mouse. Era el "saltito" al pasar por encima de los KPIs. */
+  transition:
+    transform var(--transition-base),
+    box-shadow var(--transition-base),
+    background-color var(--transition-base),
+    border-color var(--transition-base);
   animation: fadeInUp 0.6s ease both;
   position: relative;
   overflow: hidden;
@@ -40,10 +48,12 @@
   transition: opacity var(--transition-base);
 }
 
+/* El desenfoque NO cambia en hover: subirlo de 18px a 24px obliga a rehacer el
+   backdrop-filter de la tarjeta, y a 18px de base la diferencia no se ve. El
+   efecto de "vidrio que se aclara" lo da igual el salto de opacidad del fondo
+   (--glass-bg 0.55 -> --glass-bg-hover 0.72), que es una transición barata. */
 .stat-card:hover {
   background: var(--glass-bg-hover);
-  -webkit-backdrop-filter: var(--glass-blur-hover);
-  backdrop-filter: var(--glass-blur-hover);
   transform: translateY(-5px) scale(1.01);
   box-shadow: var(--glass-shadow-hover);
   border-color: rgba(255, 255, 255, 0.9);

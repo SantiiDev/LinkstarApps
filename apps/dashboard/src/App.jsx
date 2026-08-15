@@ -18,6 +18,7 @@ import DevicesPage from './pages/Devices/Devices';
 import Landing from './pages/Landing/Landing';
 import Login from './pages/Login/Login';
 import Register from './pages/Register/Register';
+import AcceptInvitation from './pages/Invitation/AcceptInvitation';
 import CreateOrg from './pages/Onboarding/CreateOrg';
 import PlanPicker from './pages/Onboarding/PlanPicker';
 import PlanCheckout from './pages/Onboarding/PlanCheckout';
@@ -134,13 +135,20 @@ function LoginRoute() {
 function RegisterRoute() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  /* Igual que LoginRoute: si alguien llegó acá desde otra pantalla hay que
+     devolverlo ahí. El caso real es la invitación al equipo — el invitado no
+     tiene cuenta todavía, se registra, y tiene que volver a /invitacion/:token
+     a canjear el token. Sin esto aterrizaba en el panel, el guard lo mandaba a
+     crear una empresa propia y la invitación quedaba sin usar. */
+  const from = location.state?.from?.pathname;
 
-  if (user) return <Navigate to={HOME_SECTION_PATH} replace />;
+  if (user) return <Navigate to={from || HOME_SECTION_PATH} replace />;
 
   return (
     <Register
-      onSuccess={() => navigate(HOME_SECTION_PATH, { replace: true })}
-      onGoLogin={() => navigate(PUBLIC_ROUTES.login)}
+      onSuccess={() => navigate(from || HOME_SECTION_PATH, { replace: true })}
+      onGoLogin={() => navigate(PUBLIC_ROUTES.login, { state: location.state })}
       onBack={() => navigate(PUBLIC_ROUTES.landing)}
     />
   );
@@ -179,6 +187,13 @@ export default function App() {
       <Route path={PUBLIC_ROUTES.landing} element={<LandingRoute />} />
       <Route path={PUBLIC_ROUTES.login} element={<LoginRoute />} />
       <Route path={PUBLIC_ROUTES.register} element={<RegisterRoute />} />
+
+      {/* Aceptar una invitación al equipo. Va fuera de RequireAuth y de
+          RequireActivePlan: el invitado llega sin sesión y sin organización, y
+          cualquiera de los dos guards lo desviaría antes de que pueda canjear
+          el token. La pantalla resuelve sola los tres casos (sin sesión, con
+          sesión, ya canjeada). */}
+      <Route path={PUBLIC_ROUTES.invitation} element={<AcceptInvitation />} />
 
       {/* Alta: con sesión, sin panel todavía. Se renderizan sueltas (sin
           AppShell) igual que login y registro — mostrar el sidebar de un panel
