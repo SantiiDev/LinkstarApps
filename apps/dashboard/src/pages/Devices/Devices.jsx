@@ -66,11 +66,14 @@ function stat(value, suffix = '') {
 }
 
 // Shape mínima que necesita el mini-ranking de abajo de esta página.
+// `human_scans_30d` (0018) y no `unique_scans_30d`: la columna se rotula
+// "Escaneos", y unique son PERSONAS distintas — un local con 40 toques de 12
+// clientes mostraba 12 y no cerraba contra ningún otro número del panel.
 function mapLocationForRanking(row, index) {
   return {
     id: row.location_id,
     name: row.name,
-    totalScans: row.unique_scans_30d ?? 0,
+    totalScans: row.human_scans_30d ?? 0,
     totalReviews: row.new_reviews_30d ?? 0,
     color: colorForIndex(index),
   };
@@ -320,20 +323,59 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
   );
 }
 
+/* ─── Empty states ──────────────────────────────────────────── */
+/* Dos vacíos distintos que antes decían lo mismo:
+
+   · La organización todavía no vinculó ningún expositor. Es el día uno de
+     cualquier cuenta nueva, y decirle "no hay dispositivos que coincidan con tu
+     búsqueda" a alguien que no buscó nada lo deja pensando que algo se rompió.
+     Este caso lleva instrucción y botón.
+   · El filtro o la búsqueda no devolvieron nada, pero dispositivos hay. Ese sí
+     es "sin resultados", y la salida es limpiar el filtro.
+
+   `hasAny` es lo que los separa: se calcula sobre la lista completa, no sobre la
+   filtrada. */
+function DevicesEmpty({ hasAny, onClaim, onClearFilters }) {
+  if (hasAny) {
+    return (
+      <div className="devices-empty">
+        <div className="devices-empty__icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </div>
+        <div className="devices-empty__title">Sin resultados</div>
+        <div className="devices-empty__text">Ningún dispositivo coincide con la búsqueda o el filtro aplicado.</div>
+        <button className="devices-empty__btn" onClick={onClearFilters}>Limpiar filtros</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="devices-empty">
+      <div className="devices-empty__icon">
+        <QrIcon size={28} />
+      </div>
+      <div className="devices-empty__title">Todavía no vinculaste ningún expositor</div>
+      <div className="devices-empty__text">
+        Cuando vincules tu primer expositor Linkstar vas a ver acá sus escaneos, su
+        ubicación y el QR para reimprimirlo. El código de vinculación viene impreso
+        en el dispositivo.
+      </div>
+      <button className="devices-empty__btn" onClick={onClaim}>
+        <QrIcon size={14} />
+        Vincular un dispositivo
+      </button>
+    </div>
+  );
+}
+
 /* ─── Card View ─────────────────────────────────────────────── */
-function DeviceCardGrid({ devices, onSelect }) {
+function DeviceCardGrid({ devices, hasAny, onSelect, onClaim, onClearFilters }) {
   if (devices.length === 0) {
     return (
       <div className="devices-grid">
-        <div className="devices-empty">
-          <div className="devices-empty__icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </div>
-          <div className="devices-empty__title">Sin resultados</div>
-          <div className="devices-empty__text">No hay dispositivos que coincidan con tu búsqueda.</div>
-        </div>
+        <DevicesEmpty hasAny={hasAny} onClaim={onClaim} onClearFilters={onClearFilters} />
       </div>
     );
   }
@@ -434,7 +476,17 @@ function DeviceCardGrid({ devices, onSelect }) {
 }
 
 /* ─── Table View ────────────────────────────────────────────── */
-function DeviceTable({ devices, onSelect }) {
+function DeviceTable({ devices, hasAny, onSelect, onClaim, onClearFilters }) {
+  // La vista tabla no tenía vacío: con cero filas quedaba el encabezado solo
+  // flotando arriba de nada, que se lee peor que en la grilla.
+  if (devices.length === 0) {
+    return (
+      <div className="devices-table-wrap">
+        <DevicesEmpty hasAny={hasAny} onClaim={onClaim} onClearFilters={onClearFilters} />
+      </div>
+    );
+  }
+
   return (
     <div className="devices-table-wrap">
       <table className="devices-table">
@@ -578,9 +630,11 @@ function buildDailyScansMock() {
 
 /* v_scans_daily trae un total por día ya agregado para toda la organización
    (decisión 2: nunca se consulta scan_events/scan_daily_rollups directo). Se
-   rellenan con 0 los días sin fila (sin escaneos ese día). */
+   rellenan con 0 los días sin fila (sin escaneos ese día).
+   `human_scans` y no `scans`: mismo criterio que las sparklines de las
+   tarjetas, para que el gráfico grande y las chicas cuenten lo mismo. */
 function buildDailyScansFromRows(rows, days) {
-  const byDay = new Map(rows.map(r => [r.day, r.scans]));
+  const byDay = new Map(rows.map(r => [r.day, r.human_scans]));
   const today = new Date();
   const totals = [];
   const labels = [];
@@ -683,6 +737,11 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
     })();
     return () => { cancelled = true; };
   }, [activityPeriod]);
+
+  function clearFilters() {
+    setSearch('');
+    setFilter('all');
+  }
 
   function handleSaveDevice(updated) {
     setDevices(prev => prev.map(d => (d.id === updated.id ? updated : d)));
@@ -804,8 +863,8 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
 
           {/* Content */}
           {viewMode === 'grid'
-            ? <DeviceCardGrid devices={filtered} onSelect={setSelected} />
-            : <DeviceTable    devices={filtered} onSelect={setSelected} />
+            ? <DeviceCardGrid devices={filtered} hasAny={devices.length > 0} onSelect={setSelected} onClaim={() => setClaiming(true)} onClearFilters={clearFilters} />
+            : <DeviceTable    devices={filtered} hasAny={devices.length > 0} onSelect={setSelected} onClaim={() => setClaiming(true)} onClearFilters={clearFilters} />
           }
         </div>
       </div>
@@ -844,6 +903,16 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
             triggerClassName="devices-period-select"
           />
         </div>
+        {/* Una organización recién creada tiene la serie entera en cero, y un
+            gráfico de barras planas no dice si no hubo actividad o si algo no
+            cargó. El gráfico se dibuja igual (los ejes ya orientan), con una
+            nota encima que lo explique. */}
+        {dailyScans.totals.every(v => v === 0) && (
+          <p className="devices-activity__empty">
+            Todavía no registramos escaneos en este período. Van a aparecer acá
+            en cuanto alguien toque o escanee un expositor.
+          </p>
+        )}
         <TrendChart
           data={dailyScans.totals}
           labels={dailyScans.labels}
@@ -867,6 +936,12 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
         </div>
         {/* Envoltorio con scroll horizontal: en teléfonos la tabla no entra y
             antes se ocultaba la columna de reseñas, que es justamente el dato. */}
+        {topLocations.length === 0 ? (
+          <p className="devices-activity__empty">
+            Todavía no cargaste ningún local. Podés crearlos desde
+            Configuración → Gestión local y después asignarles los expositores.
+          </p>
+        ) : (
         <div className="devices-locations-table-wrap">
           <table className="devices-locations-table">
             <thead>
@@ -892,6 +967,7 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* ── Footer ── */}

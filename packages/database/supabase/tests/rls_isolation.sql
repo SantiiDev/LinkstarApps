@@ -278,7 +278,7 @@ select pg_temp.check(
 );
 
 -- =========================================================================
--- 7. Las vistas del dashboard tampoco filtran de menos (0008 y 0016)
+-- 7. Las vistas del dashboard tampoco filtran de menos (0008, 0016 y 0018)
 --
 -- Por defecto una vista de Postgres corre con los permisos de QUIEN LA CREÓ,
 -- no de quien la consulta: ignora el RLS de las tablas de abajo y le devuelve
@@ -396,6 +396,59 @@ select pg_temp.check(
    where device_id = 'eeeeeeee-0000-0000-0000-000000000001') = 8
 );
 
+-- --- Las mismas cuentas, ahora en las vistas del 0008 (migración 0018) -------
+-- Bar Uno tiene hoy dos filas de rollup: Centro (10 toques, 2 bots) y Pichincha
+-- (7 toques, 1 bot). O sea 17 crudos, 14 humanos, 3 bots. El punto de esta
+-- tanda es que TODAS las vistas coincidan en ese 14 — que era exactamente lo que
+-- no pasaba antes del 0018, con cada pantalla leyendo una columna distinta.
+
+select pg_temp.check(
+  'v_scans_daily: human_scans descuenta los bots de toda la org (17 - 3 = 14)',
+  (select coalesce(sum(human_scans), 0) from public.v_scans_daily) = 14
+);
+
+select pg_temp.check(
+  'v_scans_daily: scans sigue siendo el crudo, con bots (17)',
+  (select coalesce(sum(scans), 0) from public.v_scans_daily) = 17
+);
+
+select pg_temp.check(
+  'v_device_performance: human_scans_30d del dispositivo de Centro (10 - 2 = 8)',
+  (select human_scans_30d from public.v_device_performance
+   where device_id = 'eeeeeeee-0000-0000-0000-000000000001') = 8
+);
+
+select pg_temp.check(
+  'v_device_performance: la ventana de 7 días descuenta bots igual que la de 30',
+  (select human_scans_7d from public.v_device_performance
+   where device_id = 'eeeeeeee-0000-0000-0000-000000000001') = 8
+);
+
+-- El bug que arregla el 0018 en esta vista no es sólo el de los bots: la
+-- pantalla de Ubicaciones rotulaba "Escaneos" a unique_scans_30d, que son
+-- PERSONAS. Centro tiene 8 toques humanos de 4 personas — dos números
+-- distintos, y el correcto para esa etiqueta es el 8.
+select pg_temp.check(
+  'v_location_performance: human_scans_30d (8) no es unique_scans_30d (4)',
+  (select human_scans_30d from public.v_location_performance
+   where location_id = 'dddddddd-0000-0000-0000-000000000001') = 8
+  and
+  (select unique_scans_30d from public.v_location_performance
+   where location_id = 'dddddddd-0000-0000-0000-000000000001') = 4
+);
+
+select pg_temp.check(
+  'v_employee_leaderboard: human_scans_30d del mozo de Centro (10 - 2 = 8)',
+  (select human_scans_30d from public.v_employee_leaderboard
+   where employee_id = 'ffffffff-0000-0000-0000-000000000001') = 8
+);
+
+select pg_temp.check(
+  'v_dashboard_kpis: human_scans coincide con el total de v_scans_daily (14)',
+  (select human_scans from public.v_dashboard_kpis
+   where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 14
+);
+
 -- --- Caro (manager acotada a Centro) ve una sola sucursal, también en vistas ---
 select pg_temp.login('33333333-3333-3333-3333-333333333333', 'caro@bar-uno.test');
 
@@ -422,35 +475,49 @@ select pg_temp.check(
   (select coalesce(sum(scans), 0) from public.v_device_scans_daily) = 99
 );
 
--- --- Un anónimo no ve absolutamente nada en ninguna de las tres ---
+-- --- Un anónimo no llega ni a consultarlas ------------------------------------
+-- Ojo con lo que se afirma acá. La primera versión de estos asserts pedía
+-- `count(*) = 0`, dando por hecho que anon podía consultar la vista y que el RLS
+-- le iba a devolver cero filas. La realidad es más fuerte: el 0008 y el 0016
+-- otorgan select SÓLO a `authenticated`, así que anon ni siquiera puede leer la
+-- vista — Postgres corta antes, con `permission denied for view`.
+--
+-- Escribirlo como `count(*) = 0` no era un matiz: el assert no fallaba, ABORTABA
+-- la corrida con un error, y todo lo que venía después quedaba sin ejecutar. Por
+-- eso se verifica el error de permisos, que es la garantía que realmente existe.
 select set_config('role', 'anon', true);
 select set_config('request.jwt.claims', null, true);
 
-select pg_temp.check(
-  'anon no ve nada en v_device_scans_daily',
-  (select count(*) from public.v_device_scans_daily) = 0
-);
-
-select pg_temp.check(
-  'anon no ve nada en v_location_scans_daily',
-  (select count(*) from public.v_location_scans_daily) = 0
-);
-
-select pg_temp.check(
-  'anon no ve nada en v_employee_scans_daily',
-  (select count(*) from public.v_employee_scans_daily) = 0
-);
-
--- Las vistas del 0008 corren sobre las mismas tablas y el mismo riesgo.
-select pg_temp.check(
-  'anon no ve nada en v_device_performance (0008)',
-  (select count(*) from public.v_device_performance) = 0
-);
-
-select pg_temp.check(
-  'anon no ve nada en v_scans_daily (0008)',
-  (select count(*) from public.v_scans_daily) = 0
-);
+do $$
+declare
+  v_view text;
+  v_rows int;
+begin
+  foreach v_view in array array[
+    -- 0016
+    'v_device_scans_daily', 'v_location_scans_daily', 'v_employee_scans_daily',
+    -- 0008, todas recreadas por el 0018: ese es justo el momento en que se
+    -- pierde un `with (security_invoker = on)` o un grant sin que nadie lo note,
+    -- porque create or replace view NO hereda las opciones de la vista anterior.
+    'v_device_performance', 'v_scans_daily', 'v_location_performance',
+    'v_employee_leaderboard', 'v_dashboard_kpis'
+  ]
+  loop
+    begin
+      execute format('select count(*) from public.%I', v_view) into v_rows;
+      -- Si llegó acá es que anon PUDO consultarla. Sólo es aceptable si no
+      -- devolvió nada; cualquier fila es una fuga entre tenants.
+      if v_rows = 0 then
+        raise notice '   OK   anon puede consultar %, pero no ve ninguna fila', v_view;
+      else
+        raise exception 'FALLO: anon vio % filas en %', v_rows, v_view;
+      end if;
+    exception
+      when insufficient_privilege then
+        raise notice '   OK   anon no tiene permiso ni para consultar %', v_view;
+    end;
+  end loop;
+end $$;
 
 reset role;
 

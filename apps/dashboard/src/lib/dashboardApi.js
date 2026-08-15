@@ -11,27 +11,64 @@ import { supabase } from './supabaseClient';
 // v_dashboard_kpis y v_recent_activity no se consumen todavía: ninguna
 // pantalla actual (Devices/Employees/Locations) tiene un panel de KPIs
 // generales ni un feed de actividad reciente para pegarlas.
+//
+// ---------------------------------------------------------------------------
+// "Escaneos" = human_scans, en todas las pantallas
+// ---------------------------------------------------------------------------
+// `scans` en los rollups es un count(*) crudo con bots adentro, y el bot típico
+// acá no es un atacante: la preview de WhatsApp golpea la URL del expositor
+// cada vez que alguien comparte el link. Para el dueño del local eso no es un
+// escaneo. Desde el 0018 las seis vistas del 0008 exponen `human_scans` al lado
+// de `scans`, igual que ya hacían las tres del 0016, y este módulo pide SIEMPRE
+// la columna humana. La cruda queda disponible en la vista para depurar.
+//
+// Consecuencia operativa: si el 0018 no está aplicado en el entorno, estas
+// queries fallan con "column ... does not exist" en vez de devolver un número
+// equivocado. Es a propósito — cada pantalla ya tiene su fallback, y un error
+// ruidoso es mejor que dos pantallas mostrando cifras distintas.
+
+// Estas tres piden `select('*')` porque las pantallas usan casi toda la fila.
+// El costo de `*` es que una columna que falta NO da error: PostgREST devuelve
+// la fila sin ella y en JS queda `undefined`, que con un `?? 0` se convierte en
+// un cero perfectamente creíble. Es el peor resultado posible acá — es
+// exactamente lo que este módulo intenta evitar mostrando un solo número en
+// todas las pantallas.
+//
+// Y no es hipotético: este repo ya vivió una migración escrita que tardó en
+// llegar a Postgres mientras el código asumía que estaba (ver 0013/0017 en
+// CLAUDE.md). Si el 0018 todavía no se aplicó, esto tiene que gritar.
+function assertColumn(rows, column, migration) {
+  if (rows.length > 0 && !(column in rows[0])) {
+    throw new Error(
+      `La vista no expone "${column}". Falta aplicar la migración ${migration} ` +
+      `en este entorno (npm run db:push desde packages/database).`
+    );
+  }
+  return rows;
+}
 
 export async function fetchDevicePerformance() {
   const { data, error } = await supabase.from('v_device_performance').select('*');
   if (error) throw error;
-  return data ?? [];
+  return assertColumn(data ?? [], 'human_scans_30d', '0018');
 }
 
 export async function fetchEmployeeLeaderboard() {
   const { data, error } = await supabase.from('v_employee_leaderboard').select('*');
   if (error) throw error;
-  return data ?? [];
+  return assertColumn(data ?? [], 'human_scans_30d', '0018');
 }
 
 export async function fetchLocationPerformance() {
   const { data, error } = await supabase.from('v_location_performance').select('*');
   if (error) throw error;
-  return data ?? [];
+  return assertColumn(data ?? [], 'human_scans_30d', '0018');
 }
 
 // v_scans_daily agrega TODO el historial de scan_daily_rollups agrupado por
 // día — sin límite de rango incorporado. Filtramos acá a los últimos N días.
+// `scans` se pide igual que `human_scans` para poder mostrar la diferencia
+// cuando haga falta explicarla, pero el gráfico dibuja la humana.
 export async function fetchScansDaily(days = 7) {
   const since = new Date();
   since.setDate(since.getDate() - (days - 1));
@@ -39,7 +76,7 @@ export async function fetchScansDaily(days = 7) {
 
   const { data, error } = await supabase
     .from('v_scans_daily')
-    .select('day, scans, unique_scans, estimated_reviews')
+    .select('day, scans, human_scans, unique_scans, estimated_reviews')
     .gte('day', sinceStr)
     .order('day', { ascending: true });
 
@@ -95,9 +132,12 @@ export function lastNDayLabels(days) {
 async function fetchEntitySeries(view, idColumn, days) {
   const keys = lastNDayKeys(days);
 
+  // human_scans, no scans: la sparkline tiene que contar lo mismo que el total
+  // que va al lado. Con `scans` un expositor cuyo link circuló por WhatsApp
+  // dibujaba picos que no fueron nadie.
   const { data, error } = await supabase
     .from(view)
-    .select(`${idColumn}, day, scans`)
+    .select(`${idColumn}, day, human_scans`)
     .gte('day', keys[0])
     .order('day', { ascending: true });
 
@@ -115,7 +155,7 @@ async function fetchEntitySeries(view, idColumn, days) {
       byDay = new Map();
       byEntityDay.set(id, byDay);
     }
-    byDay.set(row.day, (byDay.get(row.day) ?? 0) + (row.scans ?? 0));
+    byDay.set(row.day, (byDay.get(row.day) ?? 0) + (row.human_scans ?? 0));
   }
 
   const series = new Map();

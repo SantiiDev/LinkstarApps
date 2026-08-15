@@ -73,14 +73,20 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0017 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0019 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
 `supabase migration list` compares local vs remote. If a migration was applied by hand outside the CLI
 (has happened, see `0010`), `supabase migration repair --status applied <version>` fixes the history
 without re-running the SQL. Run `packages/database/supabase/tests/rls_isolation.sql` before any RLS change
-ships.
+ships — it needs a running local stack and is executed with
+`docker exec -i supabase_db_Linkstar psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f - < supabase/tests/rls_isolation.sql`
+from `packages/database`. It exits 0 and prints `=== Todos los tests de aislamiento pasaron ===` when green;
+`ON_ERROR_STOP=1` matters, because a failing assert aborts rather than returning false, and without it the
+rest of the file would keep going and look like it passed. **On Windows `supabase start` usually fails on
+first run with "ports are not available"** — Hyper-V reserves the whole 54320–54329 default range; see
+`packages/database/supabase/README.md` for the temporary port remap.
 
 Ops scripts live in `services/api/scripts/` and run with `node scripts/<name>.js` from `services/api`
 (`provision-devices.js` and `rebuild-today-rollup.js` also have npm aliases — `npm run provision-devices`,
@@ -155,6 +161,17 @@ A second consequence, easy to miss: the rollup runs for *yesterday*, so a scan i
 run. `0012`'s `public.rebuild_today_rollup()` exists to close that gap, and nothing calls it either —
 whether it runs on dashboard load, on a short interval, or not at all is still undecided.
 
+**One shared trigger function, two tables — don't collapse the nested `if`** (`0019`). `private.check_same_org()`
+backs both `employees_check_same_org` and `devices_check_same_org`. It used to read
+`if tg_table_name = 'devices' and new.employee_id is not null`, which looks like a guard and is not one:
+PL/pgSQL prepares the whole boolean as a single SQL expression against the triggering table's rowtype, so
+firing on `employees` — which has no `employee_id` — failed to resolve the field no matter what the left
+operand said. Effect: **every insert and update on `employees` errored, for every role including
+`service_role`, from `0003` until `0019`.** It went unnoticed because no screen creates employees yet and
+`rls_isolation.sql` had never been run end to end. The fix nests the two `if`s so the inner expression is
+only ever prepared for `devices`; merging them back reintroduces the bug, and it surfaces on the *other*
+table, which is what made it hard to see.
+
 Migration responsibilities: `0001` extensions/enums/ID & IP-hash helpers · `0002` tenancy
 (`organizations`, `profiles`, `memberships`, `invitations`, plus the `on_auth_user_created` trigger that
 creates a `profiles` row on signup) · `0003` catalog (`locations`, `employees`, `devices`) ·
@@ -168,9 +185,13 @@ creates a `profiles` row on signup) · `0003` catalog (`locations`, `employees`,
 the business tables, `claim_device()` gated) · `0015` `org_is_activated()` — the free plan also needs a
 linked device · `0016` per-entity daily series views (`v_device_scans_daily`, `v_location_scans_daily`,
 `v_employee_scans_daily`) — pure projections of `scan_daily_rollups`, no new capture ·
-`0017` corrective: re-applies the two `0013` RPC fixes that never reached Postgres (see below).
+`0017` corrective: re-applies the two `0013` RPC fixes that never reached Postgres (see below) ·
+`0018` `human_scans` / `bot_scans` on the five aggregating `0008` views, so every screen counts the same
+thing (see "Scans are human taps" below) · `0019` corrective: `insert into employees` had failed **since
+`0003`** (see below).
 
-**Everything up to `0017` is applied in production.** Correcting an already-applied migration by editing
+**Everything up to `0019` is applied in production** (pushed 15 Aug 2026, verified with
+`supabase migration list`). Correcting an already-applied migration by editing
 its file changes nothing in the database — `db push` skips migrations already in the history table. That
 is exactly how `0017` came to exist: `0013` was fixed in place on the reasonable assumption that it had
 not shipped yet, it shipped in between, and for a while the file and Postgres disagreed with nobody
@@ -411,9 +432,24 @@ split below before wiring anything — the shell is finished, the data mostly is
   really the last N days ending today. `v_employee_scans_daily` has no consumer yet.
   Bars use a `max(2px, …)` height floor — an all-zero series (any new org) otherwise renders as an empty
   strip that reads as a broken chart rather than as "no activity".
+- **"Escaneos" means human taps, everywhere** (`0018`). `scan_daily_rollups.scans` is a raw `count(*)`
+  with bots in it — and the bot that matters here isn't an attacker: `resolve_scan`'s regex flags
+  `whatsapp` and `facebookexternalhit`, so every time someone shares the expositor's link the preview hits
+  the endpoint and books a "scan". The five aggregating views now expose `scans` (raw), `human_scans`,
+  `bot_scans` and `unique_scans` side by side, and `lib/dashboardApi.js` always asks for the human column.
+  Two things were already correct and were left alone: `v_recent_activity` filters `not is_bot`, and
+  `devices.total_scans` is only incremented inside `resolve_scan`'s `if not v_bot`. If you add a view or a
+  screen that shows a scan count, it reads `human_scans` — a second number that counts bots is the bug
+  this migration existed to remove. `unique_scans` is *not* a substitute: it counts distinct people, which
+  is what `v_location_performance` was showing under an "Escaneos" label until `0018` added
+  `human_scans_30d` next to it.
 - `pages/Devices/`, `pages/Employees/`, `pages/Locations/` read real data with the same pattern: fall back
   to `data/*.js` mock **only if the query throws**; an empty result (new org) renders as-is. Fields with no
-  backing in the views render `'—'` instead of being fabricated.
+  backing in the views render `'—'` instead of being fabricated. Devices and Locations distinguish **two**
+  empty states, and the distinction is `hasAny` (computed over the unfiltered list, not the filtered one):
+  "you haven't linked an expositor / loaded a branch yet" carries an instruction and a CTA, while "the
+  filter matched nothing" offers to clear the filter. Telling a day-one account that nothing matched a
+  search it never ran is what this replaced.
 - `pages/Employees/` and `pages/Locations/` are reachable through `pages/Settings/Settings.jsx`, rendered
   inside the "Equipo" and "Gestión local" tabs with an `embedded` prop that hides their own page header and
   footer (Settings already has a `PageHeader`, and they'd otherwise show two titles and two footers). They

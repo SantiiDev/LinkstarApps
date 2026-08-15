@@ -26,9 +26,46 @@ Desde la raíz del monorepo son `npm run db:reset`, `npm run db:push` y `npm run
 | `0010_profile_login_tracking.sql` | `profiles.last_login_at` (lo escribe `POST /api/auth/login-event`) |
 | `0011_scan_medium.sql` | `scan_events.medium` (`qr`/`nfc`) y la sobrecarga de `resolve_scan` con `p_medium` |
 | `0012_rebuild_today_rollup_rpc.sql` | `public.rebuild_today_rollup()`, wrapper para recalcular un día a demanda |
+| `0013_subscription_onboarding.sql` | Catálogo real de `plans`, `plan_selected_at`, `my_org_context()`, `select_free_plan()`, RPCs de preapproval |
+| `0014_enforce_subscription_access.sql` | `private.orgs_with_access()` y el RLS que exige plan pago para leer y escribir |
+| `0015_free_plan_requires_device.sql` | `org_is_activated()` — el plan gratis además necesita un expositor vinculado |
+| `0016_entity_daily_series.sql` | Serie diaria por dispositivo / local / empleado, con `human_scans` y `bot_scans` |
+| `0017_fix_subscription_rpcs.sql` | Correctiva: reaplica los dos arreglos del `0013` que nunca llegaron a Postgres |
+| `0018_human_scans_in_dashboard_views.sql` | `human_scans` / `bot_scans` en las cinco vistas del `0008` que agregan rollups |
+| `0019_fix_check_same_org_trigger.sql` | Correctiva: `insert into employees` fallaba **siempre** desde el `0003` |
 
 Si una migración se aplicó a mano fuera de la CLI (ya pasó con `0010`),
 `supabase migration repair --status applied <version>` arregla el historial sin volver a correr el SQL.
+
+### Windows: `supabase start` falla con "ports are not available"
+
+Si el arranque local muere con
+
+```
+failed to start docker container "supabase_db_...": ports are not available:
+exposing port TCP 0.0.0.0:54322 -> ...: bind: An attempt was made to access a
+socket in a way forbidden by its access permissions.
+```
+
+no es Docker ni el firewall: Hyper-V/WSL reserva rangos de puertos dinámicos al
+arrancar, y **los puertos por defecto de Supabase (54320–54329) caen enteros
+adentro**. Se ven con:
+
+```powershell
+netsh interface ipv4 show excludedportrange protocol=tcp
+```
+
+El rango reservado cambia en cada reinicio de Windows, así que no tiene sentido
+fijar otros puertos en `config.toml` — es un archivo compartido y lo que sirve en
+una máquina rompe en la otra. La salida es remapearlos **temporalmente** (por
+ejemplo 543xx → 553xx), correr lo que haya que correr, y revertir el archivo:
+
+```bash
+git checkout -- packages/database/supabase/config.toml
+```
+
+Verificado el 15/08/2026 en Windows 10: con ese remapeo `supabase start`,
+`db reset` (0000 → 0019) y `tests/rls_isolation.sql` corren completos.
 
 ---
 

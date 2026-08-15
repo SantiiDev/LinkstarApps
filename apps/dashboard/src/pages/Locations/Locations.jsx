@@ -52,7 +52,11 @@ function mapLocationRow(row, { devicesByLocation, employeesByLocation, scansSeri
     totalDevices: myDevices.length,
     activeDevices: myDevices.filter(d => d.status === 'active').length,
     totalEmployees: myEmployees.length,
-    totalScans: row.unique_scans_30d ?? 0,
+    // human_scans_30d (0018), no unique_scans_30d: la etiqueta dice "Escaneos"
+    // y unique son personas distintas. Con 40 toques de 12 clientes la tarjeta
+    // mostraba 12, un número que no coincidía con ninguna otra pantalla.
+    // unique_scans_30d se sigue usando del lado SQL para conversion_rate.
+    totalScans: row.human_scans_30d ?? 0,
     totalReviews: row.new_reviews_30d ?? 0,
     avgConversion: row.conversion_rate,
     avgRating: row.average_rating,
@@ -272,20 +276,49 @@ function LocationModal({ location, onClose }) {
   );
 }
 
+/* ─── Empty states ──────────────────────────────────────────── */
+/* Mismo criterio que en Dispositivos: "no cargaste ninguna sucursal todavía" y
+   "el filtro no devolvió nada" son dos situaciones distintas y antes decían la
+   misma frase. `hasAny` mira la lista completa, no la filtrada. */
+function LocationsEmpty({ hasAny, onClearFilters }) {
+  if (hasAny) {
+    return (
+      <div className="loc-empty">
+        <div className="loc-empty__icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </div>
+        <div className="loc-empty__title">Sin resultados</div>
+        <div className="loc-empty__text">Ninguna sucursal coincide con la búsqueda o el filtro aplicado.</div>
+        <button className="loc-empty__btn" onClick={onClearFilters}>Limpiar filtros</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="loc-empty">
+      <div className="loc-empty__icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
+        </svg>
+      </div>
+      <div className="loc-empty__title">Todavía no cargaste ninguna sucursal</div>
+      <div className="loc-empty__text">
+        Una sucursal es cada local con su propia ficha de Google. Cargala primero
+        y después asignale los expositores: sin eso, un escaneo no sabe a qué
+        formulario de reseña mandar al cliente.
+      </div>
+    </div>
+  );
+}
+
 /* ─── Card View ─────────────────────────────────────────────── */
-function LocationCardGrid({ locations, onSelect }) {
+function LocationCardGrid({ locations, hasAny, onSelect, onClearFilters }) {
   if (locations.length === 0) {
     return (
       <div className="loc-grid">
-        <div className="loc-empty">
-          <div className="loc-empty__icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </div>
-          <div className="loc-empty__title">Sin resultados</div>
-          <div className="loc-empty__text">No hay ubicaciones que coincidan con tu búsqueda.</div>
-        </div>
+        <LocationsEmpty hasAny={hasAny} onClearFilters={onClearFilters} />
       </div>
     );
   }
@@ -441,7 +474,16 @@ function LocationCardGrid({ locations, onSelect }) {
 }
 
 /* ─── Table View ────────────────────────────────────────────── */
-function LocationTable({ locations, onSelect }) {
+function LocationTable({ locations, hasAny, onSelect, onClearFilters }) {
+  // Igual que en Dispositivos: la vista tabla se quedaba con el encabezado solo.
+  if (locations.length === 0) {
+    return (
+      <div className="loc-table-wrap">
+        <LocationsEmpty hasAny={hasAny} onClearFilters={onClearFilters} />
+      </div>
+    );
+  }
+
   return (
     <div className="loc-table-wrap">
       <table className="loc-table">
@@ -602,6 +644,11 @@ export default function LocationsPage({ embedded = false }) {
     return list;
   }, [locations, search, filter, sort]);
 
+  function clearFilters() {
+    setSearch('');
+    setFilter('all');
+  }
+
   if (loading) {
     return <div className="app-loading">Cargando…</div>;
   }
@@ -730,8 +777,8 @@ export default function LocationsPage({ embedded = false }) {
 
       {/* ── Content ── */}
       {viewMode === 'grid'
-        ? <LocationCardGrid locations={displayed} onSelect={setSelected} />
-        : <LocationTable    locations={displayed} onSelect={setSelected} />
+        ? <LocationCardGrid locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} />
+        : <LocationTable    locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} />
       }
 
       {/* ── Footer ── */}

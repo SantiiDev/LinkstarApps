@@ -1192,6 +1192,31 @@
 .loc-empty__text {
   font-size: 0.85rem;
   color: var(--color-text-secondary);
+  max-width: 34rem;
+  margin: 0 auto;
+  line-height: 1.55;
+}
+
+.loc-empty__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1.15rem;
+  padding: 0.55rem 1.1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-orange);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.loc-empty__btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -8px rgba(245,133,41,0.9);
 }
 
 /* ── Footer ── */
