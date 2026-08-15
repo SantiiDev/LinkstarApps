@@ -7,5 +7,8 @@
     "db:reset": "supabase db reset",
     "db:push": "supabase db push",
     "db:status": "supabase migration list"
+  },
+  "devDependencies": {
+    "supabase": "^2.114.0"
   }
 }

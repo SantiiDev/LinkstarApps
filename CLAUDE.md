@@ -66,7 +66,10 @@ Both dev ports are pinned with `strictPort`. Don't remove that: the two frontend
 the API's CORS allowlist and the `.env` files reference those exact ports, so a silently-reassigned port
 turns into a CORS failure that looks like an auth bug.
 
-Supabase (needs the `supabase` CLI installed globally):
+Supabase (the CLI is a `devDependency` of `packages/database`, so `npm install` at the root is enough —
+no global install; `npm i -g supabase` is disabled upstream anyway). Each developer still has to
+`supabase login` and `supabase link --project-ref <ref>` once: the link state lives in the gitignored
+`packages/database/supabase/.temp/`, so it does not travel with the repo.
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
