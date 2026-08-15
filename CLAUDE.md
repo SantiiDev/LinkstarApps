@@ -397,16 +397,20 @@ split below before wiring anything — the shell is finished, the data mostly is
 - Settings tabs live in the URL (`/panel/configuracion/:tab` — `local`, `equipo`, `facturacion`, `legal`),
   which is what makes Devices' "Ver más" able to deep-link into "Gestión local". `SETTINGS_TAB_ALIASES`
   keeps the old ids (`general`, `employees`, `locations`, `team`, `billing`) working.
-- **Real vs. mock.** The screens that read the database: `devices` (via `lib/dashboardApi.js`),
-  `employees` / `locations` (embedded in `settings`), the whole `/alta` onboarding, and the "Facturación"
-  tab of `settings` (plan and status from `OrgContext`, history from `subscription_payments`). `profile`
-  reads the logged-in user from `AuthContext`. **Everything else is a static mock** — `company` and
-  `reviews` off `data/reviews.js`,
-  and `gb-*`, `reports-*`, `monthly-reports`, `automations` off arrays hardcoded in their own files
-  (review counts, NPS, Google Business metrics, monthly PDFs, automation toggles). None of that has a
-  backing table, and most of it can't have one until the Google Business Profile integration exists.
-  Treat those pages as design targets, not as features: don't "fix" their numbers, and don't cite them as
-  evidence that a data source exists.
+- **No screen fabricates data any more.** The screens that read the database: `company` (via
+  `lib/dashboardApi.js`), `devices`, `employees` / `locations` (embedded in `settings`), the whole `/alta`
+  onboarding, and the "Facturación" tab of `settings` (plan and status from `OrgContext`, history from
+  `subscription_payments`). `profile` reads the logged-in user from `AuthContext`.
+  **Every remaining section renders `components/SectionPlaceholder`** instead of the hardcoded arrays it
+  used to show — `gb-*`, `reviews`, `reports-*`, `monthly-reports`, `automations`. The rule that replaced
+  them: a page with no data source says so; it never prints a number that can't be distinguished from a
+  measured one. The placeholder has two variants and picking the wrong one misleads:
+  `google` for what the *customer* can unblock by connecting their Business Profile (it carries the connect
+  button), `soon` for what *we* haven't built — NPS, monthly reports, automations — which gets no button,
+  because a button that resolves nothing is worse than none. Each converted file keeps a header comment
+  saying what it used to fake and which roadmap phase feeds it; the original mock markup and its CSS are
+  still in git (and the CSS files are deliberately left in place — they are the design target for when the
+  data arrives).
 - `context/AuthContext.jsx` wraps `App` and owns all Supabase Auth state. Its `onAuthStateChange` listener
   is the single place that calls `POST /api/auth/login-event` on `SIGNED_IN` — don't duplicate that inside
   `Login`/`Register`.
@@ -420,8 +424,8 @@ split below before wiring anything — the shell is finished, the data mostly is
 - `lib/dashboardApi.js` — reads **only** the `0008` views (`v_device_performance`,
   `v_employee_leaderboard`, `v_location_performance`, `v_scans_daily`), never `scan_events`/
   `scan_daily_rollups` (invariant 2). Exports `ESTIMATED_LABEL` — any number derived from `review_deltas`
-  must be labeled "estimado" (invariant 6). `v_dashboard_kpis` and `v_recent_activity` exist but nothing
-  consumes them yet.
+  must be labeled "estimado" (invariant 6). `v_dashboard_kpis` and `v_recent_activity` are consumed by
+  `company` through `fetchDashboardKpis()` / `fetchRecentActivity()`.
 - **Per-entity daily series** come from the `0016` views (`v_device_scans_daily`,
   `v_location_scans_daily`, `v_employee_scans_daily`) via `fetchDeviceScansSeries` /
   `fetchLocationScansSeries` / `fetchEmployeeScansSeries`, which return a `Map<id, number[]>` already
@@ -455,9 +459,15 @@ split below before wiring anything — the shell is finished, the data mostly is
   footer (Settings already has a `PageHeader`, and they'd otherwise show two titles and two footers). They
   used to be orphaned — written, wired to real data, and unreachable. If you move them again, keep them
   reachable from somewhere.
-- `pages/Company/Company.jsx` is the post-login landing and is **100% mock** (`data/reviews.js`). There is
-  no `reviews` table anywhere — only aggregate daily snapshots, with no text/author/sentiment. Making it
-  real needs the Google Business Profile `sync-reviews` integration, which does not exist.
+- `pages/Company/Company.jsx` is the post-login landing and is now **real, built on scans**: KPIs from
+  `v_dashboard_kpis`, the 30-day series from `v_scans_daily`, and the feed from `v_recent_activity`. It is
+  the only screen that **does not** fall back to a mock when its query fails — it exists precisely to stop
+  showing invented numbers, so a failure is reported.
+  The review KPIs render `'—'`, never `0`, and the page says why. That distinction is the whole point: a
+  `0` is indistinguishable from "we measured and there were none", and the truth is nothing measures them
+  yet — `location_review_snapshots` has no writer until `sync-reviews` exists. The gate is
+  `hasReviewData`, derived from whether any location has a non-null `total_reviews`, so the numbers appear
+  on their own once the first snapshot lands and nobody has to remember to edit this file.
 - Out of scope so far: an org switcher. `my_org_context()` now *reads* `profiles.last_organization_id` to
   pick which organization to show (falling back to the oldest membership), but nothing writes it, so a user
   in several orgs always lands on the same one and has no way to change it from the UI.

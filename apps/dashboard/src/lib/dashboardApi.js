@@ -8,9 +8,8 @@ import { supabase } from './supabaseClient';
 // (anon key + sesión del usuario) cada query devuelve sólo lo que ese
 // usuario puede ver por sus memberships, sin filtrar organization_id acá.
 //
-// v_dashboard_kpis y v_recent_activity no se consumen todavía: ninguna
-// pantalla actual (Devices/Employees/Locations) tiene un panel de KPIs
-// generales ni un feed de actividad reciente para pegarlas.
+// v_dashboard_kpis y v_recent_activity las consume Mi Empresa, que es la
+// pantalla post-login y la única con un panel de KPIs generales.
 //
 // ---------------------------------------------------------------------------
 // "Escaneos" = human_scans, en todas las pantallas
@@ -63,6 +62,36 @@ export async function fetchLocationPerformance() {
   const { data, error } = await supabase.from('v_location_performance').select('*');
   if (error) throw error;
   return assertColumn(data ?? [], 'human_scans_30d', '0018');
+}
+
+// Los KPIs generales de Mi Empresa: 30 días contra los 30 anteriores.
+// Devuelve UNA fila —la organización activa— o null si todavía no hay ninguna.
+// La vista sale de `organizations` con left joins, así que una organización sin
+// un solo escaneo igual tiene fila, con ceros. Eso es distinto de "no hay
+// datos" y la pantalla lo trata distinto.
+export async function fetchDashboardKpis() {
+  const { data, error } = await supabase
+    .from('v_dashboard_kpis')
+    .select('*')
+    .limit(1);
+
+  if (error) throw error;
+  const rows = assertColumn(data ?? [], 'human_scans', '0018');
+  return rows[0] ?? null;
+}
+
+// El feed de actividad. La vista ya filtra `not is_bot` desde el 0008 y se
+// acota sola a 7 días y 200 filas, así que acá sólo se recorta a lo que entra
+// en pantalla. No hace falta assertColumn: no tiene columnas del 0018.
+export async function fetchRecentActivity(limit = 8) {
+  const { data, error } = await supabase
+    .from('v_recent_activity')
+    .select('event_type, device_label, kind, occurred_at')
+    .order('occurred_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data ?? [];
 }
 
 // v_scans_daily agrega TODO el historial de scan_daily_rollups agrupado por

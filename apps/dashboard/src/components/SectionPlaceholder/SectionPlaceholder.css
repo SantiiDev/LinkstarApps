@@ -1,0 +1,134 @@
+/* Estado de sección sin datos. Usa los mismos tokens de glass del resto del
+   panel (index.css) para que no se lea como un error del sistema sino como una
+   parte más de la interfaz que todavía no se llenó. */
+
+.sph {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 3.25rem 2rem 3rem;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--glass-shadow);
+  animation: fadeIn 0.4s ease both;
+}
+
+.sph__icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.1rem;
+  background: rgba(245, 133, 41, 0.09);
+  color: var(--color-orange);
+}
+
+/* La variante "soon" no ofrece acción, así que tampoco usa el naranja de
+   marca: en este panel el naranja es el color de "hacé algo acá". */
+.sph--soon .sph__icon {
+  background: rgba(26, 38, 57, 0.07);
+  color: var(--color-navy);
+}
+
+.sph__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-navy);
+  text-wrap: balance;
+}
+
+.sph__text {
+  margin: 0;
+  max-width: 34rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.sph__preview-label {
+  margin-top: 1.75rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+/* Lista alineada a la izquierda dentro de un bloque centrado: leer una lista
+   con el ragged en los dos lados cuesta bastante más. */
+.sph__preview {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: left;
+}
+
+.sph__preview li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+.sph__check {
+  flex: none;
+  margin-top: 0.1rem;
+  color: var(--color-forest);
+  display: inline-flex;
+}
+
+.sph--soon .sph__check {
+  color: var(--color-text-secondary);
+}
+
+.sph__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.85rem;
+  padding: 0.65rem 1.3rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-button);
+  background: var(--color-white);
+  color: var(--color-navy);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--glass-shadow);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.sph__btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--glass-shadow-hover);
+}
+
+.sph__note {
+  margin: 1.3rem 0 0;
+  max-width: 34rem;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sph { animation: none; }
+  .sph__btn:hover { transform: none; }
+}
+
+@media (max-width: 640px) {
+  .sph { padding: 2.5rem 1.25rem; }
+}
