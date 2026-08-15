@@ -297,11 +297,38 @@ reset role;
 -- tope 3 dispositivos).
 update public.subscriptions set plan_code = 'business', status = 'active';
 
+-- Estos dos inserts son, además de fixture, la regresión del 0019: hasta esa
+-- migración TODO insert sobre employees moría con `record "new" has no field
+-- "employee_id"`, porque private.check_same_org() —compartida con devices—
+-- resolvía new.employee_id incluso disparando sobre una tabla que no la tiene.
+-- Si alguien vuelve a colapsar los dos IF anidados de esa función en un solo
+-- `and`, esta sección deja de correr acá mismo.
 insert into public.employees (id, organization_id, location_id, full_name) values
   ('ffffffff-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
    'dddddddd-0000-0000-0000-000000000001', 'Mozo Uno'),
   ('ffffffff-0000-0000-0000-000000000002', 'bbbbbbbb-0000-0000-0000-000000000002',
    'dddddddd-0000-0000-0000-000000000003', 'Mozo Dos');
+
+select pg_temp.check(
+  '0019: se pueden crear empleados (el trigger compartido con devices no explota)',
+  (select count(*) from public.employees
+   where id in ('ffffffff-0000-0000-0000-000000000001',
+                'ffffffff-0000-0000-0000-000000000002')) = 2
+);
+
+-- Y la otra mitad: el chequeo que la función SÍ tiene que hacer sigue vivo —
+-- un dispositivo no puede apuntar a un empleado de otra organización.
+do $$
+begin
+  insert into public.devices (organization_id, location_id, employee_id, kind, form_factor, status)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000001',
+          'ffffffff-0000-0000-0000-000000000002',  -- empleado de Bar Dos
+          'google_review', 'nfc_stand', 'active');
+  raise exception 'FALLO: se pudo asignar un empleado de otra organización a un dispositivo';
+exception
+  when foreign_key_violation then
+    raise notice '   OK   Un dispositivo no acepta un empleado de otra organización';
+end $$;
 
 insert into public.devices (id, organization_id, location_id, employee_id, kind, form_factor, status, claimed_at) values
   ('eeeeeeee-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
