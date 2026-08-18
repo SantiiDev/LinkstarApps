@@ -26,7 +26,7 @@ const SCAN_MEDIUM_BY_QUERY_PARAM = { q: 'qr', n: 'nfc' };
 // si algo falla — ver packages/database/supabase/migrations/0007_functions_and_jobs.sql.
 // ──────────────────────────────────────────────────────────
 router.get('/d/:publicId', scanLimiter, async (req, res) => {
-  const fallback = 'https://linkstar.com.ar';
+  const fallback = 'https://linkstarapp.com';
   try {
     const ip = (req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || '').trim();
     const medium = SCAN_MEDIUM_BY_QUERY_PARAM[req.query.s] || null;

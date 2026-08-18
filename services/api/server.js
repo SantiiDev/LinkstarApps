@@ -7,6 +7,7 @@ import healthRoutes from './routes/health.js';
 import authRoutes from './routes/auth.js';
 import redirectRoutes from './routes/redirect.js';
 import ordersRoutes from './routes/orders.js';
+import contactRoutes from './routes/contact.js';
 import subscriptionRoutes from './routes/subscriptions.js';
 import webhookRoutes from './routes/webhooks.js';
 
@@ -29,6 +30,7 @@ app.use(healthRoutes);
 app.use(authRoutes);
 app.use(redirectRoutes);
 app.use(ordersRoutes);
+app.use(contactRoutes);
 app.use(subscriptionRoutes);
 app.use(webhookRoutes);
 

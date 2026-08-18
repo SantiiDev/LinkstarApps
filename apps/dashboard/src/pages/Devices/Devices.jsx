@@ -15,6 +15,8 @@ import {
 } from '../../lib/dashboardApi';
 import { REDIRECT_DOMAIN } from '../../lib/config';
 import { downloadQrPng } from '../../lib/qr';
+import { supabase } from '../../lib/supabaseClient';
+import { useOrg } from '../../context/OrgContext';
 import './Devices.css';
 
 // Largo de la sparkline de cada tarjeta. Es independiente del selector de
@@ -546,15 +548,50 @@ function DeviceTable({ devices, hasAny, onSelect, onClaim, onClearFilters }) {
   );
 }
 
-/* ─── Claim device modal (Escanear QR) ───────────────────────── */
-function ClaimDeviceModal({ onClose }) {
+/* ─── Claim device modal ─────────────────────────────────────────
+   Hasta el 18 ago 2026 este modal no vinculaba nada: `handleSubmit` ponía la
+   pantalla de éxito sin llamar a la base. Era la única forma de vincular un
+   expositor desde adentro del panel, y mentía. Ahora llama a claim_device()
+   (SECURITY DEFINER: valida rol, código, doble vinculación y límite de plan) y
+   traduce sus errores igual que la pantalla del alta. */
+const CLAIM_ERRORS = {
+  invalid_claim_code: 'Ese código no existe. Revisá que esté igual al impreso en la base del expositor.',
+  already_claimed: 'Ese expositor ya está vinculado a otra cuenta.',
+  plan_limit_reached: 'Alcanzaste el límite de dispositivos de tu plan. Mejorá el plan para sumar más.',
+  subscription_inactive: 'Tu suscripción no está activa. Revisá tu plan para continuar.',
+};
+
+function ClaimDeviceModal({ onClose, onClaimed }) {
+  const { org } = useOrg();
   const [code, setCode] = useState('');
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    if (!code.trim()) return;
+    if (!code.trim() || submitting) return;
+
+    setError('');
+    setSubmitting(true);
+
+    const { error: rpcError } = await supabase.rpc('claim_device', {
+      p_claim_code: code.trim(),
+      p_org_id: org?.organization_id,
+    });
+
+    setSubmitting(false);
+
+    if (rpcError) {
+      setError(
+        CLAIM_ERRORS[rpcError.hint] ||
+          'No pudimos vincular el expositor. Revisá el código e intentá de nuevo.'
+      );
+      return;
+    }
+
     setSuccess(true);
+    onClaimed?.();
   }
 
   return (
@@ -578,11 +615,12 @@ function ClaimDeviceModal({ onClose }) {
                 type="text"
                 placeholder="Código de vinculación (ej. LNK-4F2A9C)"
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onChange={(e) => { setCode(e.target.value.toUpperCase()); if (error) setError(''); }}
                 autoFocus
               />
-              <button type="submit" className="claim-modal__submit" disabled={!code.trim()}>
-                Vincular dispositivo
+              {error && <p className="claim-modal__error">{error}</p>}
+              <button type="submit" className="claim-modal__submit" disabled={!code.trim() || submitting}>
+                {submitting ? 'Vinculando…' : 'Vincular dispositivo'}
               </button>
             </form>
           </>
@@ -657,6 +695,9 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
   const [viewMode, setViewMode]     = useState('grid');   // 'grid' | 'table'
   const [selected, setSelected]     = useState(null);
   const [claiming, setClaiming]     = useState(false);
+  /* Se incrementa al vincular un expositor, para volver a pedir la lista sin
+     recargar la página — el dispositivo recién vinculado tiene que aparecer. */
+  const [reloadKey, setReloadKey]   = useState(0);
 
   /* Carga real desde Supabase (v_device_performance / v_location_performance).
      Si la query falla (red, RLS, lo que sea) se cae de vuelta al mock — nunca
@@ -692,7 +733,7 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [reloadKey]);
 
   /* Derived stats */
   const totalActive = devices.filter(d => d.status === 'active').length;
@@ -992,7 +1033,12 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
       )}
 
       {/* ── Claim device modal ── */}
-      {claiming && <ClaimDeviceModal onClose={() => setClaiming(false)} />}
+      {claiming && (
+        <ClaimDeviceModal
+          onClose={() => setClaiming(false)}
+          onClaimed={() => setReloadKey(k => k + 1)}
+        />
+      )}
     </div>
   );
 }

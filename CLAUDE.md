@@ -73,7 +73,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0020 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0021 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -107,7 +107,7 @@ to `.env`, don't rename them away.
 
 - `services/api/.env` — see `services/api/.env.example`. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
   `PORT`, `FRONTEND_URL`, `DASHBOARD_URL`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `WEBHOOK_URL`,
-  `WEB3FORMS_KEY`, `REDIRECT_DOMAIN` (optional, defaults to `l.linkstar.com.ar`).
+  `WEB3FORMS_KEY`, `REDIRECT_DOMAIN` (optional, defaults to `l.linkstarapp.com`).
   `DASHBOARD_URL` is optional too (defaults to the *second* entry of `FRONTEND_URL`) and is where the
   subscription returns from Mercado Pago — it cannot be `FRONTEND_URL`, which points at the sales site.
   `FRONTEND_URL` is **comma-separated**: this one service serves both frontends, so CORS needs both
@@ -183,19 +183,23 @@ creates a `profiles` row on signup) · `0003` catalog (`locations`, `employees`,
 `select_free_plan()`, the two preapproval webhook RPCs, and a rewritten `bootstrap_organization()`) ·
 `0014` enforcement of paid access in RLS (`private.orgs_with_access()`, rewritten select/write policies on
 the business tables, `claim_device()` gated) · `0015` `org_is_activated()` — the free plan also needs a
-linked device · `0016` per-entity daily series views (`v_device_scans_daily`, `v_location_scans_daily`,
+linked device, **reverted by `0022`** · `0016` per-entity daily series views (`v_device_scans_daily`, `v_location_scans_daily`,
 `v_employee_scans_daily`) — pure projections of `scan_daily_rollups`, no new capture ·
 `0017` corrective: re-applies the two `0013` RPC fixes that never reached Postgres (see below) ·
 `0018` `human_scans` / `bot_scans` on the five aggregating `0008` views, so every screen counts the same
 thing (see "Scans are human taps" below) · `0019` corrective: `insert into employees` had failed **since
 `0003`** (see below) · `0020` team & access (`invite_member()`, `list_org_members()`, `set_member_role()`,
-`private.active_org_id()`, and the `max_members` enforcement that never existed — see "Team" below).
+`private.active_org_id()`, and the `max_members` enforcement that never existed — see "Team" below) ·
+`0021` corrective: `resolve_scan()`'s dead-end fallback pointed at `linkstar.com.ar`, a domain that was
+never registered (the only owned zone is `linkstarapp.com`), so the one URL that exists to guarantee a
+scan never dead-ends was sending people to somebody else's domain · `0022` product decision:
+`org_is_activated()` stops requiring a linked device on the free plan (see "Subscription gate").
 
-**Everything up to `0019` is applied in production** (pushed 15 Aug 2026, verified with
-`supabase migration list`). **`0020` is written but NOT applied anywhere and has never been executed** —
-it was authored with no local Supabase stack running, so it has not even been syntax-checked against
-Postgres. Everything the dashboard's "Equipo" tab does depends on it, so that screen will error until
-someone runs `npm run db:push`. Applying it needs the Supabase project, which not every developer here
+**Everything up to `0020` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
+16 Aug after running it locally with `db:reset` and `rls_isolation.sql` green; both verified with
+`supabase migration list`). **`0021` and `0022` are written but NOT applied anywhere** — until someone
+runs `npm run db:push`, the database still redirects to the unregistered domain and still locks free-plan
+accounts out of the panel until they link a device, while the repo and the frontend say otherwise. Applying it needs the Supabase project, which not every developer here
 has. Correcting an already-applied migration by editing
 its file changes nothing in the database — `db push` skips migrations already in the history table. That
 is exactly how `0017` came to exist: `0013` was fixed in place on the reasonable assumption that it had
@@ -223,13 +227,19 @@ row says. It is not a `subscription_status` value because
   Billing tables are deliberately excluded — a lapsed customer has to be able to see their plan and pay.
   `resolve_scan()` is also excluded: a physical device must keep redirecting no matter what.
 
-**Two access checks, and confusing them locks people out** (`0015`). `org_has_access()` answers "is the
-subscription current?". `org_is_activated()` answers that *and*, when the plan is `free`, "is there a
-device linked?" — because the free plan is what ships bundled with the hardware, so an account with no
-device is not a customer. The RLS policies and the `RequireActivePlan` guard use `org_is_activated()`;
-**`claim_device()` deliberately still uses `org_has_access()`**, because gating it on activation would
-mean you need a linked device in order to link your first device. Paid plans never hit this check: someone
-who already authorized the monthly debit gets in while their device is still in the mail.
+**The free plan does NOT require a linked device** (`0022`, reverting `0015`). `0015` had made
+`org_is_activated()` mean "subscription current *and*, on `free`, at least one device linked", on the
+argument that the free plan ships bundled with the hardware. In practice the expositor arrives days after
+signup, so the rule locked out precisely the person who had already paid and was waiting for the package —
+and telling a buyer apart from a tourist would need a link between the account and the order, which
+doesn't exist. `0022` reduces `org_is_activated()` to `org_has_access()`.
+
+The function is **kept, not dropped**: `0014`'s policies and `private.orgs_with_access()` call it by name,
+so it stays as the single place to re-add an activation condition. `my_org_context()` still returns
+`has_devices` (useful: "is there anything to measure yet?") and `is_activated`, which now equals
+`has_access` — the column stays in the contract so the frontend doesn't break. `RequireActivePlan` no
+longer has the third redirect to `/alta/expositor`; linking a device is now optional at onboarding and
+available later from Devices.
 
 Mercado Pago subscriptions use **preapproval without an associated plan**, because the plan-linked
 checkout does not accept `external_reference`, and without it a webhook arrives with no way to tell which
@@ -322,7 +332,8 @@ The destination is not a stored column — it is built at scan time from a `coal
    - `instagram` → `locations.instagram_url`, else built from `locations.instagram_handle`.
    - `custom` → relies entirely on step 1.
 3. `organizations.fallback_url`.
-4. Hardcoded `'https://linkstar.com.ar'`, so a scan never dead-ends.
+4. Hardcoded `'https://linkstarapp.com'`, so a scan never dead-ends (`0021`; it used to be
+   `linkstar.com.ar`, a domain that was never registered — see below).
 
 `kind` is copied verbatim into `scan_events.kind` / `scan_daily_rollups.kind` (invariant 1) — never
 re-derived.
@@ -369,7 +380,7 @@ Routes, one router per file, all mounted at the app root:
   the repo. Rate limited to 30/min per IP (a real tap is a few per minute per person; the limit exists for
   `public_id` enumeration and floods). Calls `resolve_scan()` with `p_public_id`/`p_ip`/`p_user_agent`/
   `p_referrer`/`p_medium` and 302s to `data.destination`. **Always redirects somewhere**, falling back to
-  `https://linkstar.com.ar` on any error — a dead redirect at a physical device is the failure mode to
+  `https://linkstarapp.com` on any error — a dead redirect at a physical device is the failure mode to
   avoid. Does not pass `p_country`/`p_region`/`p_city`/`p_latency_ms`; those are geo/latency enrichment
   nothing computes yet, so those `scan_events` columns stay null in practice.
 - `routes/orders.js` — `POST /api/create-preference` (pending order + MP preference; `auto_return` only
@@ -404,6 +415,11 @@ Routes, one router per file, all mounted at the app root:
   The body carries **only a plan code**: price and trial length are read from `plans`, never from the
   request. Neither route writes the subscription state — that is the webhook's job, so a failure in MP
   can't leave a customer cut off while they are actually paying.
+- `routes/contact.js` — `POST /api/contact`, 5 per 15 min per IP. Exists for one reason: the ventas
+  contact form used to POST to Web3Forms straight from the browser with the access key inlined in the
+  bundle, so anyone could read it and flood the inbox. The key now lives in `WEB3FORMS_KEY` server-side.
+  Same shape as the checkout: the browser tries the API first and only falls back to the direct call
+  while `services/api` has no deploy target.
 - `routes/auth.js` — `POST /api/auth/login-event`, behind `requireAuth`. The only writer of
   `profiles.last_login_at`.
 - `routes/health.js` — `GET /api/health`.
@@ -463,6 +479,12 @@ split below before wiring anything — the shell is finished, the data mostly is
   saying what it used to fake and which roadmap phase feeds it; the original mock markup and its CSS are
   still in git (and the CSS files are deliberately left in place — they are the design target for when the
   data arrives).
+  Two mocks outlived that sweep because they were embedded in `Settings.jsx` and in `AppShell` rather than
+  being screens of their own, and were removed on 18 Aug 2026: the "Cuentas de Google conectadas" card
+  (a fabricated connected account carrying a real person's name and an address on the unregistered
+  domain, plus a "0 de 1 locales activos" counter backed by nothing) and the topbar's invented support
+  phone number. Same rule as the rest — no button, since connecting the Business Profile lands in phase 4.
+  Note the `google` variant's connect button is itself inert today: no caller passes `onConnect`.
 - **The mock JSX is a deliverable, not discarded history — and it does not come back on its own.** The tag
   `maquetas-pre-fase-2` points at the last commit where those ten screens were still drawing their grids,
   tables and charts, and every converted file's header repeats the `git show` line that recovers its own
@@ -526,6 +548,10 @@ split below before wiring anything — the shell is finished, the data mostly is
   this migration existed to remove. `unique_scans` is *not* a substitute: it counts distinct people, which
   is what `v_location_performance` was showing under an "Escaneos" label until `0018` added
   `human_scans_30d` next to it.
+- **Linking an expositor from inside the panel is real since 18 Aug 2026.** `ClaimDeviceModal` in
+  `pages/Devices/Devices.jsx` used to set its own success screen without calling anything; it now calls
+  `claim_device()` and reloads the list. It matters more than it looks: with `0022` the onboarding step is
+  optional, so this modal is the path for everyone whose expositor arrives after signup.
 - `pages/Devices/`, `pages/Employees/`, `pages/Locations/` read real data with the same pattern: fall back
   to `data/*.js` mock **only if the query throws**; an empty result (new org) renders as-is. Fields with no
   backing in the views render `'—'` instead of being fabricated. Devices and Locations distinguish **two**
@@ -573,6 +599,10 @@ split below before wiring anything — the shell is finished, the data mostly is
   they are styled buttons, not navigation, so they were left alone.
 - Cart state is global via `CartContext`; the `Cart` drawer is mounted outside `<Routes>` (it is a drawer,
   not a page) and navigates to checkout by itself.
+- `src/lib/config.js` — `API_URL` and `WEB3FORMS_KEY`. The key is in **one** place on purpose: it is
+  public (it ships in the bundle), both forms now send through `services/api` instead, and the constant
+  plus the two fallback paths that use it get deleted the day the API is deployed. Until then the only
+  extra mitigations are settings in the Web3Forms panel (allowed domains, required captcha), not code.
 - The Worker already serves the site with `not_found_handling: "single-page-application"`, so new paths
   work as deep links without touching `wrangler.jsonc`.
 - `pages/LinkstarApp/LinkstarApp.jsx` is a **marketing page with a hardcoded mock dashboard**, not the real
@@ -581,17 +611,36 @@ split below before wiring anything — the shell is finished, the data mostly is
 - `pages/Shop/Shop.jsx` holds the device prices and the four tiers (1 unidad / 2 unidades / combo Google +
   Instagram / pedido grande) as module constants, and pushes items into `CartContext` with the price
   already resolved. See "Pricing".
-- `pages/Checkout/Checkout.jsx` generates its own order number client-side and only sends a notification
-  email via Web3Forms straight from the browser; it does **not** call `services/api`, so nothing is
-  persisted in `orders` and nothing is charged. Real checkout/payment is being rebuilt separately with a
-  collaborator. The two holes that made the old version unsafe are already fixed on the API side
-  (server-side price validation via `lib/catalog.js`, and `?email=` required on the order-lookup route) —
-  reconnecting means pointing this page at those routes, not re-doing that work, and not routing around
-  it. Don't touch checkout/payment without confirming which direction is wanted.
+- `pages/Checkout/Checkout.jsx` takes orders **without online payment, on purpose**: the buyer confirms,
+  we get the notification and we charge them by hand (transfer/link), coordinating payment and shipping
+  off-platform. That is the intended sales model for the first months, not a gap — the page says so on
+  screen ("Este pedido no incluye pago online"), so don't "fix" it by wiring Mercado Pago back in.
+  Since 18 Aug 2026 it **does** persist: it POSTs to `/api/orders/manual`, which writes `orders` +
+  `order_items` and sends the notification server-side. Before that the order existed only as an email,
+  so a lost email was a lost order.
+  It keeps a **fallback path** for exactly one reason: `services/api` has no deploy target yet
+  (`apps/ventas/.env.production` still carries the `BACKEND_URL_PENDIENTE` placeholder), so if the API
+  doesn't answer the page mails the order straight from the browser as it used to, with the subject
+  flagged "SIN REGISTRAR". A `400` is not part of that path — it means the cart didn't match the server
+  catalog, and it's shown to the user instead of being mailed around. **When the API is deployed, delete
+  the fallback and with it `WEB3FORMS_KEY` from the bundle.**
+  The Mercado Pago routes (`create-preference`, `process-payment`) stay dormant, not dead — their
+  hardening (server-side price validation via `lib/catalog.js`, `?email=` on the order lookup) is what a
+  future online checkout plugs into. Don't touch checkout/payment without confirming which direction is
+  wanted.
 
 ## Pricing
 
 Two separate things are priced, and they don't live in the same place. All amounts are Argentine pesos.
+
+**Never trim what a plan promises just because it isn't built yet — this question is settled, stop
+re-opening it.** The `business` highlights seeded in `0013` cover NPS, sentiment, keywords, automations,
+monthly reports and Google Business Profile metrics: whole phases that don't exist. That is deliberate.
+Nothing is on sale, nobody has been charged, and there is no customer being misled — the product is being
+built step by step and the plan describes where it's going. So when a screen or a bullet names something
+that isn't built, the answer is to build it, or to have the screen say plainly that it's pending (see
+`components/SectionPlaceholder`) — **not** to delete the line from `plans`, from the landing or from the
+plan picker. The only moment to revisit this is right before charging the first real customer.
 
 **The subscription** (dashboard, monthly): the source of truth is the **`plans` table**, not the code.
 `price_ars`, `trial_days`, `checkout_mode` and `features.highlights` are seeded in `0013` and read at

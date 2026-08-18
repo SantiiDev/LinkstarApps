@@ -64,7 +64,7 @@ function RequireAuth({ children }) {
    frena a quien canceló o se le venció el período de gracia: en ese caso la
    salida es volver a elegir plan, no una pantalla de error. */
 function RequireActivePlan({ children }) {
-  const { loading, hasOrg, hasChosenPlan, hasAccess, isActivated } = useOrg();
+  const { loading, hasOrg, hasChosenPlan, hasAccess } = useOrg();
   const location = useLocation();
 
   if (loading) {
@@ -76,12 +76,11 @@ function RequireActivePlan({ children }) {
   if (!hasChosenPlan || !hasAccess) {
     return <Navigate to={ONBOARDING_ROUTES.plan} replace state={{ from: location }} />;
   }
-  /* Suscripción vigente pero todavía sin activar: es el plan gratis sin
-     expositor vinculado. El orden importa — primero se resuelve el plan y
-     recién después el dispositivo, porque un plan pago ni pasa por acá. */
-  if (!isActivated) {
-    return <Navigate to={ONBOARDING_ROUTES.device} replace state={{ from: location }} />;
-  }
+  /* Acá había un tercer desvío: el plan gratis sin expositor vinculado iba a
+     /alta/expositor y no entraba al panel (0015). Lo sacó la 0022 — el
+     expositor llega días después del alta, así que la regla dejaba afuera
+     justo al que ya compró. Vincularlo ahora es opcional y se puede hacer
+     cuando llegue, desde Dispositivos. */
   return children;
 }
 

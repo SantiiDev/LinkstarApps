@@ -73,9 +73,10 @@ export default function PlanPicker() {
     }
 
     await refresh();
-    // El gratis todavía no abre el panel: falta vincular el expositor
-    // (org_is_activated, 0015). El guard igual redirigiría, pero mandarlo
-    // derecho evita el rebote visible.
+    // El gratis ya abre el panel sin expositor vinculado (0022). Igual, al que
+    // todavía no tiene ninguno le ofrecemos vincularlo ahora: es el paso
+    // natural si el expositor ya está sobre la mesa, y esa pantalla ahora trae
+    // su propia salida al panel para el que lo está esperando.
     navigate(hasDevices ? SECTION_PATHS[DEFAULT_SECTION] : ONBOARDING_ROUTES.device, {
       replace: true,
     });

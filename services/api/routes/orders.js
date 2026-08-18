@@ -10,6 +10,7 @@ import {
   validateBody,
   createPreferenceSchema,
   orderTransferSchema,
+  manualOrderSchema,
   processPaymentSchema,
 } from '../lib/validation.js';
 import { assertCatalogPrices, assertMatchesCatalogTotal } from '../lib/catalog.js';
@@ -117,6 +118,60 @@ router.post('/api/create-preference', paymentLimiter, validateBody(createPrefere
     if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error('Error creating preference:', err);
     res.status(500).json({ error: 'Error al crear la preferencia de pago' });
+  }
+});
+
+// ──────────────────────────────────────────────────────────
+// POST /api/orders/manual
+// Pedido sin pago online: es el modo de venta de los primeros meses. El
+// comprador confirma en apps/ventas, nosotros recibimos el aviso y cobramos a
+// mano. Persiste la orden en `orders` + `order_items` y recién después manda
+// el mail — antes de esto un pedido existía SÓLO como notificación, así que un
+// mail perdido era un pedido perdido, sin número, sin lista y sin forma de
+// consultarlo.
+//
+// El precio se valida igual que en las rutas de pago: `assertCatalogPrices` no
+// está para proteger un cobro que acá no ocurre, sino para que la orden
+// guardada tenga el precio de catálogo y no uno que mandó el navegador.
+// ──────────────────────────────────────────────────────────
+router.post('/api/orders/manual', paymentLimiter, validateBody(manualOrderSchema), async (req, res) => {
+  try {
+    const { items, customer } = req.body;
+    assertCatalogPrices(items);
+
+    const orderNumber = generateOrderNumber();
+    const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+
+    await createOrder({
+      orderNumber,
+      status: 'pending',
+      paymentMethod: 'manual',
+      buyer: customer,
+      items,
+      total,
+    });
+
+    await sendEmailNotification({
+      order_number: orderNumber,
+      payment_method: 'manual',
+      customer_name: customer.name,
+      customer_email: customer.email,
+      customer_phone: customer.phone,
+      customer_address: customer.address,
+      customer_city: customer.city,
+      customer_zip: customer.zip,
+      items,
+      total,
+    });
+
+    res.json({
+      order_number: orderNumber,
+      total,
+    });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    console.error('Error creating manual order:', err);
+    res.status(500).json({ error: 'Error al registrar el pedido' });
   }
 });
 

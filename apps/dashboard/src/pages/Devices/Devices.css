@@ -1256,6 +1256,16 @@
   cursor: not-allowed;
 }
 
+/* El error que devuelve claim_device() traducido a texto. Va entre el input y
+   el botón para que se lea sin tener que mover la vista. */
+.claim-modal__error {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--color-red, #d64545);
+  text-align: left;
+}
+
 /* ── Empty state ── */
 .devices-empty {
   grid-column: 1 / -1;

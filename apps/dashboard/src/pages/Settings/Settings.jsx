@@ -95,31 +95,23 @@ function LocalTab() {
           title="Cuentas de Google conectadas"
           badge={<Icon name="info" width={14} height={14} className="settings-info-icon" />}
           subtitle={
-            <>
-              <p className="settings-card__subtitle settings-card__subtitle--tight">0 de 1 locales activos</p>
-              <p className="settings-card__hint">1 local activable. <button type="button" className="settings-inline-link">¿Necesitás más?</button></p>
-            </>
-          }
-          action={
-            <button type="button" className="settings-btn settings-btn--outline">
-              <Icon name="google" width={16} height={16} /> Conectar más cuentas
-            </button>
+            <p className="settings-card__subtitle settings-card__subtitle--tight">
+              Todavía no hay ninguna cuenta conectada.
+            </p>
           }
         />
 
-        <div className="settings-account-row">
-          <div className="settings-account-row__icon"><Icon name="google" width={18} height={18} /></div>
-          <div className="settings-account-row__body">
-            <div className="settings-account-row__name">Santino Gallo</div>
-            <div className="settings-account-row__email">santino@linkstar.com.ar</div>
-          </div>
-          <button type="button" className="settings-danger-link">Desconectar</button>
-        </div>
-
-        <div className="settings-danger-banner">
-          <Icon name="alertCircle" width={18} height={18} />
-          <p>Esta cuenta de Google no administra ningún local de Google Business. Desconectala y conectá una cuenta que sí administre locales.</p>
-        </div>
+        {/* Esta tarjeta mostraba una cuenta conectada inventada —con el nombre y
+            el correo de una persona real, en un dominio que ni siquiera es
+            nuestro— más un contador de locales activos que no salía de ningún
+            lado. Es la maqueta que la fase 2 no alcanzó a barrer, porque estaba
+            embebida acá y no en una pantalla propia. Sin botón: conectar la
+            ficha no existe hasta la fase 4, y un botón que no resuelve nada es
+            peor que ninguno. */}
+        <p className="settings-card__hint">
+          Cuando conectes la cuenta de Google que administra tu ficha, el panel va a poder traer
+          las reseñas y las métricas de cada local. Todavía estamos construyendo esa conexión.
+        </p>
       </div>
 
       <div className="settings-card">

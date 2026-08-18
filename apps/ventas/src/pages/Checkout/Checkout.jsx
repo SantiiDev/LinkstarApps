@@ -1,15 +1,62 @@
 import { useState } from 'react';
 import { useCart } from '../../context/CartContext';
+import { API_URL, WEB3FORMS_KEY } from '../../lib/config';
 import './Checkout.css';
 
-const WEB3FORMS_KEY = '32d006c0-18f0-411b-989f-19a34a6963c2';
 
-// Checkout en pausa: el registro del pedido en la base de datos (backend +
-// Supabase) está desactivado por ahora. El número de orden se genera acá
-// mismo y el pedido sólo queda como notificación por mail (Web3Forms) —
-// no hay persistencia ni forma de consultarlo después vía /api/orders.
+/* Pedido sin pago online: el comprador confirma acá y el cobro se coordina a
+ * mano. Es el modo de venta elegido para los primeros meses, no una etapa a
+ * medio terminar.
+ *
+ * El pedido se registra en la base a través de POST /api/orders/manual, que
+ * además manda el aviso por mail desde el servidor. Antes el pedido existía
+ * SÓLO como mail: un mail perdido era un pedido perdido.
+ *
+ * El camino de respaldo de abajo existe porque services/api todavía no está
+ * desplegado (VITE_API_URL en .env.production sigue siendo un placeholder). Si
+ * el API no contesta, se manda el mail desde el navegador como antes y se
+ * avisa en el asunto que ese pedido NO quedó registrado. Cuando el API esté
+ * arriba, este respaldo —y con él la key de Web3Forms en el bundle— se puede
+ * borrar. */
 function generateOrderNumber() {
   return `LS-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+}
+
+async function createManualOrder({ customer, items }) {
+  const response = await fetch(`${API_URL}/api/orders/manual`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      customer: {
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone || undefined,
+        address: customer.address,
+        city: customer.city,
+        zip: customer.zip || undefined,
+      },
+      items: items.map(i => ({
+        id: i.id ?? i.key,
+        key: i.key,
+        name: i.name,
+        color: i.color,
+        qty: i.qty,
+        price: i.price,
+        isBundle: i.isBundle,
+        items: i.items,
+      })),
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const error = new Error(data.error || 'No pudimos registrar el pedido');
+    error.status = response.status;
+    throw error;
+  }
+
+  return data.order_number;
 }
 
 // Web3Forms (plan free) rechaza llamadas server-to-server, así que este mail
@@ -18,7 +65,7 @@ function generateOrderNumber() {
 // para el plan Pro (con esta cuenta, un intento de adjuntar hace que
 // rechace todo el envío) — en su lugar, cada producto lleva el link
 // absoluto a su imagen para que se pueda ver con un click.
-async function sendOrderEmail({ orderNumber, customer, items, total }) {
+async function sendOrderEmail({ orderNumber, customer, items, total, persisted = true }) {
   const origin = window.location.origin;
   const itemsText = items
     .map(i => i.isBundle
@@ -32,7 +79,9 @@ async function sendOrderEmail({ orderNumber, customer, items, total }) {
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
       access_key: WEB3FORMS_KEY,
-      subject: `🛒 Nuevo pedido ${orderNumber}`,
+      subject: persisted
+        ? `🛒 Nuevo pedido ${orderNumber}`
+        : `⚠️ Pedido SIN REGISTRAR ${orderNumber} — anotalo a mano`,
       from_name: 'Linkstar Tienda',
       name: customer.name,
       email: customer.email,
@@ -55,7 +104,9 @@ ${itemsText}
 
 TOTAL: $${total.toLocaleString('es-AR')}
 
-⚠️ Pedido sin pago online: coordinar el pago y el envío con el cliente.
+⚠️ Pedido sin pago online: coordinar el pago y el envío con el cliente.${persisted ? '' : `
+⚠️ ESTE PEDIDO NO QUEDÓ GUARDADO EN LA BASE — el servidor no respondió.
+   Es el único registro que existe: guardalo o cargalo a mano.`}
       `.trim(),
     }),
   });
@@ -98,28 +149,48 @@ export default function Checkout({ onBack }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // ── Realizar pedido (sin pago online, sólo notificación por mail) ──
+  // ── Realizar pedido (sin pago online: se registra y se avisa por mail) ──
   const handlePlaceOrder = async () => {
     setProcessing(true);
     setOrderError('');
 
-    const newOrderNumber = generateOrderNumber();
-
-    try {
-      await sendOrderEmail({
-        orderNumber: newOrderNumber,
-        customer: form,
-        items,
-        total,
-      });
-
-      setOrderNumber(newOrderNumber);
+    const finish = (number) => {
+      setOrderNumber(number);
       setStep('success');
       clearCart();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    try {
+      finish(await createManualOrder({ customer: form, items }));
     } catch (err) {
-      console.error('Order email error:', err);
-      setOrderError(err.message || 'Ocurrió un error al enviar el pedido. Intentá de nuevo.');
+      // Un 400 es el pedido en sí: precio que no coincide con el catálogo del
+      // servidor, o un dato que falta. Reintentar por mail escondería el
+      // problema, así que se muestra y no se manda nada.
+      if (err.status === 400) {
+        console.error('Pedido rechazado por el servidor:', err);
+        setOrderError('No pudimos validar tu pedido. Actualizá la página y volvé a armar el carrito.');
+        setProcessing(false);
+        return;
+      }
+
+      // Cualquier otra cosa es el API caído o todavía sin desplegar: el pedido
+      // no se pierde, va por mail avisando que no quedó registrado.
+      console.error('No se pudo registrar el pedido, mando el aviso por mail:', err);
+      const fallbackNumber = generateOrderNumber();
+      try {
+        await sendOrderEmail({
+          orderNumber: fallbackNumber,
+          customer: form,
+          items,
+          total,
+          persisted: false,
+        });
+        finish(fallbackNumber);
+      } catch (mailErr) {
+        console.error('Order email error:', mailErr);
+        setOrderError('Ocurrió un error al enviar el pedido. Intentá de nuevo en unos minutos.');
+      }
     } finally {
       setProcessing(false);
     }

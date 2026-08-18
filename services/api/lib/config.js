@@ -46,4 +46,6 @@ export const WEBHOOK_URL = process.env.WEBHOOK_URL || null;
 
 // Dominio corto grabado en el NFC / impreso en el QR: https://<REDIRECT_DOMAIN>/d/<public_id>
 // (ver comentario de devices.public_id en packages/database/supabase/migrations/0003_catalog.sql).
-export const REDIRECT_DOMAIN = process.env.REDIRECT_DOMAIN || 'l.linkstar.com.ar';
+// Subdominio de linkstarapp.com, que es la única zona propia (l.linkstar.com.ar
+// nunca se registró: apuntaba a un dominio de nadie).
+export const REDIRECT_DOMAIN = process.env.REDIRECT_DOMAIN || 'l.linkstarapp.com';

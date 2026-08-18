@@ -10,6 +10,10 @@ export const cartItemSchema = z
     key: z.union([z.string(), z.number()]).optional(),
     name: z.string().min(1).max(200),
     color: z.string().max(40).optional(),
+    // Sólo para el mail de aviso: qué modelo hay que despachar. Zod descarta
+    // las claves que no estén declaradas, así que sin esto el color de cada
+    // parte de un combo se perdía antes de llegar al servidor.
+    label: z.string().max(120).optional(),
     qty: z.number().int().positive().max(100),
     price: z.number().positive().max(10_000_000),
     isBundle: z.boolean().optional(),
@@ -37,6 +41,18 @@ export const createPreferenceSchema = z.object({
 export const orderTransferSchema = z.object({
   items: z.array(cartItemSchema).min(1),
   customer: customerSchema,
+});
+
+// Pedido sin pago online: el comprador confirma en el sitio y el cobro se
+// coordina a mano. La dirección y la ciudad son obligatorias acá y opcionales
+// en customerSchema porque esto termina en un envío físico — sin dirección, el
+// pedido no se puede despachar y el mail de aviso llega incompleto.
+export const manualOrderSchema = z.object({
+  items: z.array(cartItemSchema).min(1),
+  customer: customerSchema.extend({
+    address: z.string().trim().min(1).max(300),
+    city: z.string().trim().min(1).max(120),
+  }),
 });
 
 export const processPaymentSchema = z.object({

@@ -1,11 +1,60 @@
 import { useState, useEffect, useRef } from 'react';
+import { API_URL, WEB3FORMS_KEY } from '../../lib/config';
 import './Contact.css';
+
+/* La consulta se manda por services/api (POST /api/contact): ahí la access_key
+ * de Web3Forms vive en el .env y la ruta tiene rate limit. Desde el navegador
+ * la key es pública y cualquiera puede usarla para llenarnos la casilla.
+ *
+ * El respaldo directo a Web3Forms existe sólo porque el API todavía no está
+ * desplegado. Cuando lo esté, se borra junto con WEB3FORMS_KEY. */
+async function sendContactMessage(form) {
+  const response = await fetch(`${API_URL}/api/contact`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: form.name,
+      email: form.email,
+      phone: form.phone || undefined,
+      message: form.message,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || 'No pudimos enviar tu consulta');
+    error.status = response.status;
+    throw error;
+  }
+}
+
+async function sendContactMessageFallback(form) {
+  const response = await fetch('https://api.web3forms.com/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      access_key: WEB3FORMS_KEY,
+      subject: `✉️ Consulta de ${form.name}`,
+      from_name: 'Linkstar Web',
+      name: form.name,
+      email: form.email,
+      phone: form.phone,
+      message: form.message,
+    }),
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!result.success) throw new Error(result.message || 'Web3Forms rechazó el envío');
+}
 
 export default function Contact() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
+  /* Antes un envío fallido sólo se veía en la consola: el visitante creía que
+     había mandado la consulta y nosotros nunca la recibíamos. */
+  const [sendError, setSendError] = useState('');
   const sectionRef = useRef(null);
 
   useEffect(() => {
@@ -42,31 +91,29 @@ export default function Contact() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     
     setSending(true);
-    
+    setSendError('');
+
     try {
-      const response = await fetch("https://api.web3forms.com/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          access_key: "32d006c0-18f0-411b-989f-19a34a6963c2",
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          message: form.message,
-        }),
-      });
-      
-      const result = await response.json();
-      if (result.success) {
-        setSubmitted(true);
-      } else {
-        console.error("Error al enviar el formulario:", result);
-      }
+      await sendContactMessage(form);
+      setSubmitted(true);
     } catch (error) {
-      console.error("Error de red:", error);
+      // 400 (datos inválidos) y 429 (demasiadas consultas) son respuestas del
+      // servidor sobre este envío: reintentar por otro canal las saltearía.
+      if (error.status === 400 || error.status === 429) {
+        console.error('Consulta rechazada por el servidor:', error);
+        setSendError(error.message);
+        setSending(false);
+        return;
+      }
+
+      console.error('No se pudo enviar por el API, uso el respaldo:', error);
+      try {
+        await sendContactMessageFallback(form);
+        setSubmitted(true);
+      } catch (fallbackError) {
+        console.error('Error al enviar el formulario:', fallbackError);
+        setSendError('No pudimos enviar tu consulta. Probá de nuevo en unos minutos.');
+      }
     } finally {
       setSending(false);
     }
@@ -179,6 +226,8 @@ export default function Contact() {
                   />
                   {errors.message && <span className="contact__error">{errors.message}</span>}
                 </div>
+
+                {sendError && <span className="contact__error">{sendError}</span>}
 
                 <button
                   type="submit"

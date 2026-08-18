@@ -5,11 +5,13 @@ import { useOrg } from '../../context/OrgContext';
 import { ONBOARDING_ROUTES, SECTION_PATHS, DEFAULT_SECTION } from '../../lib/routes';
 import OnboardingLayout from './OnboardingLayout';
 
-/* Último paso del plan gratis: vincular el expositor.
+/* Vincular un expositor.
  *
- * El plan gratis viene incluido con el dispositivo, así que sin dispositivo no
- * hay nada que medir. La regla se aplica en la base (org_is_activated, 0015),
- * no acá: esta pantalla es la forma de cumplirla, no la que la impone.
+ * Era el último paso obligatorio del plan gratis. Desde la 0022 no bloquea
+ * nada: el expositor llega días después del alta, así que exigirlo dejaba
+ * afuera del panel justo al que ya había comprado. Ahora se ofrece al elegir
+ * el plan gratis y se puede volver acá cuando el expositor llegue, desde
+ * Dispositivos.
  *
  * claim_device() es SECURITY DEFINER y valida rol, código, doble vinculación y
  * límite de plan del lado del servidor. Acá sólo se traducen sus errores. */
@@ -55,7 +57,9 @@ export default function ClaimDevice() {
     }
 
     await refresh();
-    navigate(SECTION_PATHS[DEFAULT_SECTION], { replace: true });
+    // A Dispositivos y no al inicio: acabás de vincular uno, verlo en la lista
+    // es la confirmación de que salió bien.
+    navigate(SECTION_PATHS.devices, { replace: true });
   }
 
   return (
@@ -63,7 +67,7 @@ export default function ClaimDevice() {
       steps={STEPS}
       step={3}
       title="Vinculá tu expositor"
-      subtitle="El plan gratis viene incluido con tu expositor. Escribí el código impreso en la base para activarlo y entrar al panel."
+      subtitle="Escribí el código impreso en la base del expositor para empezar a medir sus escaneos. Si todavía no te llegó, podés entrar al panel y hacerlo después."
     >
       {error && <div className="onb-error">{error}</div>}
 
@@ -94,21 +98,29 @@ export default function ClaimDevice() {
           </label>
 
           <button type="submit" className="onb-submit" disabled={submitting}>
-            {submitting ? 'Vinculando…' : 'Activar mi panel'}
+            {submitting ? 'Vinculando…' : 'Vincular expositor'}
           </button>
         </form>
       </div>
 
-      {/* Sin esta salida, alguien que eligió gratis y todavía no recibió el
-          expositor queda encerrado: el panel no lo deja entrar y no hay ningún
-          otro control en pantalla. */}
+      {/* La salida principal de la pantalla. Antes el panel estaba cerrado
+          hasta vincular, así que lo único que se podía ofrecer era pasarse a un
+          plan pago; ahora entrar es una opción de verdad. */}
+      <button
+        type="button"
+        className="onb-back"
+        onClick={() => navigate(SECTION_PATHS[DEFAULT_SECTION], { replace: true })}
+      >
+        Todavía no me llegó — entrar al panel
+      </button>
+
       {canManageBilling && (
         <button
           type="button"
           className="onb-back"
           onClick={() => navigate(ONBOARDING_ROUTES.plan)}
         >
-          Todavía no tengo mi expositor — ver los planes pagos
+          Ver los planes pagos
         </button>
       )}
     </OnboardingLayout>
