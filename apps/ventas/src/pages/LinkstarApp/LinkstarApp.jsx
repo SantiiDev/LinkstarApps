@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import FAQ from '../../components/sections/FAQ/FAQ';
+import { DASHBOARD_URL } from '../../lib/config';
 import './LinkstarApp.css';
 
 const linkstarFaqData = [
@@ -247,13 +248,13 @@ export default function LinkstarApp({ onShop, onContact }) {
               <button type="button" className="lapp__btn lapp__btn--primary" onClick={(e) => { e.preventDefault(); onShop(); }}>
                 Comprar Dispositivos
               </button>
-              <button type="button" className="lapp__btn lapp__btn--secondary" onClick={(e) => e.preventDefault()}>
+              <a href={DASHBOARD_URL} target="_blank" rel="noopener noreferrer" className="lapp__btn lapp__btn--secondary">
                 Acceder a LinkstarApp
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="5" y1="12" x2="19" y2="12" />
                   <polyline points="12 5 19 12 12 19" />
                 </svg>
-              </button>
+              </a>
             </div>
 
             <div className="lapp__stats">

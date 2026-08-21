@@ -3,6 +3,13 @@
 // pantallas que lo usan (Contacto y Checkout) tienen camino de respaldo.
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+// Landing de apps/dashboard (no la del panel logueado). apps/dashboard
+// todavía no tiene destino de despliegue, así que en producción esto queda en
+// un placeholder hasta que exista una URL real — igual que API_URL de acá
+// arriba. En desarrollo apunta al puerto fijo del dashboard (npm run
+// dev:dashboard, strictPort).
+export const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_URL || 'http://localhost:5173';
+
 // ⚠️ Único lugar donde vive la access_key de Web3Forms en el front.
 //
 // Está a la vista de cualquiera que abra el bundle: eso es lo que permite que
