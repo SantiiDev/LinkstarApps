@@ -1212,3 +1212,25 @@
   .emp-stats   { grid-template-columns: 1fr 1fr; }
   .emp-modal__stats { grid-template-columns: 1fr 1fr 1fr; }
 }
+
+/* ── Aviso de error de acción (alta, edición, baja) ── */
+.emp-action-error {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-left: 2px solid var(--color-danger);
+  border-radius: 0 0.6rem 0.6rem 0;
+  background: rgba(239, 68, 68, 0.08);
+  font-size: 0.83rem;
+  line-height: 1.55;
+  color: var(--color-text-primary);
+}
+
+.emp-modal__action-btn--danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.emp-modal__action-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.16);
+}

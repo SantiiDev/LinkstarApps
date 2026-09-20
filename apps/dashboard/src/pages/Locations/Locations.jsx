@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ALL_LOCATIONS } from '../../data/locations';
+import { useOrg } from '../../context/OrgContext';
 import {
   fetchLocationPerformance,
   fetchDevicePerformance,
@@ -9,6 +10,13 @@ import {
   colorForIndex,
   lastNDayLabels,
 } from '../../lib/dashboardApi';
+import {
+  fetchLocationRows,
+  deleteLocation,
+  googleDestinationOf,
+  catalogErrorMessage,
+} from '../../lib/catalogApi';
+import LocationForm from './LocationForm';
 import './Locations.css';
 
 // Largo de las sparklines de esta pantalla.
@@ -25,10 +33,13 @@ function stat(value, suffix = '') {
 }
 
 // v_location_performance (0008_dashboard_views.sql) no expone dirección,
-// encargado, teléfono, zonas ni meta mensual — esos campos no existen a ese
-// grano en el schema. Se cruza con v_device_performance/v_employee_leaderboard
-// para armar listas reales de dispositivos/empleados y la última actividad.
-function mapLocationRow(row, { devicesByLocation, employeesByLocation, scansSeries, index }) {
+// teléfono ni los campos de Google: es una vista de MÉTRICAS. Esos datos salen
+// de la fila de `locations` (catalogApi.fetchLocationRows), que se cruza acá por
+// id. Las dos lecturas conviven a propósito — la vista sigue siendo la única
+// fuente de los números (invariante 2), y la fila es lo que edita el formulario.
+// Se cruza además con v_device_performance/v_employee_leaderboard para armar
+// listas reales de dispositivos/empleados y la última actividad.
+function mapLocationRow(row, { devicesByLocation, employeesByLocation, scansSeries, index, detail }) {
   const myDevices = devicesByLocation.get(row.location_id) || [];
   const myEmployees = employeesByLocation.get(row.location_id) || [];
   const lastScanAt = myDevices.reduce((latest, d) => {
@@ -39,15 +50,22 @@ function mapLocationRow(row, { devicesByLocation, employeesByLocation, scansSeri
   return {
     id: row.location_id,
     name: row.name,
-    address: '—',
-    city: row.city || '—',
+    address: detail?.address || '—',
+    city: detail?.city || row.city || '—',
     // La vista sólo excluye locations con deleted_at (soft-delete) — no hay
     // un flag real de "operativa/cerrada" más allá de eso.
     status: 'active',
+    // No hay encargado a nivel sucursal en el esquema: `memberships` +
+    // `membership_locations` acotan a un usuario a una sucursal, pero eso es un
+    // permiso, no un cargo. Queda en "—" hasta que exista el campo.
     manager: '—',
-    phone: '—',
+    phone: detail?.phone || '—',
     email: '—',
     openSince: '—',
+    // La fila cruda, para el formulario de edición y para saber si la sucursal
+    // tiene destino de escaneo cargado.
+    detail: detail ?? null,
+    hasGoogleDestination: Boolean(googleDestinationOf(detail)),
     lastActivity: formatRelativeTime(lastScanAt),
     totalDevices: myDevices.length,
     activeDevices: myDevices.filter(d => d.status === 'active').length,
@@ -77,7 +95,7 @@ function mapLocationRow(row, { devicesByLocation, employeesByLocation, scansSeri
 }
 
 /* ─── Location Detail Modal ────────────────────────────────── */
-function LocationModal({ location, onClose }) {
+function LocationModal({ location, onClose, onEdit, onDelete, canEdit }) {
   if (!location) return null;
   const maxScans = Math.max(...location.weeklyScans, 1);
   const maxReviews = Math.max(...location.weeklyReviews, 1);
@@ -262,15 +280,33 @@ function LocationModal({ location, onClose }) {
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="loc-modal__footer">
-          <button className="loc-modal__action-btn loc-modal__action-btn--primary">
-            Ver historial completo
-          </button>
-          <button className="loc-modal__action-btn loc-modal__action-btn--secondary">
-            Editar ubicación
-          </button>
-        </div>
+        {/* Footer.
+            "Ver historial completo" estaba acá y no abría nada — no existe una
+            pantalla de historial por sucursal. Se sacó junto con el resto de los
+            botones inertes; si más adelante hay a dónde ir, vuelve. */}
+        {canEdit && (
+          <div className="loc-modal__footer">
+            <button
+              className="loc-modal__action-btn loc-modal__action-btn--danger"
+              onClick={() => onDelete(location)}
+            >
+              Dar de baja
+            </button>
+            {/* Sin `detail` no se puede editar, y el botón se deshabilita en vez
+                de abrir el formulario: LocationForm decide entre alta y edición
+                mirando si le llegó un id, así que abrirlo sin la fila crearía
+                una sucursal nueva en lugar de modificar ésta. Pasa sólo si
+                fetchLocationRows() falló. */}
+            <button
+              className="loc-modal__action-btn loc-modal__action-btn--secondary"
+              onClick={() => onEdit(location)}
+              disabled={!location.detail}
+              title={location.detail ? undefined : 'No pudimos cargar los datos de esta sucursal. Recargá la página.'}
+            >
+              Editar sucursal
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -558,6 +594,7 @@ const SORT_OPTIONS = [
 // Configuración, que ya trae su propio PageHeader. En ese modo se ocultan el
 // encabezado y el pie propios para no duplicarlos.
 export default function LocationsPage({ embedded = false }) {
+  const { org } = useOrg();
   const [locations, setLocations] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
@@ -565,17 +602,37 @@ export default function LocationsPage({ embedded = false }) {
   const [sort, setSort]         = useState('totalReviews');
   const [viewMode, setViewMode] = useState('grid');
   const [selected, setSelected] = useState(null);
+  /* null = cerrado · { location: null } = alta · { location } = edición */
+  const [editing, setEditing]   = useState(null);
+  const [actionError, setActionError] = useState(null);
+
+  /* Sólo owner y admin pueden escribir `locations` (política locations_insert
+     del 0014). Un manager entra a esta pantalla y ve todo, pero no puede crear
+     ni editar: mostrarle los botones sería ofrecerle algo que la base va a
+     rechazar. */
+  const canEdit = org?.role === 'owner' || org?.role === 'admin';
 
   /* Carga real desde Supabase (v_location_performance, cruzada con
      v_device_performance/v_employee_leaderboard para dispositivos/equipo
      asignados y última actividad). Si falla, mock completo — un resultado
      vacío (org sin ubicaciones todavía) no es una falla. */
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = () => setReloadToken(t => t + 1);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [locationRows, deviceRows, employeeRows, scansSeries] = await Promise.all([
+        const [locationRows, detailRows, deviceRows, employeeRows, scansSeries] = await Promise.all([
           fetchLocationPerformance(),
+          // Las filas crudas: dirección, teléfono y los campos de Google, que la
+          // vista de métricas no tiene. Catch propio — si esto falla, la
+          // pantalla sigue mostrando métricas reales y sólo se queda sin los
+          // datos de ficha, en vez de caerse entera al mock.
+          fetchLocationRows().catch(err => {
+            console.error('No se pudieron cargar los datos de ficha de las sucursales:', err);
+            return [];
+          }),
           fetchDevicePerformance(),
           fetchEmployeeLeaderboard(),
           // Catch propio: si falta la migración 0016 la sparkline queda plana,
@@ -587,6 +644,8 @@ export default function LocationsPage({ embedded = false }) {
           }),
         ]);
         if (cancelled) return;
+
+        const detailById = new Map(detailRows.map(r => [r.id, r]));
 
         const devicesByLocation = new Map();
         deviceRows.forEach(d => {
@@ -603,7 +662,13 @@ export default function LocationsPage({ embedded = false }) {
         });
 
         setLocations(locationRows.map((row, index) =>
-          mapLocationRow(row, { devicesByLocation, employeesByLocation, scansSeries, index })
+          mapLocationRow(row, {
+            devicesByLocation,
+            employeesByLocation,
+            scansSeries,
+            index,
+            detail: detailById.get(row.location_id),
+          })
         ));
       } catch (err) {
         console.error('No se pudieron cargar las ubicaciones reales, muestro datos de ejemplo:', err);
@@ -614,9 +679,42 @@ export default function LocationsPage({ embedded = false }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [reloadToken]);
+
+  /* Después de guardar se recarga todo en vez de parchear el array en memoria.
+     Es una consulta más, pero una sucursal nueva no tiene fila en
+     v_location_performance hasta que se la vuelve a pedir, y parchear a mano
+     significaría fabricar sus métricas en cero — justo lo que este panel dejó
+     de hacer. */
+  function handleSaved() {
+    setEditing(null);
+    setSelected(null);
+    setActionError(null);
+    reload();
+  }
+
+  async function handleDelete(location) {
+    const ok = window.confirm(
+      `¿Dar de baja "${location.name}"?\n\nLos expositores asignados dejan de tener sucursal y sus escaneos pasan a redirigir al destino de respaldo de la organización. El historial se conserva.`
+    );
+    if (!ok) return;
+
+    try {
+      await deleteLocation(location.id);
+      setSelected(null);
+      setActionError(null);
+      reload();
+    } catch (err) {
+      console.error('No se pudo dar de baja la sucursal:', err);
+      setActionError(catalogErrorMessage(err, 'la sucursal'));
+    }
+  }
 
   /* Derived stats */
+  // Sólo se cuentan las que tienen fila cruda: si fetchLocationRows() falló, el
+  // campo viene vacío para todas y avisar "ninguna tiene destino" sería mentir
+  // sobre un dato que no llegamos a leer.
+  const missingDestinationCount = locations.filter(l => l.detail && !l.hasGoogleDestination).length;
   const totalActive    = locations.filter(l => l.status === 'active').length;
   const totalDevices   = locations.reduce((s, l) => s + l.totalDevices, 0);
   const totalReviews   = locations.reduce((s, l) => s + l.totalReviews, 0);
@@ -670,21 +768,20 @@ export default function LocationsPage({ embedded = false }) {
           </p>
         </div>
 
-        <div className="loc-page__actions">
-          <button className="loc-page__btn-secondary">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Exportar
-          </button>
-          <button className="loc-page__btn-primary">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Nueva Ubicación
-          </button>
-        </div>
+        {/* "Exportar" vivía acá y no hacía nada: ni descargaba un archivo ni
+            abría un diálogo. Se sacó por la misma regla que la fase 2 le aplicó
+            a los interruptores de Automatizaciones — un botón que no resuelve
+            nada es peor que ninguno. Cuando exista la exportación, vuelve. */}
+        {canEdit && (
+          <div className="loc-page__actions">
+            <button className="loc-page__btn-primary" onClick={() => setEditing({ location: null })}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Nueva sucursal
+            </button>
+          </div>
+        )}
       </div>
       )}
 
@@ -721,11 +818,24 @@ export default function LocationsPage({ embedded = false }) {
           <input
             className="loc-search__input"
             type="text"
-            placeholder="Buscar por nombre, dirección o encargado…"
+            placeholder="Buscar por nombre, dirección o ciudad…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+
+        {/* El alta también vive acá, no sólo en el encabezado: esta pantalla se
+            renderiza embebida dentro de Configuración → Gestión local, y en ese
+            modo el encabezado propio no se dibuja. Con el botón sólo arriba, la
+            ruta por la que realmente se entra no tenía forma de crear nada. */}
+        {canEdit && (
+          <button className="loc-toolbar__new" onClick={() => setEditing({ location: null })}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Nueva sucursal
+          </button>
+        )}
 
         {/* Filter tabs */}
         <div className="loc-filters">
@@ -775,6 +885,22 @@ export default function LocationsPage({ embedded = false }) {
         </div>
       </div>
 
+      {actionError && <p className="loc-action-error" role="alert">{actionError}</p>}
+
+      {/* Una sucursal sin destino de escaneo es el problema más caro de esta
+          pantalla y el menos visible: todo se ve bien hasta que alguien apoya el
+          celular en el expositor y no pasa nada. Por eso se avisa arriba de la
+          lista y no escondido en el detalle. */}
+      {missingDestinationCount > 0 && (
+        <p className="loc-action-warn">
+          {missingDestinationCount === 1
+            ? 'Hay 1 sucursal sin destino de reseña cargado.'
+            : `Hay ${missingDestinationCount} sucursales sin destino de reseña cargado.`}
+          {' '}Sus expositores no llevan a tu ficha de Google todavía —
+          {canEdit ? ' abrila y completá el link para dejar una reseña.' : ' pedile al propietario de la cuenta que lo complete.'}
+        </p>
+      )}
+
       {/* ── Content ── */}
       {viewMode === 'grid'
         ? <LocationCardGrid locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} />
@@ -796,7 +922,20 @@ export default function LocationsPage({ embedded = false }) {
       {selected && (
         <LocationModal
           location={selected}
+          canEdit={canEdit}
           onClose={() => setSelected(null)}
+          onEdit={loc => { if (loc.detail) setEditing({ location: loc.detail }); }}
+          onDelete={handleDelete}
+        />
+      )}
+
+      {/* ── Alta / edición ── */}
+      {editing && (
+        <LocationForm
+          organizationId={org?.organization_id}
+          location={editing.location}
+          onClose={() => setEditing(null)}
+          onSaved={handleSaved}
         />
       )}
     </div>

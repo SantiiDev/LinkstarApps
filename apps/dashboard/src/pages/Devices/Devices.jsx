@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ALL_DEVICES } from '../../data/devices';
 import { ALL_LOCATIONS } from '../../data/locations';
+import { updateDevice, catalogErrorMessage } from '../../lib/catalogApi';
 import GoogleConnectBanner from '../../components/GoogleConnectBanner/GoogleConnectBanner';
 import TrendChart from '../../components/TrendChart/TrendChart';
 import Select from '../../components/Select/Select';
@@ -39,6 +40,12 @@ function mapDeviceRow(row, series) {
     publicId: row.public_id,
     name: row.label,
     type: row.kind === 'instagram' ? 'instagram' : 'google',
+    // El id, además del nombre: el nombre es lo que se muestra y el id es lo
+    // que se guarda. Editar un dispositivo escribe `location_id`, y hasta ahora
+    // el formulario sólo tenía el nombre — por eso ofrecía las sucursales del
+    // mock, que era lo único que tenía a mano con forma de lista.
+    locationId: row.location_id ?? '',
+    employeeId: row.employee_id ?? '',
     location: row.location_name || 'Sin ubicación asignada',
     status: row.status === 'active' ? 'active' : 'inactive',
     scans: row.total_scans ?? 0,
@@ -151,7 +158,7 @@ function SparkLine({ data, inactive, className = '' }) {
 }
 
 /* ─── Device Detail Modal ────────────────────────────────────── */
-function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
+function DeviceModal({ device, onClose, onSave, onToggleStatus, locations, employees, canEdit, busy, error }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
 
@@ -160,14 +167,22 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
   const days = lastNDayLabels(device.weeklyScans.length);
 
   function startEditing() {
-    setForm({ name: device.name, location: device.location, type: device.type });
+    setForm({
+      name: device.name,
+      locationId: device.locationId ?? '',
+      employeeId: device.employeeId ?? '',
+      type: device.type,
+    });
     setEditing(true);
   }
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.preventDefault();
-    onSave({ ...device, ...form });
-    setEditing(false);
+    const ok = await onSave(device, form);
+    // Sólo se sale del modo edición si el guardado entró. Si falló, el
+    // formulario queda abierto con lo que la persona escribió y el error
+    // visible: cerrarlo perdería el texto y daría a entender que se guardó.
+    if (ok) setEditing(false);
   }
 
   return (
@@ -209,12 +224,38 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
                   autoFocus
                 />
               </label>
+              {/* Las opciones salen de las sucursales REALES de la cuenta. Antes
+                  venían de ALL_LOCATIONS, el mock: el desplegable ofrecía locales
+                  que no existían y elegir uno no guardaba nada igual. */}
               <div className="device-edit-form__field">
-                <span>Ubicación</span>
+                <span>Sucursal</span>
                 <Select
-                  value={form.location}
-                  onChange={v => setForm(f => ({ ...f, location: v }))}
-                  options={ALL_LOCATIONS.map(l => ({ value: l.name, label: l.name }))}
+                  value={form.locationId}
+                  onChange={v => setForm(f => ({ ...f, locationId: v }))}
+                  options={[
+                    { value: '', label: 'Sin asignar' },
+                    ...locations.map(l => ({ value: l.id, label: l.name })),
+                  ]}
+                  triggerClassName="device-edit-form__select-trigger"
+                />
+              </div>
+              {/* La sucursal es la que decide a dónde redirige el escaneo
+                  (resolve_scan lee locations.google_review_url), así que un
+                  expositor sin sucursal cae al destino de respaldo. */}
+              {!form.locationId && (
+                <p className="device-edit-form__warn">
+                  Sin sucursal asignada, los escaneos de este expositor no llegan a ninguna ficha de Google.
+                </p>
+              )}
+              <div className="device-edit-form__field">
+                <span>Empleado</span>
+                <Select
+                  value={form.employeeId}
+                  onChange={v => setForm(f => ({ ...f, employeeId: v }))}
+                  options={[
+                    { value: '', label: 'Sin asignar' },
+                    ...employees.map(e => ({ value: e.id, label: e.name })),
+                  ]}
                   triggerClassName="device-edit-form__select-trigger"
                 />
               </div>
@@ -227,6 +268,7 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
                   triggerClassName="device-edit-form__select-trigger"
                 />
               </div>
+              {error && <p className="device-edit-form__error" role="alert">{error}</p>}
             </form>
           ) : (
             <>
@@ -294,11 +336,11 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
         <div className="device-modal__footer">
           {editing ? (
             <>
-              <button type="button" className="device-modal__action-btn device-modal__action-btn--secondary" onClick={() => setEditing(false)}>
+              <button type="button" className="device-modal__action-btn device-modal__action-btn--secondary" onClick={() => setEditing(false)} disabled={busy}>
                 Cancelar
               </button>
-              <button type="submit" form="device-edit-form" className="device-modal__action-btn device-modal__action-btn--primary">
-                Guardar cambios
+              <button type="submit" form="device-edit-form" className="device-modal__action-btn device-modal__action-btn--primary" disabled={busy}>
+                {busy ? 'Guardando…' : 'Guardar cambios'}
               </button>
             </>
           ) : (
@@ -311,15 +353,22 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus }) {
               >
                 Descargar QR
               </button>
-              <button className="device-modal__action-btn device-modal__action-btn--secondary" onClick={startEditing}>
-                Editar
-              </button>
-              <button className="device-modal__action-btn device-modal__action-btn--danger" onClick={() => onToggleStatus(device)}>
-                {device.status === 'active' ? 'Desactivar' : 'Activar'}
-              </button>
+              {/* Editar y desactivar se ocultan para quien no puede escribir
+                  (política devices_update: owner, admin o manager). */}
+              {canEdit && (
+                <>
+                  <button className="device-modal__action-btn device-modal__action-btn--secondary" onClick={startEditing}>
+                    Editar
+                  </button>
+                  <button className="device-modal__action-btn device-modal__action-btn--danger" onClick={() => onToggleStatus(device)} disabled={busy}>
+                    {device.status === 'active' ? 'Desactivar' : 'Activar'}
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>
+        {!editing && error && <p className="device-edit-form__error" role="alert">{error}</p>}
       </div>
     </div>
   );
@@ -687,17 +736,29 @@ function buildDailyScansFromRows(rows, days) {
 }
 
 export default function DevicesPage({ onNavigate, onNavigateSettings }) {
+  const { org } = useOrg();
   const [devices, setDevices]       = useState([]);
   const [locations, setLocations]   = useState([]);
+  /* Las sucursales y los empleados reales de la cuenta, para los desplegables
+     del formulario de edición. Separado de `locations`, que es el ranking de
+     abajo y viene de la vista de métricas. */
+  const [locationOptions, setLocationOptions] = useState([]);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState('');
   const [filter, setFilter]         = useState('all');
   const [viewMode, setViewMode]     = useState('grid');   // 'grid' | 'table'
   const [selected, setSelected]     = useState(null);
   const [claiming, setClaiming]     = useState(false);
+  const [deviceBusy, setDeviceBusy] = useState(false);
+  const [deviceError, setDeviceError] = useState(null);
   /* Se incrementa al vincular un expositor, para volver a pedir la lista sin
      recargar la página — el dispositivo recién vinculado tiene que aparecer. */
   const [reloadKey, setReloadKey]   = useState(0);
+  const reload = () => setReloadKey(k => k + 1);
+
+  /* devices_update (0014) admite owner, admin y manager. */
+  const canEdit = ['owner', 'admin', 'manager'].includes(org?.role);
 
   /* Carga real desde Supabase (v_device_performance / v_location_performance).
      Si la query falla (red, RLS, lo que sea) se cae de vuelta al mock — nunca
@@ -707,9 +768,16 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
     let cancelled = false;
     (async () => {
       try {
-        const [deviceRows, locationRows, deviceSeries] = await Promise.all([
+        const [deviceRows, locationRows, employeeRows, deviceSeries] = await Promise.all([
           fetchDevicePerformance(),
           fetchLocationPerformance(),
+          // Para el desplegable de empleado del formulario. Catch propio: sin
+          // esto la pantalla entera se caería al mock por no poder llenar un
+          // <select> que ni siquiera está abierto.
+          fetchEmployeeLeaderboard().catch(err => {
+            console.error('No se pudo cargar la lista de empleados:', err);
+            return [];
+          }),
           // La serie tiene su propio catch a propósito: si falla (típicamente
           // porque la migración 0016 todavía no se aplicó en este entorno),
           // las sparklines quedan planas pero el resto de la pantalla sigue
@@ -723,6 +791,8 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
         if (cancelled) return;
         setDevices(deviceRows.map(row => mapDeviceRow(row, deviceSeries)));
         setLocations(locationRows.map(mapLocationForRanking));
+        setLocationOptions(locationRows.map(l => ({ id: l.location_id, name: l.name })));
+        setEmployeeOptions(employeeRows.map(e => ({ id: e.employee_id, name: e.full_name })));
       } catch (err) {
         console.error('No se pudieron cargar los dispositivos reales, muestro datos de ejemplo:', err);
         if (cancelled) return;
@@ -784,15 +854,52 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
     setFilter('all');
   }
 
-  function handleSaveDevice(updated) {
-    setDevices(prev => prev.map(d => (d.id === updated.id ? updated : d)));
-    setSelected(updated);
+  /* Guardado real contra `devices` (política devices_update del 0014).
+     Hasta acá estas dos funciones sólo tocaban el estado de React: la tarjeta
+     cambiaba, y al recargar volvía todo como estaba. Quien lo usara creería
+     haber reasignado un expositor de sucursal sin que la base se enterara — y
+     el escaneo siguiente redirigía al destino viejo.
+
+     Devuelve true/false para que el modal sepa si puede cerrar el formulario. */
+  async function handleSaveDevice(device, form) {
+    setDeviceBusy(true);
+    setDeviceError(null);
+    try {
+      await updateDevice(device.id, {
+        label: form.name,
+        location_id: form.locationId || null,
+        employee_id: form.employeeId || null,
+        // El desplegable habla en 'google'/'instagram' porque es lo que rotula
+        // la UI; la columna es el enum device_kind, donde Google es
+        // 'google_review'. Sin esta traducción el update falla con 22P02.
+        kind: form.type === 'instagram' ? 'instagram' : 'google_review',
+      });
+      setSelected(null);
+      reload();
+      return true;
+    } catch (err) {
+      console.error('No se pudo guardar el dispositivo:', err);
+      setDeviceError(catalogErrorMessage(err, 'el dispositivo'));
+      return false;
+    } finally {
+      setDeviceBusy(false);
+    }
   }
 
-  function handleToggleStatus(device) {
-    const updated = { ...device, status: device.status === 'active' ? 'inactive' : 'active' };
-    setDevices(prev => prev.map(d => (d.id === updated.id ? updated : d)));
-    setSelected(updated);
+  async function handleToggleStatus(device) {
+    const next = device.status === 'active' ? 'inactive' : 'active';
+    setDeviceBusy(true);
+    setDeviceError(null);
+    try {
+      await updateDevice(device.id, { status: next });
+      setSelected(null);
+      reload();
+    } catch (err) {
+      console.error('No se pudo cambiar el estado del dispositivo:', err);
+      setDeviceError(catalogErrorMessage(err, 'el dispositivo'));
+    } finally {
+      setDeviceBusy(false);
+    }
   }
 
   const topLocations = useMemo(
@@ -1026,7 +1133,12 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
       {selected && (
         <DeviceModal
           device={selected}
-          onClose={() => setSelected(null)}
+          locations={locationOptions}
+          employees={employeeOptions}
+          canEdit={canEdit}
+          busy={deviceBusy}
+          error={deviceError}
+          onClose={() => { setSelected(null); setDeviceError(null); }}
           onSave={handleSaveDevice}
           onToggleStatus={handleToggleStatus}
         />

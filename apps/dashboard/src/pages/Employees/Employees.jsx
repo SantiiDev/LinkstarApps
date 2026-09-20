@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ALL_EMPLOYEES } from '../../data/employees';
+import { useOrg } from '../../context/OrgContext';
 import {
   fetchEmployeeLeaderboard,
   fetchLocationPerformance,
@@ -8,6 +9,8 @@ import {
   colorForIndex,
   initialsFor,
 } from '../../lib/dashboardApi';
+import { fetchEmployeeRows, deleteEmployee, catalogErrorMessage } from '../../lib/catalogApi';
+import EmployeeForm from './EmployeeForm';
 import './Employees.css';
 
 // "—" para campos sin dato real (null) en vez de "null" o "%" solo.
@@ -65,7 +68,7 @@ function rankClass(rank) {
 }
 
 /* ─── Employee Detail Modal ─────────────────────────────────── */
-function EmployeeModal({ employee, rank, total, onClose }) {
+function EmployeeModal({ employee, rank, total, onClose, onEdit, onDelete, canEdit, hasDetail }) {
   if (!employee) return null;
   const max = Math.max(...employee.weeklyReviews, 1);
   const progress = pct(employee.reviews, employee.goal);
@@ -203,14 +206,28 @@ function EmployeeModal({ employee, rank, total, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="emp-modal__footer">
-          <button className="emp-modal__action-btn emp-modal__action-btn--primary">
-            Ver historial completo
-          </button>
-          <button className="emp-modal__action-btn emp-modal__action-btn--secondary">
-            Editar perfil
-          </button>
-        </div>
+        {/* "Ver historial completo" no abría nada y se sacó: no existe una
+            pantalla de historial por empleado. */}
+        {canEdit && (
+          <div className="emp-modal__footer">
+            <button
+              className="emp-modal__action-btn emp-modal__action-btn--danger"
+              onClick={() => onDelete(employee)}
+            >
+              Dar de baja
+            </button>
+            {/* Igual que en Ubicaciones: sin la fila cruda, el formulario no
+                sabría que es una edición y crearía un empleado nuevo. */}
+            <button
+              className="emp-modal__action-btn emp-modal__action-btn--secondary"
+              onClick={() => onEdit(employee)}
+              disabled={!hasDetail}
+              title={hasDetail ? undefined : 'No pudimos cargar los datos de este empleado. Recargá la página.'}
+            >
+              Editar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -441,6 +458,7 @@ const SORT_OPTIONS = [
 // En ese modo se ocultan el encabezado y el pie propios para no duplicarlos;
 // todo lo demás (stats, filtros, grilla/tabla, modal) es igual.
 export default function EmployeesPage({ embedded = false }) {
+  const { org } = useOrg();
   const [employees, setEmployees] = useState([]);
   const [estimatedReviews, setEstimatedReviews] = useState(0); // suma de new_reviews_30d por location (decisión 6)
   const [loading,  setLoading]  = useState(true);
@@ -449,6 +467,20 @@ export default function EmployeesPage({ embedded = false }) {
   const [sort,     setSort]     = useState('reviews');
   const [viewMode, setViewMode] = useState('grid');
   const [selected, setSelected] = useState(null);
+  /* null = cerrado · { employee: null } = alta · { employee } = edición */
+  const [editing, setEditing]   = useState(null);
+  const [actionError, setActionError] = useState(null);
+  /* Las filas crudas de `employees` por id, para poblar el formulario de
+     edición; y las sucursales reales para su desplegable. */
+  const [employeeDetails, setEmployeeDetails] = useState(new Map());
+  const [locationOptions, setLocationOptions] = useState([]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = () => setReloadKey(k => k + 1);
+
+  /* employees_write (0014) admite owner, admin y manager — un encargado puede
+     dar de alta al mozo de su sucursal. Es más amplio que `locations`, que sólo
+     deja a owner y admin. */
+  const canEdit = ['owner', 'admin', 'manager'].includes(org?.role);
 
   /* Carga real desde Supabase (v_employee_leaderboard, cruzada con
      v_location_performance y v_device_performance para nombre de ubicación,
@@ -458,13 +490,22 @@ export default function EmployeesPage({ embedded = false }) {
     let cancelled = false;
     (async () => {
       try {
-        const [employeeRows, locationRows, deviceRows] = await Promise.all([
+        const [employeeRows, locationRows, deviceRows, detailRows] = await Promise.all([
           fetchEmployeeLeaderboard(),
           fetchLocationPerformance(),
           fetchDevicePerformance(),
+          // Las filas crudas de `employees`: puesto, legajo, teléfono y mail,
+          // que v_employee_leaderboard no expone y el formulario necesita.
+          fetchEmployeeRows().catch(err => {
+            console.error('No se pudieron cargar los datos de ficha de los empleados:', err);
+            return [];
+          }),
         ]);
         if (cancelled) return;
 
+        const detailById = new Map(detailRows.map(r => [r.id, r]));
+        setEmployeeDetails(detailById);
+        setLocationOptions(locationRows.map(l => ({ id: l.location_id, name: l.name })));
         const locationsById = new Map(locationRows.map(l => [l.location_id, l]));
         const devicesByEmployee = new Map();
         deviceRows.forEach(d => {
@@ -487,7 +528,34 @@ export default function EmployeesPage({ embedded = false }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [reloadKey]);
+
+  /* Recarga después de guardar en vez de parchear el array: un empleado nuevo
+     no tiene fila en v_employee_leaderboard hasta volver a pedirla, y
+     fabricarle un ranking en cero sería inventar un número. */
+  function handleSaved() {
+    setEditing(null);
+    setSelected(null);
+    setActionError(null);
+    reload();
+  }
+
+  async function handleDelete(employee) {
+    const ok = window.confirm(
+      `¿Dar de baja a "${employee.name}"?\n\nLos expositores que tenga asignados quedan sin empleado. Los escaneos ya registrados conservan la atribución.`
+    );
+    if (!ok) return;
+
+    try {
+      await deleteEmployee(employee.id);
+      setSelected(null);
+      setActionError(null);
+      reload();
+    } catch (err) {
+      console.error('No se pudo dar de baja al empleado:', err);
+      setActionError(catalogErrorMessage(err, 'el empleado'));
+    }
+  }
 
   /* Orden de ranking: usa la posición ya calculada por la vista
      (rank() sobre unique_scans_30d) cuando existe; el mock no trae
@@ -555,21 +623,18 @@ export default function EmployeesPage({ embedded = false }) {
           </p>
         </div>
 
-        <div className="emp-page__actions">
-          <button className="emp-page__btn-secondary">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Exportar
-          </button>
-          <button className="emp-page__btn-primary">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Nuevo Empleado
-          </button>
-        </div>
+        {/* "Exportar" se sacó por la misma regla que en Ubicaciones: no
+            descargaba nada. Vuelve cuando exista la exportación. */}
+        {canEdit && (
+          <div className="emp-page__actions">
+            <button className="emp-page__btn-primary" onClick={() => setEditing({ employee: null })}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Nuevo empleado
+            </button>
+          </div>
+        )}
       </div>
       )}
 
@@ -660,6 +725,8 @@ export default function EmployeesPage({ embedded = false }) {
         </div>
       </div>
 
+      {actionError && <p className="emp-action-error" role="alert">{actionError}</p>}
+
       {/* ── Content ── */}
       {viewMode === 'grid'
         ? <EmployeeCardGrid employees={displayed} rankedIds={rankedIds} onSelect={setSelected} />
@@ -683,7 +750,25 @@ export default function EmployeesPage({ embedded = false }) {
           employee={selected}
           rank={selectedRank}
           total={employees.length}
+          canEdit={canEdit}
+          hasDetail={employeeDetails.has(selected.id)}
           onClose={() => setSelected(null)}
+          onEdit={emp => {
+            const detail = employeeDetails.get(emp.id);
+            if (detail) setEditing({ employee: detail });
+          }}
+          onDelete={handleDelete}
+        />
+      )}
+
+      {/* ── Alta / edición ── */}
+      {editing && (
+        <EmployeeForm
+          organizationId={org?.organization_id}
+          employee={editing.employee}
+          locations={locationOptions}
+          onClose={() => setEditing(null)}
+          onSaved={handleSaved}
         />
       )}
     </div>
