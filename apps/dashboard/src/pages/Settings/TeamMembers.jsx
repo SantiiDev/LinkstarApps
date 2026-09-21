@@ -12,6 +12,7 @@ import {
   invitationErrorMessage,
   removeMember,
   revokeInvitation,
+  sendInvitationEmail,
   setMemberRole,
 } from '../../lib/teamApi';
 import './TeamMembers.css';
@@ -23,12 +24,19 @@ import './TeamMembers.css';
  * escaneos y no tienen usuario. Los dos bloques dicen cuál es cuál en su
  * subtítulo, porque "equipo" a secas es ambiguo en este producto.
  *
- * La invitación viaja como LINK COPIABLE, no por mail: todavía no hay proveedor
- * de email transaccional (llega en la fase 7, que igual lo necesita para las
- * automatizaciones). Web3Forms, que es lo único conectado hoy, sirve para
- * avisarnos a nosotros de una compra, no para escribirle a un cliente. El día
- * que haya proveedor, manda exactamente este mismo link y esta pantalla no
- * cambia.
+ * El LINK COPIABLE sigue siendo el camino principal, y el correo es un extra
+ * encima. Ese orden importa: la invitación se creó igual, el enlace es válido
+ * igual, y si el mail no sale —porque el servidor todavía no tiene proveedor
+ * configurado, o porque el proveedor lo rechaza— quien invita no queda
+ * bloqueado, lo copia y lo manda por donde quiera. Por eso el botón de enviar
+ * no reemplaza al enlace ni cierra el cartel.
+ *
+ * El correo sale por POST /api/team/send-invitation, que manda EXACTAMENTE este
+ * mismo enlace: `invite_member()` y la pantalla de aceptación no cambiaron. El
+ * endpoint recibe el token y arma la URL él mismo, para no convertirse en un
+ * relay que mande cualquier enlace con nuestra marca. Si responde
+ * `simulated: true`, no se mandó nada y la pantalla lo dice en vez de dar el
+ * envío por hecho.
  */
 
 function Icon({ name, size = 16 }) {
@@ -88,6 +96,7 @@ function ConfirmButton({ label, confirmLabel, onConfirm, busy }) {
  * copiarlo ahora y avisa que no se puede volver a ver. */
 function InvitationLink({ invitation, onDismiss }) {
   const [copied, setCopied] = useState(false);
+  const [mail, setMail] = useState({ state: 'idle', message: null });
 
   const copy = async () => {
     try {
@@ -98,6 +107,30 @@ function InvitationLink({ invitation, onDismiss }) {
       // clipboard puede fallar sin https o sin permiso; el input es
       // seleccionable a mano, así que no se rompe nada.
       setCopied(false);
+    }
+  };
+
+  /* Mandar el mail es un extra, no el camino principal: el enlace copiable
+     sigue siendo la garantía. Por eso un fallo acá no bloquea nada — se avisa
+     y el enlace queda igual de válido. */
+  const sendByEmail = async () => {
+    setMail({ state: 'sending', message: null });
+    try {
+      const result = await sendInvitationEmail(invitation.email, invitation.token);
+      if (result.simulated) {
+        setMail({
+          state: 'error',
+          message: 'El servidor no tiene configurado el proveedor de correo todavía. Mandá el enlace a mano.',
+        });
+        return;
+      }
+      setMail({ state: 'sent', message: `Enviado a ${invitation.email}.` });
+    } catch (err) {
+      console.error('No se pudo enviar la invitación por correo:', err);
+      setMail({
+        state: 'error',
+        message: 'No pudimos enviar el correo. Copiá el enlace y mandáselo vos.',
+      });
     }
   };
 
@@ -118,6 +151,23 @@ function InvitationLink({ invitation, onDismiss }) {
           {copied ? 'Copiado' : 'Copiar'}
         </button>
       </div>
+      <div className="team-invite-result__send">
+        <button
+          type="button"
+          className="team-invite-result__send-btn"
+          onClick={sendByEmail}
+          disabled={mail.state === 'sending' || mail.state === 'sent'}
+        >
+          <Icon name={mail.state === 'sent' ? 'check' : 'mail'} />
+          {mail.state === 'sending' ? 'Enviando…' : mail.state === 'sent' ? 'Enviado' : 'Enviármelo por correo a esta persona'}
+        </button>
+        {mail.message && (
+          <span className={`team-invite-result__send-msg team-invite-result__send-msg--${mail.state}`}>
+            {mail.message}
+          </span>
+        )}
+      </div>
+
       <p className="team-invite-result__hint">
         Tiene que aceptarla desde una cuenta con el correo <strong>{invitation.email}</strong>. {expiryLabel(invitation.expiresAt)}.
       </p>

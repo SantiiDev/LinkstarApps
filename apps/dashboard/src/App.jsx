@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import './App.css';
 import AppShell from './components/AppShell/AppShell';
 import Company from './pages/Company/Company';
+import PrivacyPage from './pages/Legal/Privacy';
 import ReviewsPage from './pages/Reviews/Reviews';
 import GoogleMetrics from './pages/GoogleBusiness/GoogleMetrics';
 import GoogleProfile from './pages/GoogleBusiness/GoogleProfile';
@@ -193,6 +194,11 @@ export default function App() {
           el token. La pantalla resuelve sola los tres casos (sin sesión, con
           sesión, ya canjeada). */}
       <Route path={PUBLIC_ROUTES.invitation} element={<AcceptInvitation />} />
+
+      {/* Política de privacidad. Pública y fuera de todos los guards: Google
+          exige poder abrirla sin sesión para aprobar la pantalla de
+          consentimiento de las Business Profile APIs. */}
+      <Route path={PUBLIC_ROUTES.privacy} element={<PrivacyPage />} />
 
       {/* Alta: con sesión, sin panel todavía. Se renderizan sueltas (sin
           AppShell) igual que login y registro — mostrar el sidebar de un panel

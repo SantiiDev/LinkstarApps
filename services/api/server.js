@@ -10,6 +10,7 @@ import ordersRoutes from './routes/orders.js';
 import contactRoutes from './routes/contact.js';
 import subscriptionRoutes from './routes/subscriptions.js';
 import webhookRoutes from './routes/webhooks.js';
+import teamRoutes from './routes/team.js';
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use(redirectRoutes);
 app.use(ordersRoutes);
 app.use(contactRoutes);
 app.use(subscriptionRoutes);
+app.use(teamRoutes);
 app.use(webhookRoutes);
 
 app.listen(PORT, () => {

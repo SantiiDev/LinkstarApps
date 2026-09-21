@@ -623,9 +623,24 @@
   color: var(--color-orange);
 }
 
+/* Eran <button>; ahora son <a> de verdad, así que hay que sacarle el subrayado
+   y dejar que el bloque entero sea el área de click. */
+.settings-legal-row {
+  text-decoration: none;
+}
+
 .settings-legal-row span {
   flex: 1;
   text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.settings-legal-row__hint {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-secondary);
 }
 
 .settings-legal-row__ext {

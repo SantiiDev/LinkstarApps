@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { invitationPath } from './routes';
+import { API_URL } from './config';
 
 /* Equipo de la organización: miembros que INICIAN SESIÓN en el panel.
  *
@@ -109,6 +110,37 @@ export async function inviteMember(email, role) {
  * sigue funcionando sin tocarse. */
 export function buildInvitationLink(token) {
   return `${window.location.origin}${invitationPath(token)}`;
+}
+
+/* Manda la invitación por correo, además del link copiable.
+ *
+ * Pasa por el API y no por Supabase porque la clave del proveedor de email es
+ * un secreto de servidor. Se manda el TOKEN, no el link: el endpoint arma la
+ * URL con su propia DASHBOARD_URL, así nadie puede hacernos enviar un enlace
+ * arbitrario con nuestra marca.
+ *
+ * Devuelve { sent, simulated }. `simulated: true` significa que el servidor no
+ * tiene proveedor configurado y no se mandó nada — hay que decirlo, no dar el
+ * envío por hecho. */
+export async function sendInvitationEmail(email, token) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Sesión vencida');
+
+  const response = await fetch(`${API_URL}/api/team/send-invitation`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ email, token }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'No se pudo enviar el correo');
+  }
+
+  return response.json();
 }
 
 export async function revokeInvitation(invitationId) {

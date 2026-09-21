@@ -11,7 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useOrg } from '../../context/OrgContext';
 import { API_URL } from '../../lib/config';
 import { formatArs } from '../../lib/format';
-import { ONBOARDING_ROUTES, SETTINGS_TABS, SETTINGS_TAB_ALIASES, settingsTabPath } from '../../lib/routes';
+import { ONBOARDING_ROUTES, PUBLIC_ROUTES, SETTINGS_TABS, SETTINGS_TAB_ALIASES, settingsTabPath } from '../../lib/routes';
 import './Settings.css';
 
 // Los ids son los mismos que van en la URL (/panel/configuracion/equipo), así
@@ -403,7 +403,28 @@ function BillingTab() {
 }
 
 /* ─── Legal ───────────────────────────────────────────────────── */
-const LEGAL_DOCS = ['Términos de Servicio', 'Política de Privacidad', 'DPA', 'Aviso Legal', 'Política de Cookies'];
+/* Esta lista eran cinco botones que no abrían nada, y dos de los documentos ni
+ * existían (DPA, Política de Cookies — esta última además sobraba: el panel no
+ * usa cookies de seguimiento). Sobrevivió a la limpieza de maquetas de la fase 2
+ * porque estaba embebida acá y no era una pantalla propia, igual que la tarjeta
+ * de "Cuentas de Google conectadas".
+ *
+ * Ahora son enlaces de verdad y sólo a lo que existe. Al agregar un documento,
+ * agregarlo acá con su URL — no como una fila sin destino. */
+const LEGAL_DOCS = [
+  {
+    label: 'Política de privacidad',
+    hint: 'Qué datos guardamos y qué podés hacer con ellos.',
+    href: PUBLIC_ROUTES.privacy,
+    external: false,
+  },
+  {
+    label: 'Términos y condiciones',
+    hint: 'Las condiciones del sitio de venta de expositores.',
+    href: 'https://linkstarapp.com/terminos',
+    external: true,
+  },
+];
 
 function LegalTab() {
   return (
@@ -418,11 +439,19 @@ function LegalTab() {
 
         <div className="settings-legal-list">
           {LEGAL_DOCS.map((doc) => (
-            <button key={doc} type="button" className="settings-legal-row">
+            <a
+              key={doc.label}
+              className="settings-legal-row"
+              href={doc.href}
+              {...(doc.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+            >
               <Icon name="fileText" width={16} height={16} />
-              <span>{doc}</span>
+              <span>
+                {doc.label}
+                <small className="settings-legal-row__hint">{doc.hint}</small>
+              </span>
               <Icon name="externalLink" width={14} height={14} className="settings-legal-row__ext" />
-            </button>
+            </a>
           ))}
         </div>
       </div>

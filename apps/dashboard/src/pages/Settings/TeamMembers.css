@@ -319,3 +319,49 @@
     flex: 1 1 100%;
   }
 }
+
+/* ── Enviar la invitación por correo ──
+   Es un extra sobre el enlace copiable, no el camino principal: por eso va
+   como botón secundario debajo del enlace y no reemplazándolo. Si el envío
+   falla, el enlace de arriba sigue siendo válido. */
+.team-invite-result__send {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.team-invite-result__send-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid rgba(26, 38, 57, 0.15);
+  border-radius: var(--radius-button);
+  background: var(--color-white);
+  color: var(--color-navy);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-base), border-color var(--transition-base);
+}
+
+.team-invite-result__send-btn:hover:not(:disabled) {
+  background: var(--color-light);
+  border-color: var(--color-orange);
+}
+
+.team-invite-result__send-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.team-invite-result__send-msg {
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.team-invite-result__send-msg--sent  { color: var(--color-forest); }
+.team-invite-result__send-msg--error { color: var(--color-danger); }

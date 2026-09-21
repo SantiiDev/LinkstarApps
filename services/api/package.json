@@ -7,7 +7,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "provision-devices": "node scripts/provision-devices.js",
-    "rebuild-today-rollup": "node scripts/rebuild-today-rollup.js"
+    "rebuild-today-rollup": "node scripts/rebuild-today-rollup.js",
+    "send-alerts": "node scripts/send-alerts.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",

@@ -24,6 +24,11 @@ export const PUBLIC_ROUTES = {
    * vuelve acá. Fuera de /panel a propósito — el invitado todavía no es
    * miembro de ninguna organización y el guard del panel lo expulsaría. */
   invitation: '/invitacion/:token',
+  /* La política de privacidad es pública y sin sesión por obligación, no por
+   * comodidad: la pantalla de consentimiento de Google exige una URL accesible
+   * sin iniciar sesión, en un dominio propio, para aprobar el acceso a las
+   * Business Profile APIs. Sin esto la fase 4 no arranca. */
+  privacy: '/privacidad',
 };
 
 /* El path concreto, para armar el link que se copia. */

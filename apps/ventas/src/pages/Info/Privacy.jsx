@@ -29,10 +29,31 @@ export default function Privacy() {
 
           <h2>4. Comunicación de los Datos</h2>
           <p>
-            No se comunicarán los datos a terceros, salvo obligación legal. Nuestra infraestructura de servidores en la nube cuenta con los máximos estándares de seguridad y privacidad.
+            <strong>No vendemos tus datos ni los cedemos a terceros con fines comerciales.</strong> Para
+            que el servicio funcione nos apoyamos en los siguientes proveedores, que tratan esos datos
+            por nuestra cuenta y únicamente para prestarnos su servicio:
+          </p>
+          <ul>
+            <li><strong>Supabase</strong> — base de datos y alojamiento de la información de pedidos y cuentas.</li>
+            <li><strong>Cloudflare</strong> — publicación de este sitio.</li>
+            <li><strong>Mercado Pago</strong> — procesamiento de los pagos. Los datos de tu tarjeta los cargás directamente ahí y nunca pasan por nuestros servidores.</li>
+            <li><strong>Web3Forms</strong> — envío a nuestra casilla de los avisos de pedidos y consultas.</li>
+          </ul>
+          <p>
+            También los entregaríamos si nos lo exigiera una autoridad competente por una vía legal
+            válida.
           </p>
 
-          <h2>5. Derechos del Usuario</h2>
+          <h2>5. LinkstarApp</h2>
+          <p>
+            Si además usás <strong>LinkstarApp</strong>, el panel donde administrás tus expositores, el
+            tratamiento de esos datos —escaneos, sucursales, equipo y, si la conectás, tu ficha de Google
+            Business Profile— se rige por{' '}
+            <a href="https://app.linkstarapp.com/privacidad">la política de privacidad del panel</a>,
+            que es un documento aparte.
+          </p>
+
+          <h2>6. Derechos del Usuario</h2>
           <p>
             Los derechos que asisten al Usuario son:
           </p>
@@ -42,7 +63,8 @@ export default function Privacy() {
             <li>Derecho a la limitación u oposición a su tratamiento.</li>
           </ul>
           <p>
-            Para ejercer estos derechos, puede ponerse en contacto con nosotros a través de los canales de soporte oficiales.
+            Para ejercer estos derechos, escribinos a{' '}
+            <a href="mailto:linkstar.app1@gmail.com">linkstar.app1@gmail.com</a> y te respondemos.
           </p>
         </div>
       </div>
