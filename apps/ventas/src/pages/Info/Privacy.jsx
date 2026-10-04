@@ -55,17 +55,37 @@ export default function Privacy() {
 
           <h2>5. A quién se los damos</h2>
           <p>
-            No cedemos tus datos a terceros, salvo obligación legal o requerimiento de autoridad
-            competente. Trabajamos con proveedores de infraestructura y de pagos que los tratan
-            únicamente por nuestra cuenta y siguiendo nuestras instrucciones.
+            <strong>No vendemos tus datos ni los cedemos a terceros con fines comerciales.</strong> Para
+            que el servicio funcione nos apoyamos en los siguientes proveedores, que tratan esos datos
+            por nuestra cuenta y únicamente para prestarnos su servicio:
+          </p>
+          <ul>
+            <li><strong>Supabase</strong> — base de datos y alojamiento de la información de pedidos y cuentas.</li>
+            <li><strong>Cloudflare</strong> — publicación de este sitio.</li>
+            <li><strong>Mercado Pago</strong> — procesamiento de los pagos. Los datos de tu tarjeta los cargás directamente ahí y nunca pasan por nuestros servidores.</li>
+            <li><strong>Web3Forms</strong> — envío a nuestra casilla de los avisos de pedidos y consultas.</li>
+          </ul>
+          <p>
+            También los entregaríamos si nos lo exigiera una autoridad competente por una vía legal
+            válida.
           </p>
 
-          <h2>6. Tus derechos</h2>
+          <h2>6. LinkstarApp</h2>
+          <p>
+            Si además usás <strong>LinkstarApp</strong>, el panel donde administrás tus expositores, el
+            tratamiento de esos datos —escaneos, sucursales, equipo y, si la conectás, tu ficha de Google
+            Business Profile— se rige por{' '}
+            <a href="https://app.linkstarapp.com/privacidad">la política de privacidad del panel</a>,
+            que es un documento aparte.
+          </p>
+
+          <h2>7. Tus derechos</h2>
           <p>
             Tenés derecho a acceder a tus datos, y a rectificarlos, actualizarlos o suprimirlos
-            cuando corresponda. Escribinos a [EMAIL] y te respondemos dentro de los plazos que fija
-            la Ley 25.326: 10 días corridos para el acceso y 5 días hábiles para la rectificación o
-            supresión.
+            cuando corresponda. Escribinos a{' '}
+            <a href="mailto:linkstar.app1@gmail.com">linkstar.app1@gmail.com</a> y te respondemos
+            dentro de los plazos que fija la Ley 25.326: 10 días corridos para el acceso y 5 días
+            hábiles para la rectificación o supresión.
           </p>
           <p>
             El titular de los datos personales tiene la facultad de ejercer el derecho de acceso en

@@ -831,6 +831,28 @@
   margin-bottom: 0.25rem;
 }
 
+/* Avisos dentro del formulario de edición: el de sucursal sin asignar (que
+   deja al expositor sin destino) y el de error al guardar. */
+.device-edit-form__warn,
+.device-edit-form__error {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+.device-edit-form__warn {
+  border-left: 2px solid var(--color-gold);
+  background: rgba(245, 158, 11, 0.09);
+}
+
+.device-edit-form__error {
+  border-left: 2px solid var(--color-danger);
+  background: rgba(239, 68, 68, 0.08);
+}
+
 .device-edit-form__field {
   display: flex;
   flex-direction: column;

@@ -1,0 +1,113 @@
+/* Páginas legales del panel (política de privacidad, términos).
+   Documento largo para leer, no interfaz: fondo sólido, medida de lectura
+   acotada y sin el glass del resto del panel, que acá sólo estorbaría. */
+
+.legal-page {
+  min-height: 100vh;
+  background: var(--color-light);
+  padding: clamp(2rem, 5vw, 4rem) 1.25rem 5rem;
+}
+
+.legal-page__inner {
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.legal-page__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 1.75rem;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--transition-base);
+}
+
+.legal-page__back:hover {
+  color: var(--color-orange);
+}
+
+.legal-page__title {
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.8rem, 5vw, 2.4rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--color-navy);
+  text-wrap: balance;
+}
+
+.legal-page__meta {
+  margin: 0 0 2.25rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(26, 38, 57, 0.1);
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.legal-page__lead {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--color-text-primary);
+  padding: 1rem 1.15rem;
+  background: var(--color-white);
+  border-radius: var(--radius-card);
+  border-left: 2px solid var(--color-orange);
+}
+
+/* El contenido usa selectores de elemento y no clases: es prosa larga, y
+   clasear cada <p> de un documento legal no aporta nada. Está acotado a
+   .legal-page__content para que no se escape al resto del panel. */
+.legal-page__content {
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--color-text-primary);
+}
+
+.legal-page__content h2 {
+  margin: 2.5rem 0 0.75rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-navy);
+  text-wrap: balance;
+}
+
+.legal-page__content h3 {
+  margin: 1.75rem 0 0.5rem;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.legal-page__content p {
+  margin: 0 0 1rem;
+}
+
+.legal-page__content ul {
+  margin: 0 0 1.25rem;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.legal-page__content li {
+  padding-left: 0.15rem;
+}
+
+.legal-page__content a {
+  color: var(--color-orange);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.legal-page__content a:hover {
+  color: var(--color-navy);
+}
+
+.legal-page__content strong {
+  font-weight: 700;
+  color: var(--color-navy);
+}

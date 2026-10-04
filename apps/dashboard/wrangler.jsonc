@@ -1,0 +1,36 @@
+// Config del Worker que sirve el panel (apps/dashboard).
+//
+// Escrita, NO desplegada. Falta crear el subdominio en Cloudflare y decidir dos
+// cosas que están en el README de este directorio. Desplegar con
+// `npx wrangler deploy` parado en apps/dashboard (igual que ventas: el binario
+// está hoisteado en la raíz y no hay wrangler.jsonc ahí).
+//
+// ── Por qué existe antes de la fase 8 ──────────────────────────────────────
+// El despliegue del panel es fase 8, pero el paso 4.2 del roadmap lo arrastra
+// hacia adelante: para aprobar las Business Profile APIs, Google pide una
+// pantalla de consentimiento verificada contra un dominio propio, con una
+// política de privacidad accesible sin iniciar sesión. O sea que el panel
+// necesita una URL estable ANTES de que se pueda escribir una línea de OAuth.
+// Esto es sólo ese pedazo, no toda la fase 8.
+//
+// ── not_found_handling ────────────────────────────────────────────────────
+// Sin esto, cada refresh en /panel/... y cada deep link devuelven 404: el
+// router es del lado del cliente y el Worker buscaría un archivo que no existe.
+// Es la misma línea que ya tiene ventas.
+//
+// ── account_id ────────────────────────────────────────────────────────────
+// El mismo de ventas: es la cuenta donde vive la zona linkstarapp.com.
+{
+  "name": "linkstar-dashboard",
+  "compatibility_date": "2026-09-20",
+  "account_id": "5991443b4284ab352cac4849e38ddf50",
+  "workers_dev": true,
+  "route": {
+    "pattern": "app.linkstarapp.com/*",
+    "zone_name": "linkstarapp.com"
+  },
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

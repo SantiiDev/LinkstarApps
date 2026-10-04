@@ -73,7 +73,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0021 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0023 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -193,13 +193,16 @@ thing (see "Scans are human taps" below) · `0019` corrective: `insert into empl
 `0021` corrective: `resolve_scan()`'s dead-end fallback pointed at `linkstar.com.ar`, a domain that was
 never registered (the only owned zone is `linkstarapp.com`), so the one URL that exists to guarantee a
 scan never dead-ends was sending people to somebody else's domain · `0022` product decision:
-`org_is_activated()` stops requiring a linked device on the free plan (see "Subscription gate").
+`org_is_activated()` stops requiring a linked device on the free plan (see "Subscription gate") ·
+`0023` notification preferences + send log, and `pending_notifications()` — the half of phase 7 that
+doesn't need Google (see "Alerts" below).
 
 **Everything up to `0020` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
 16 Aug after running it locally with `db:reset` and `rls_isolation.sql` green; both verified with
-`supabase migration list`). **`0021` and `0022` are written but NOT applied anywhere** — until someone
-runs `npm run db:push`, the database still redirects to the unregistered domain and still locks free-plan
-accounts out of the panel until they link a device, while the repo and the frontend say otherwise. Applying it needs the Supabase project, which not every developer here
+`supabase migration list`). **`0021`, `0022` and `0023` are written but NOT applied anywhere** — until
+someone runs `npm run db:push`, the database still redirects to the unregistered domain, still locks
+free-plan accounts out of the panel until they link a device, and has no notification tables at all
+(so `npm run send-alerts` fails), while the repo and the frontend say otherwise. Applying it needs the Supabase project, which not every developer here
 has. Correcting an already-applied migration by editing
 its file changes nothing in the database — `db push` skips migrations already in the history table. That
 is exactly how `0017` came to exist: `0013` was fixed in place on the reasonable assumption that it had
@@ -308,12 +311,33 @@ ambiguous in this product, and the phase 3 work was nearly built against the wro
 is this user operating on" and they must agree — if `invite_member()` picked a different org than the
 panel displays, someone would invite people into an account they aren't looking at.
 
-**Invitations travel as a copyable link, not email.** There is no transactional email provider yet (phase
-7 brings one, which also needs it for automations); Web3Forms is for notifying *us* of a sale. The owner
-copies the link and sends it however they want. When email lands it sends this same link — `AcceptInvitation`
-and the RPCs don't change. `PUBLIC_ROUTES.invitation` lives outside both `RequireAuth` and
+**The copyable link is still the primary path; email is an extra on top.** `invite_member()` issues the
+token, the screen shows the link, and `POST /api/team/send-invitation` can additionally mail *that same
+link* — `AcceptInvitation` and the RPCs did not change. Keep that order: if the mail fails, or the server
+has no `RESEND_API_KEY` and `lib/mailer.js` returns `simulated: true`, the inviter is not blocked, and the
+screen says so rather than claiming it sent. The endpoint takes the **token**, not a URL, and builds the
+link from `DASHBOARD_URL` itself — accepting a URL would turn it into an open relay that mails arbitrary
+links under our branding. `PUBLIC_ROUTES.invitation` lives outside both `RequireAuth` and
 `RequireActivePlan`: the invitee arrives with no session and no organization, and either guard would
 divert them before they could redeem the token. `RegisterRoute` honors `state.from` for the same reason.
+
+**Alerts — the half of phase 7 that doesn't need Google** (`0023`). Two alerts run purely off scans:
+`device_idle` (an active expositor with no taps for N hours, default 48, configurable per org because a
+bar and an events venue don't have the same normal) and `weekly_summary`. All the "what to send" logic
+lives in `private.pending_notifications()`, and `scripts/send-alerts.js` only renders and sends it — same
+split as `rebuild-today-rollup.js`, so phase 8 can schedule the function under `pg_cron` without rewriting
+anything. Run it with `npm run send-alerts` (`--dry-run` prints what it would send).
+Three things that are load-bearing and easy to undo:
+- **`notification_log` is what makes it idempotent.** A device that has been quiet for a week satisfies
+  the condition on every run; the log is what answers "did I already say this?". It is written *after*
+  the provider accepts, so a failed send retries next run instead of vanishing.
+- **A simulated send is not a send.** With no `RESEND_API_KEY` the mailer prints to console and returns
+  `simulated: true`; the script deliberately does **not** log those, or the real alert would never go out.
+- **Missing preferences mean defaults, not silence.** The function `left join`s `notification_preferences`;
+  an inner join would mean a new account never receives anything until someone opens Settings.
+`lib/mailer.js` (Resend, customer-facing) is not `lib/email.js` (Web3Forms, notifies *us* of a sale) —
+Web3Forms forwards a form to one fixed mailbox and can't do variable recipients, which is why phase 3
+shipped the copyable link in the first place. `send()` is the only function that knows about Resend.
 
 **The activity log is real now.** `audit_log` (`0004`) existed from the start but only `claim_device()`
 ever wrote to it, so the "Registro de actividad" card was a three-row hardcoded array — with a real
@@ -603,16 +627,27 @@ split below before wiring anything — the shell is finished, the data mostly is
   "you haven't linked an expositor / loaded a branch yet" carries an instruction and a CTA, while "the
   filter matched nothing" offers to clear the filter. Telling a day-one account that nothing matched a
   search it never ran is what this replaced.
-- **Devices writes, and the status enum is wider than the UI.** `lib/devicesApi.js` holds the `devices`
-  updates (it is not in `lib/dashboardApi.js` on purpose — that module reads only views). Editing a device
+- **`lib/catalogApi.js` is the only module that writes the catalog** — `locations`, `employees` and
+  `devices`. It is the counterpart of `lib/dashboardApi.js`, which reads only views, and it goes straight
+  through PostgREST rather than RPC because `0014` rewrote those three tables' policies precisely so the
+  logged-in client can write them (`teamApi.js` needs RPC only because the email lives in `auth.users`).
+  Three things in it that look like details and are not: `createLocation` / `createEmployee` deliberately
+  skip `.select()`, because the RETURNING would be evaluated against `locations_select`, whose
+  `visible_location_ids()` is `stable` and cannot see the row being inserted — the insert succeeds and the
+  client reads "no rows", which looks like a failure and invites a retry that duplicates the branch; the
+  UPDATEs do use `.select()`, where the row already exists in the snapshot. Deletes are logical
+  (`deleted_at`), never physical, or `devices.location_id`'s `on delete set null` would orphan the
+  expositores silently. And `catalogErrorMessage()` branches on `hint`/`code`, never on the message text.
+- **Devices writes, and the status enum is wider than the UI.** Editing a device
   and activating/pausing it used to mutate `useState` and nothing else, so every change vanished on
-  reload. Two things to keep: PostgREST returns **zero rows, not an error**, when RLS rejects an update,
-  so every write asks for `.select()` and counts what came back — without it a `viewer` saw "saved" and
-  nothing had been saved. And the panel shows two states, Activo/Inactivo, while `device_status` has five
+  reload. The panel shows two states, Activo/Inactivo, while `device_status` has five
   (`unassigned | active | paused | lost | retired`): pausing writes `'paused'`, because `'inactive'` does
-  not exist in the enum. The enum is not shrunk to match the UI — `unassigned` is what provisioning
+  not exist in the enum — writing it fails with `22P02`, and it is an easy mistake because the UI's own
+  label *is* "Inactivo". The enum is not shrunk to match the UI — `unassigned` is what provisioning
   writes before anyone claims a device, and `org_is_activated()` / `has_devices` filter on
-  `status <> 'retired'`.
+  `status <> 'retired'`. The edit modal also assigns the **employee**, and both Edit and Activar/Desactivar
+  are hidden for anyone outside owner/admin/manager (`devices_update`): offering a button the database will
+  reject is worse than not showing it.
 - **The per-device destination is real.** `devices.destination_url` is step 1 of the `resolve_scan()`
   cascade and now has a field in the edit modal. Empty must be stored as `null`, never `''`: the cascade
   is a `coalesce` and an empty string would count as a valid destination and send the scan nowhere.
@@ -620,18 +655,23 @@ split below before wiring anything — the shell is finished, the data mostly is
   Attributing a scan to a person needs personal cards; an expositor sits on a table and belongs to nobody.
   Cards aren't sold yet, so `v_employee_leaderboard` will stay empty — but the screen reads it for real,
   so it keeps its markup and only carries a notice above it (in `Settings.jsx`'s "Equipo" tab, plus the
-  badge on the Devices teaser). When cards exist, delete the notice and it works. There is no "Nuevo
-  empleado" form for the same reason; don't build one until cards ship.
-- **TEMPORARY: `pages/Locations/NewLocationModal.jsx` is manual location loading behind
-  `VITE_ENABLE_MANUAL_LOCATION`** (`MANUAL_LOCATION_ENABLED` in `lib/config.js`). Locations are meant to
-  arrive by connecting the customer's Google profile, but that needs the `business.manage` scope, which
-  Google approves by hand at the Cloud-project level and is still pending — and with no `locations` row a
-  scan has nowhere to go. This form writes through the same path OAuth will use (`locations_insert` of
-  `0014`, `enforce_plan_limit()` of `0007`), so it also exercises a write policy that had never run. It is
-  reached from the Locations toolbar and the day-one empty state, both gated by the flag, because the
-  page only renders `embedded` inside Settings and its own header is hidden there. To remove it: delete
-  the component and its CSS, the `config.js` export, the two conditionals in `Locations.jsx` and the
-  `.env.example` line.
+  badge on the Devices teaser). When cards exist, delete the notice and it works. `EmployeeForm.jsx` does
+  exist and creates employees — that is a change of mind about the older rule here ("don't build the form
+  until cards ship"), not an oversight: a branch can register its waiters before the cards arrive, and the
+  rows are what `v_employee_leaderboard` will attribute scans to.
+- **Locations are loaded by hand, and that is no longer provisional.** `LocationForm.jsx` creates *and*
+  edits a branch through `locations_insert`/`locations_update` of `0014` and `enforce_plan_limit()` of
+  `0007`. It used to be a dev-only modal behind `VITE_ENABLE_MANUAL_LOCATION`, because branches were
+  supposed to arrive by connecting the customer's Google profile — that needs the `business.manage` scope,
+  approved by hand at the Cloud-project level and still pending. The form stays either way: with no
+  `locations` row a scan has nowhere to go, so this is the only path that makes the product work today.
+  The part that earns its keep is the **live destination preview**: it mirrors `resolve_scan()`'s coalesce
+  cascade in JS and shows where a scan would land with what is typed so far. That mirror is a copy of the
+  SQL, not the source of truth — if the cascade's order changes in a migration, `googleDestinationOf()` /
+  `instagramDestinationOf()` change with it. Saving a branch with no destination at all is allowed and
+  warned about, on purpose; the list screen also counts them above the table, because the failure is
+  invisible until somebody taps an expositor and nothing happens. Create/edit/delete are hidden from a
+  `manager`, who has no insert policy on `locations`.
 - `pages/Employees/` and `pages/Locations/` are reachable through `pages/Settings/Settings.jsx`, rendered
   inside the "Equipo" and "Gestión local" tabs with an `embedded` prop that hides their own page header and
   footer (Settings already has a `PageHeader`, and they'd otherwise show two titles and two footers). They
@@ -766,7 +806,18 @@ only real contact channel in the repo. Replace it when there's a sales email or 
 - `services/api` deploys to Railway or Render (plain Node host, not a Worker), root directory
   `services/api`, planned at `api.linkstarapp.com`. When that goes live, update `apps/ventas/.env.production`'s
   `VITE_API_URL` and the API's `FRONTEND_URL` together.
-- `apps/dashboard` has no deploy target configured yet. Whatever host it lands on must serve `index.html`
+- `apps/dashboard` now has `wrangler.jsonc` (route `app.linkstarapp.com/*`, SPA fallback) but is **not
+  deployed**: the subdomain doesn't exist yet and `apps/dashboard/DEPLOY.md` holds the two decisions to
+  make first. It was written ahead of phase 8 because step **4.2** drags it forward — Google won't approve
+  the Business Profile APIs without a consent screen verified against an owned domain and a privacy policy
+  reachable **without signing in**, so the panel needs a stable URL before any OAuth code can be written.
+  That is why `PUBLIC_ROUTES.privacy` (`/privacidad`, `pages/Legal/Privacy.jsx`) sits outside every guard;
+  if it ever ends up behind `RequireAuth`, the Google review fails. It is a separate document from the
+  sales site's policy on purpose — different processing (scans and Business Profile data vs. orders and
+  shipping) — and it carries the Limited Use disclosure Google requires for restricted scopes. The contact
+  address in both is `linkstar.app1@gmail.com`; **never** `soporte@linkstar.com.ar`, a domain that was
+  never registered (see `0021`) — a bouncing contact address fails the review on its own.
+- Whatever host `apps/dashboard` lands on must serve `index.html`
   for unknown paths (SPA fallback), or every `/panel/...` deep link and every browser refresh returns 404 —
   the same `not_found_handling` the ventas Worker already sets.
 - Of the three services `packages/database/supabase/README.md` originally assumed would be Edge Functions,

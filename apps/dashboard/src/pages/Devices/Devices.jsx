@@ -1,12 +1,14 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ALL_DEVICES } from '../../data/devices';
 import { ALL_LOCATIONS } from '../../data/locations';
+import { updateDevice, catalogErrorMessage, fetchDeviceDestinations } from '../../lib/catalogApi';
 import GoogleConnectBanner from '../../components/GoogleConnectBanner/GoogleConnectBanner';
 import TrendChart from '../../components/TrendChart/TrendChart';
 import Select from '../../components/Select/Select';
 import {
   fetchDevicePerformance,
   fetchLocationPerformance,
+  fetchEmployeeLeaderboard,
   fetchDeviceScansSeries,
   fetchScansDaily,
   formatRelativeTime,
@@ -14,7 +16,6 @@ import {
   lastNDayLabels,
   lastNDayKeys,
 } from '../../lib/dashboardApi';
-import { fetchDeviceDestinations, updateDevice, setDeviceActive } from '../../lib/devicesApi';
 import { REDIRECT_DOMAIN } from '../../lib/config';
 import { downloadQrPng } from '../../lib/qr';
 import { supabase } from '../../lib/supabaseClient';
@@ -41,14 +42,19 @@ function mapDeviceRow(row, series, destinations) {
     publicId: row.public_id,
     name: row.label,
     type: row.kind === 'instagram' ? 'instagram' : 'google',
-    // Para editar hacen falta los ids crudos, no los nombres que se muestran.
+    // Los ids, además de los nombres: el nombre es lo que se muestra y el id es
+    // lo que se guarda. Editar un dispositivo escribe `location_id` y
+    // `employee_id`, y hasta ahora el formulario sólo tenía el nombre — por eso
+    // ofrecía las sucursales del mock, que era lo único que tenía a mano con
+    // forma de lista.
     locationId: row.location_id ?? '',
+    employeeId: row.employee_id ?? '',
     // `destination_url` no está en v_device_performance (es una vista de
     // métricas): se trae aparte, con fetchDeviceDestinations().
     destinationUrl: destinations?.get(row.device_id) ?? '',
     location: row.location_name || 'Sin ubicación asignada',
     // El enum tiene cinco valores pero el panel muestra dos: todo lo que no
-    // esté activo se ve como Inactivo. Ver lib/devicesApi.js.
+    // esté activo se ve como Inactivo. Ver handleToggleStatus más abajo.
     status: row.status === 'active' ? 'active' : 'inactive',
     scans: row.total_scans ?? 0,
     reviews: null,
@@ -160,11 +166,9 @@ function SparkLine({ data, inactive, className = '' }) {
 }
 
 /* ─── Device Detail Modal ────────────────────────────────────── */
-function DeviceModal({ device, locations, onClose, onSave, onToggleStatus }) {
+function DeviceModal({ device, onClose, onSave, onToggleStatus, locations, employees, canEdit, busy, error }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
 
   if (!device) return null;
   const max = Math.max(...device.weeklyScans, 1);
@@ -174,10 +178,10 @@ function DeviceModal({ device, locations, onClose, onSave, onToggleStatus }) {
     setForm({
       name: device.name,
       locationId: device.locationId ?? '',
+      employeeId: device.employeeId ?? '',
       type: device.type,
       destinationUrl: device.destinationUrl ?? '',
     });
-    setError('');
     setEditing(true);
   }
 
@@ -187,30 +191,11 @@ function DeviceModal({ device, locations, onClose, onSave, onToggleStatus }) {
      vinculación antes de que llamara a claim_device(). */
   async function handleSave(e) {
     e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      await onSave(device, form);
-      setEditing(false);
-    } catch (err) {
-      setError(err.message || 'No pudimos guardar los cambios.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleToggle() {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      await onToggleStatus(device);
-    } catch (err) {
-      setError(err.message || 'No pudimos cambiar el estado del dispositivo.');
-    } finally {
-      setBusy(false);
-    }
+    const ok = await onSave(device, form);
+    // Sólo se sale del modo edición si el guardado entró. Si falló, el
+    // formulario queda abierto con lo que la persona escribió y el error
+    // visible: cerrarlo perdería el texto y daría a entender que se guardó.
+    if (ok) setEditing(false);
   }
 
   return (
@@ -254,15 +239,16 @@ function DeviceModal({ device, locations, onClose, onSave, onToggleStatus }) {
                   autoFocus
                 />
               </label>
+              {/* Las opciones salen de las sucursales REALES de la cuenta. Antes
+                  venían de ALL_LOCATIONS, el mock: el desplegable ofrecía locales
+                  que no existían y elegir uno no guardaba nada igual. */}
               <div className="device-edit-form__field">
-                <span>Ubicación</span>
-                {/* Los locales reales de la organización, no el mock: antes esta
-                    lista mostraba "Sucursal Centro / Norte / Sur" a cualquiera. */}
+                <span>Sucursal</span>
                 <Select
                   value={form.locationId}
                   onChange={v => setForm(f => ({ ...f, locationId: v }))}
                   options={[
-                    { value: '', label: 'Sin ubicación asignada' },
+                    { value: '', label: 'Sin asignar' },
                     ...locations.map(l => ({ value: l.id, label: l.name })),
                   ]}
                   triggerClassName="device-edit-form__select-trigger"
@@ -272,6 +258,26 @@ function DeviceModal({ device, locations, onClose, onSave, onToggleStatus }) {
                     Todavía no hay locales cargados. Un expositor sin local usa el destino de acá abajo.
                   </span>
                 )}
+              </div>
+              {/* La sucursal es la que decide a dónde redirige el escaneo
+                  (resolve_scan lee locations.google_review_url), así que un
+                  expositor sin sucursal cae al destino de respaldo. */}
+              {!form.locationId && (
+                <p className="device-edit-form__warn">
+                  Sin sucursal asignada, los escaneos de este expositor no llegan a ninguna ficha de Google.
+                </p>
+              )}
+              <div className="device-edit-form__field">
+                <span>Empleado</span>
+                <Select
+                  value={form.employeeId}
+                  onChange={v => setForm(f => ({ ...f, employeeId: v }))}
+                  options={[
+                    { value: '', label: 'Sin asignar' },
+                    ...employees.map(e => ({ value: e.id, label: e.name })),
+                  ]}
+                  triggerClassName="device-edit-form__select-trigger"
+                />
               </div>
               <div className="device-edit-form__field">
                 <span>Tipo</span>
@@ -298,6 +304,7 @@ function DeviceModal({ device, locations, onClose, onSave, onToggleStatus }) {
                   va a llevar ahí y no a la reseña.
                 </span>
               </label>
+              {error && <p className="device-edit-form__error" role="alert">{error}</p>}
             </form>
           ) : (
             <>
@@ -383,15 +390,22 @@ function DeviceModal({ device, locations, onClose, onSave, onToggleStatus }) {
               >
                 Descargar QR
               </button>
-              <button className="device-modal__action-btn device-modal__action-btn--secondary" onClick={startEditing}>
-                Editar
-              </button>
-              <button className="device-modal__action-btn device-modal__action-btn--danger" onClick={handleToggle} disabled={busy}>
-                {busy ? 'Guardando…' : device.status === 'active' ? 'Desactivar' : 'Activar'}
-              </button>
+              {/* Editar y desactivar se ocultan para quien no puede escribir
+                  (política devices_update: owner, admin o manager). */}
+              {canEdit && (
+                <>
+                  <button className="device-modal__action-btn device-modal__action-btn--secondary" onClick={startEditing}>
+                    Editar
+                  </button>
+                  <button className="device-modal__action-btn device-modal__action-btn--danger" onClick={() => onToggleStatus(device)} disabled={busy}>
+                    {busy ? 'Guardando…' : device.status === 'active' ? 'Desactivar' : 'Activar'}
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>
+        {!editing && error && <p className="device-edit-form__error" role="alert">{error}</p>}
       </div>
     </div>
   );
@@ -752,17 +766,29 @@ function buildDailyScansFromRows(rows, days) {
 }
 
 export default function DevicesPage({ onNavigate, onNavigateSettings }) {
+  const { org } = useOrg();
   const [devices, setDevices]       = useState([]);
   const [locations, setLocations]   = useState([]);
+  /* Las sucursales y los empleados reales de la cuenta, para los desplegables
+     del formulario de edición. Separado de `locations`, que es el ranking de
+     abajo y viene de la vista de métricas. */
+  const [locationOptions, setLocationOptions] = useState([]);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState('');
   const [filter, setFilter]         = useState('all');
   const [viewMode, setViewMode]     = useState('grid');   // 'grid' | 'table'
   const [selected, setSelected]     = useState(null);
   const [claiming, setClaiming]     = useState(false);
+  const [deviceBusy, setDeviceBusy] = useState(false);
+  const [deviceError, setDeviceError] = useState(null);
   /* Se incrementa al vincular un expositor, para volver a pedir la lista sin
      recargar la página — el dispositivo recién vinculado tiene que aparecer. */
   const [reloadKey, setReloadKey]   = useState(0);
+  const reload = () => setReloadKey(k => k + 1);
+
+  /* devices_update (0014) admite owner, admin y manager. */
+  const canEdit = ['owner', 'admin', 'manager'].includes(org?.role);
 
   /* Carga real desde Supabase (v_device_performance / v_location_performance).
      Si la query falla (red, RLS, lo que sea) se cae de vuelta al mock — nunca
@@ -772,9 +798,16 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
     let cancelled = false;
     (async () => {
       try {
-        const [deviceRows, locationRows, deviceSeries, destinations] = await Promise.all([
+        const [deviceRows, locationRows, employeeRows, deviceSeries, destinations] = await Promise.all([
           fetchDevicePerformance(),
           fetchLocationPerformance(),
+          // Para el desplegable de empleado del formulario. Catch propio: sin
+          // esto la pantalla entera se caería al mock por no poder llenar un
+          // <select> que ni siquiera está abierto.
+          fetchEmployeeLeaderboard().catch(err => {
+            console.error('No se pudo cargar la lista de empleados:', err);
+            return [];
+          }),
           // La serie tiene su propio catch a propósito: si falla (típicamente
           // porque la migración 0016 todavía no se aplicó en este entorno),
           // las sparklines quedan planas pero el resto de la pantalla sigue
@@ -795,6 +828,8 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
         if (cancelled) return;
         setDevices(deviceRows.map(row => mapDeviceRow(row, deviceSeries, destinations)));
         setLocations(locationRows.map(mapLocationForRanking));
+        setLocationOptions(locationRows.map(l => ({ id: l.location_id, name: l.name })));
+        setEmployeeOptions(employeeRows.map(e => ({ id: e.employee_id, name: e.full_name })));
       } catch (err) {
         console.error('No se pudieron cargar los dispositivos reales, muestro datos de ejemplo:', err);
         if (cancelled) return;
@@ -856,45 +891,63 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
     setFilter('all');
   }
 
-  /* Los dos escriben en la base y recién después tocan la pantalla. Si la RLS
-     rechaza —un viewer, una suscripción vencida— devicesApi tira y el modal
-     muestra el error, en vez de simular que se guardó. */
+  /* Guardado real contra `devices` (política devices_update del 0014).
+     Hasta acá estas dos funciones sólo tocaban el estado de React: la tarjeta
+     cambiaba, y al recargar volvía todo como estaba. Quien lo usara creería
+     haber reasignado un expositor de sucursal sin que la base se enterara — y
+     el escaneo siguiente redirigía al destino viejo.
+
+     Devuelve true/false para que el modal sepa si puede cerrar el formulario. */
   async function handleSaveDevice(device, form) {
-    const name = form.name.trim();
-    const destination = form.destinationUrl.trim();
-    // El select ofrece dos tipos, igual que antes. Un dispositivo 'custom'
-    // queda como google_review al editarlo, y no cambia su comportamiento:
-    // destination_url es el paso 1 de la cascada y le gana a `kind`.
-    const kind = form.type === 'instagram' ? 'instagram' : 'google_review';
-
-    await updateDevice(device.id, {
-      label: name,
-      location_id: form.locationId || null,
-      kind,
-      // Vacío tiene que ser null: resolve_scan() hace coalesce sobre esta
-      // columna y un string vacío contaría como destino válido.
-      destination_url: destination || null,
-    });
-
-    const updated = {
-      ...device,
-      name,
-      type: form.type,
-      locationId: form.locationId || '',
-      location: locations.find(l => l.id === form.locationId)?.name || 'Sin ubicación asignada',
-      destinationUrl: destination,
-    };
-    setDevices(prev => prev.map(d => (d.id === updated.id ? updated : d)));
-    setSelected(updated);
+    setDeviceBusy(true);
+    setDeviceError(null);
+    try {
+      await updateDevice(device.id, {
+        label: form.name,
+        location_id: form.locationId || null,
+        employee_id: form.employeeId || null,
+        // El desplegable habla en 'google'/'instagram' porque es lo que rotula
+        // la UI; la columna es el enum device_kind, donde Google es
+        // 'google_review'. Sin esta traducción el update falla con 22P02.
+        kind: form.type === 'instagram' ? 'instagram' : 'google_review',
+        // Vacío tiene que ser null, nunca '': resolve_scan() hace coalesce
+        // sobre esta columna y una cadena vacía contaría como destino válido,
+        // así que el escaneo terminaría en ninguna parte. Es el paso 1 de la
+        // cascada, o sea que le gana a `kind` y a la sucursal.
+        destination_url: form.destinationUrl.trim() || null,
+      });
+      setSelected(null);
+      reload();
+      return true;
+    } catch (err) {
+      console.error('No se pudo guardar el dispositivo:', err);
+      setDeviceError(catalogErrorMessage(err, 'el dispositivo'));
+      return false;
+    } finally {
+      setDeviceBusy(false);
+    }
   }
 
   async function handleToggleStatus(device) {
-    const nextActive = device.status !== 'active';
-    await setDeviceActive(device.id, nextActive);
-
-    const updated = { ...device, status: nextActive ? 'active' : 'inactive' };
-    setDevices(prev => prev.map(d => (d.id === updated.id ? updated : d)));
-    setSelected(updated);
+    /* El enum device_status es ('unassigned','active','paused','lost','retired'):
+       'inactive' NO existe en la base y escribirlo falla con 22P02. El panel
+       muestra sólo dos estados —Activo e Inactivo—, así que apagar un expositor
+       lo deja en 'paused'. 'lost' y 'retired' siguen existiendo (los usan
+       org_is_activated() y el aprovisionamiento) y también se ven como
+       "Inactivo", pero no se escriben desde acá. */
+    const next = device.status === 'active' ? 'paused' : 'active';
+    setDeviceBusy(true);
+    setDeviceError(null);
+    try {
+      await updateDevice(device.id, { status: next });
+      setSelected(null);
+      reload();
+    } catch (err) {
+      console.error('No se pudo cambiar el estado del dispositivo:', err);
+      setDeviceError(catalogErrorMessage(err, 'el dispositivo'));
+    } finally {
+      setDeviceBusy(false);
+    }
   }
 
   const topLocations = useMemo(
@@ -1128,8 +1181,12 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
       {selected && (
         <DeviceModal
           device={selected}
-          locations={locations}
-          onClose={() => setSelected(null)}
+          locations={locationOptions}
+          employees={employeeOptions}
+          canEdit={canEdit}
+          busy={deviceBusy}
+          error={deviceError}
+          onClose={() => { setSelected(null); setDeviceError(null); }}
           onSave={handleSaveDevice}
           onToggleStatus={handleToggleStatus}
         />

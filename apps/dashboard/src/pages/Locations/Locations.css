@@ -1162,6 +1162,67 @@
   transform: translateY(-2px);
 }
 
+/* ── Alta desde la barra de herramientas ──
+   Existe además del botón del encabezado porque en modo `embedded` (la pestaña
+   "Gestión local" de Configuración) el encabezado propio no se renderiza. */
+.loc-toolbar__new {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+  padding: 0.55rem 1rem;
+  border: none;
+  border-radius: var(--radius-button);
+  background: var(--color-orange);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-button);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.loc-toolbar__new:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-button-hover);
+}
+
+/* ── Avisos de la lista ── */
+.loc-action-error,
+.loc-action-warn {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0 0.6rem 0.6rem 0;
+  font-size: 0.83rem;
+  line-height: 1.55;
+  color: var(--color-text-primary);
+}
+
+.loc-action-error {
+  border-left: 2px solid var(--color-danger);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.loc-action-warn {
+  border-left: 2px solid var(--color-gold);
+  background: rgba(245, 158, 11, 0.09);
+}
+
+.loc-modal__action-btn--danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.loc-modal__action-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loc-toolbar__new:hover { transform: none; }
+}
+
 /* ── Empty state ── */
 .loc-empty {
   flex: 1 1 100%;
