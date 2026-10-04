@@ -1,12 +1,6 @@
 import GoogleLogo from '../GoogleLogo/GoogleLogo';
+import { GOOGLE_BENEFITS } from '../../lib/googleBenefits';
 import './GoogleConnectBanner.css';
-
-const BENEFITS = [
-  'Responder con IA usando tu propio tono de marca.',
-  'Consultar cuántos clientes te llegan desde Google Maps.',
-  'Revisar las publicaciones de tu ficha.',
-  'Descubrir tu puntuación de SEO local y qué mejorar.',
-];
 
 function CheckIcon() {
   return (
@@ -23,7 +17,7 @@ export default function GoogleConnectBanner() {
         <h2 className="gcb__title">Gestioná todo tu perfil de Google Business.</h2>
         <p className="gcb__lead">Una vez conectes tu cuenta vas a poder:</p>
         <ul className="gcb__list">
-          {BENEFITS.map((b) => (
+          {GOOGLE_BENEFITS.map((b) => (
             <li key={b}>
               <span className="gcb__check"><CheckIcon /></span>
               {b}

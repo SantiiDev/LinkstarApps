@@ -74,6 +74,25 @@ export const SECTION_PATHS = {
 /* Sección a la que se entra después de iniciar sesión. */
 export const DEFAULT_SECTION = 'company';
 
+/* Secciones bloqueadas por el modal de "conectá tu ficha de Google"
+ * (components/GoogleGate). No se les muestra el aviso de suscripción: quedaría
+ * detrás del modal, desenfocado y sin poder tocarse, y encima le corre el alto
+ * a la pantalla. El aviso vuelve solo en cuanto la sección deje de estar
+ * bloqueada.
+ *
+ * Es una lista fija porque hoy la puerta no depende de nada: no existe todavía
+ * ningún dato de "ficha conectada". Cuando exista, esto pasa a leer la misma
+ * condición que GoogleGate, en un solo lugar. */
+export const GOOGLE_GATED_SECTIONS = new Set([
+  'reviews',
+  'gb-metrics',
+  'gb-profile',
+  'gb-posts',
+  'gb-seo',
+  'reports-sentiment',
+  'reports-keywords',
+]);
+
 /* Pestañas de Configuración: van en la URL para poder enlazar directo a una
  * (Dispositivos enlaza a la de ubicaciones, por ejemplo). Los alias son los
  * nombres viejos, de cuando Equipo y Gestión local eran secciones propias. */

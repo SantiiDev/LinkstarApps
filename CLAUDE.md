@@ -483,34 +483,62 @@ split below before wiring anything — the shell is finished, the data mostly is
   `lib/dashboardApi.js`), `devices`, `employees` / `locations` (embedded in `settings`), the whole `/alta`
   onboarding, and the "Facturación" tab of `settings` (plan and status from `OrgContext`, history from
   `subscription_payments`). `profile` reads the logged-in user from `AuthContext`.
-  **Every remaining section renders `components/SectionPlaceholder`** instead of the hardcoded arrays it
-  used to show — `gb-*`, `reviews`, `reports-*`, `monthly-reports`, `automations`. The rule that replaced
-  them: a page with no data source says so; it never prints a number that can't be distinguished from a
-  measured one. The placeholder has two variants and picking the wrong one misleads:
+  The sections with no data source do **not** print numbers: the three that depend on us (`reports-nps`,
+  `monthly-reports`, `automations`) render `components/SectionPlaceholder`, and the seven that depend on
+  the customer's Google profile render their old mock behind `components/GoogleGate` (see below). The rule
+  that replaced the hardcoded arrays: a page with no data source says so; it never prints a number that
+  can't be distinguished from a measured one. The placeholder has two variants and picking the wrong one
+  misleads:
   `google` for what the *customer* can unblock by connecting their Business Profile (it carries the connect
   button), `soon` for what *we* haven't built — NPS, monthly reports, automations — which gets no button,
   because a button that resolves nothing is worse than none. Each converted file keeps a header comment
-  saying what it used to fake and which roadmap phase feeds it; the original mock markup and its CSS are
-  still in git (and the CSS files are deliberately left in place — they are the design target for when the
-  data arrives).
+  saying what it used to fake and which roadmap phase feeds it. Since `GoogleGate` landed, `variant="google"`
+  has exactly one caller left — the one on `company` — so changing that variant barely moves anything; the
+  copy that used to live in the other seven (`description`, `preview`, `note`) moved into the gate's modal.
   Two mocks outlived that sweep because they were embedded in `Settings.jsx` and in `AppShell` rather than
   being screens of their own, and were removed on 18 Aug 2026: the "Cuentas de Google conectadas" card
   (a fabricated connected account carrying a real person's name and an address on the unregistered
   domain, plus a "0 de 1 locales activos" counter backed by nothing) and the topbar's invented support
   phone number. Same rule as the rest — no button, since connecting the Business Profile lands in phase 4.
-  Note the `google` variant's connect button is itself inert today: no caller passes `onConnect`.
-- **The mock JSX is a deliverable, not discarded history — and it does not come back on its own.** The tag
-  `maquetas-pre-fase-2` points at the last commit where those ten screens were still drawing their grids,
-  tables and charts, and every converted file's header repeats the `git show` line that recovers its own
-  screen. Connecting Google flips no switch: the JSX is gone from the working tree, so a connected account
-  still renders the placeholder until somebody rewrites the screen against the real data. Budget that
-  front-end work into phase 4 alongside the API work. Two consequences that look like dead code and are
-  not: `components/PieChart/` (plus `lib/shares.js`) and `lib/chartColors.js` have no importer today
-  **only because** the screens that used them — `reports-nps`, `reports-sentiment`, `gb-metrics` — were the
-  ones converted. Same for the now-unused CSS in `GoogleBusiness.css`, `Reviews.css`, `Reports.css`,
-  `Automations.css` and `MonthlyReports.css`. `components/DateField/` belongs on the same list for a
-  different reason: it is not a mock, it is a working date picker with no caller yet, and the date-range
-  filters of the reports screens are what it was built for. None of it gets swept in a dead-code pass.
+  Note the `google` variant's connect button is itself inert today: no caller passes `onConnect`. So is
+  `GoogleGate`'s and `GoogleConnectBanner`'s — the OAuth is phase 4, and the three are wired together.
+- **`components/GoogleGate` is the only place a mock is allowed to render, and that is what makes it
+  legal.** The seven sections that depend on the customer's Google profile — `reviews`, the four `gb-*`,
+  `reports-sentiment`, `reports-keywords` — show their pre-phase-2 mock *as the background* of a modal that
+  invites you to connect: blurred, `inert` (no clicks, no tab stops, no text selection, no screen reader),
+  and with no way to close the modal and no `Escape`. The page file is a thin wrapper that passes copy to
+  the gate; the recovered JSX lives next to it in a `*Mockup.jsx`, with `data/reviews.js` back for the
+  three that read it. The blur is **deliberately light** (`filter: blur(3px)`) — the mock is there so the
+  customer sees what the section is for, so parts of it are legible. What keeps the invented numbers on the
+  right side of "never print a number that can't be distinguished from a measured one" is therefore the
+  whole set of conditions, not illegibility: a `*Mockup.jsx` rendered outside the gate, or a gate that can
+  be dismissed, breaks the rule. Three mechanics that are not decorative:
+  **(a)** the section scrolls normally (the mock runs past behind) but the modal does not — it is
+  `position: fixed` over the content area, offset by the sidebar width (264px, 88px under 1024, 0 under
+  640, where the topbar also grows 44px → 52px), because the sidebar must stay visible and clickable as the
+  only way out; **(b)** the modal never scrolls inside and is never cut: it has no `max-height`, its layer
+  is `overflow: hidden` (with `auto`, one pixel of overflow turned the layer into a scroller and the wheel
+  moved the modal instead of the page behind it), and a ladder of `max-height` media queries drops the
+  modal's optional parts — small print, then the description, then the review skeleton — so it fits short
+  windows instead of overflowing; **(c)** the blur is `filter` on the mock, **not**
+  `backdrop-filter` on a veil over it: the section scrolls, and a backdrop-filter would re-blur the mock's
+  ~20 glass cards every frame (rule 2 below). `SubscriptionBanner` is hidden on these sections
+  (`GOOGLE_GATED_SECTIONS` in `lib/routes.js`, read by `AppShell`) — behind the modal it is unreachable and
+  only steals height. That list is fixed because nothing records whether a profile is connected; when that
+  exists, it and the gate read the same condition. This was asked for as the MyTapStar pattern, so match
+  that screen if it's ever redesigned.
+- **The mock JSX is a deliverable, not discarded history.** The tag `maquetas-pre-fase-2` points at the last
+  commit where those ten screens were still drawing their grids, tables and charts; seven of them now live
+  in the tree as `*Mockup.jsx` and the three "próximamente" ones (`reports-nps`, `monthly-reports`,
+  `automations`) are still only in the tag, with the `git show` line in each file's header. Connecting
+  Google flips no switch either way: the mock is a *drawing*, not a screen wired to data, so a connected
+  account does not get a working section — somebody has to rewrite each one against the real data and
+  delete the `*Mockup.jsx`. Budget that front-end work into phase 4 alongside the API work. What looks like
+  dead code and is not: the now-unused CSS in `Automations.css` and `MonthlyReports.css` (the design target
+  for when the data arrives), and `components/DateField/`, a working date picker with no caller yet — the
+  date-range filters of the reports screens are what it was built for. Neither gets swept in a dead-code
+  pass. (`components/PieChart/`, `lib/shares.js` and `lib/chartColors.js` used to be on this list; the
+  recovered mocks import them again.)
 - **Scroll performance: the glass look is expensive, so the cheap frames are load-bearing.** The design is
   glassmorphism — around sixty surfaces carry `backdrop-filter: var(--glass-blur)`, and each one re-blurs
   whatever is behind it. That only stays affordable because the backdrop itself is cheap, which took three
