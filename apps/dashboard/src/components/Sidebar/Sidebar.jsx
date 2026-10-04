@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
+import { initialsFor } from '../../lib/dashboardApi';
 import Select from '../Select/Select';
 import './Sidebar.css';
 
@@ -129,14 +130,6 @@ const TAIL_ITEMS = [
   { id: 'automations', label: 'Automatizaciones', icon: 'zap' },
   { id: 'settings', label: 'Configuración', icon: 'settings' },
 ];
-
-function initialsFor(name, email) {
-  const source = (name || email || '').trim();
-  if (!source) return '?';
-  const parts = source.split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
-}
 
 export default function Sidebar({ activeSection, onNavigate, onLogout, open = false, onClose }) {
   const { user } = useAuth();
@@ -277,7 +270,7 @@ export default function Sidebar({ activeSection, onNavigate, onLogout, open = fa
           )}
 
           <button className="sidebar__user" onClick={() => setMenuOpen((prev) => !prev)}>
-            <div className="sidebar__avatar">{initialsFor(fullName, user?.email)}</div>
+            <div className="sidebar__avatar">{initialsFor(fullName || user?.email)}</div>
             <div className="sidebar__user-info">
               <span className="sidebar__user-name">{displayName}</span>
               <span className="sidebar__user-role">{secondaryLine}</span>

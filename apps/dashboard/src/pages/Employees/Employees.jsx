@@ -7,6 +7,7 @@ import {
   formatRelativeTime,
   colorForIndex,
   initialsFor,
+  lastNDayLabels,
 } from '../../lib/dashboardApi';
 import './Employees.css';
 
@@ -36,7 +37,12 @@ function mapEmployeeRow(row, { locationsById, devicesByEmployee, index }) {
     // La vista ya filtra `e.is_active` — todo lo que llega acá está activo.
     status: 'active',
     reviews: null,
-    scans: row.scans_30d ?? 0,
+    // human_scans_30d, no scans_30d: `scans` es el count(*) crudo y tiene los
+    // bots adentro — y el bot que importa acá no es un atacante, es la preview
+    // de WhatsApp cada vez que alguien comparte el link del expositor. Esta
+    // pantalla era la única que seguía mostrando la columna cruda bajo la
+    // etiqueta "Escaneos", que es justo lo que la 0018 vino a eliminar.
+    scans: row.human_scans_30d ?? 0,
     conversion: null,
     streak: 0,
     goal: 100,
@@ -51,8 +57,6 @@ function mapEmployeeRow(row, { locationsById, devicesByEmployee, index }) {
 }
 
 /* ─── Helpers ──────────────────────────────────────────────── */
-const DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-
 function pct(reviews, goal) {
   return Math.min(Math.round((reviews / goal) * 100), 100);
 }
@@ -69,6 +73,11 @@ function EmployeeModal({ employee, rank, total, onClose }) {
   if (!employee) return null;
   const max = Math.max(...employee.weeklyReviews, 1);
   const progress = pct(employee.reviews, employee.goal);
+  /* Los últimos N días terminando hoy, no una semana calendario. Acá quedaba
+     el último ['L','M','X','J','V','S','D'] del panel, que asume que la serie
+     arranca un lunes y desalinea cada barra con su fecha real. Mismo arreglo
+     que ya tenían Dispositivos y Ubicaciones. */
+  const days = lastNDayLabels(employee.weeklyReviews.length);
 
   return (
     <div className="emp-modal-overlay" onClick={onClose}>
@@ -195,8 +204,8 @@ function EmployeeModal({ employee, rank, total, onClose }) {
               <div
                 key={i}
                 className="emp-modal__chart-bar"
-                style={{ height: `${(v / max) * 100}%` }}
-                title={`${DAYS[i]}: ${v} reseñas`}
+                style={{ height: `max(2px, ${(v / max) * 100}%)` }}
+                title={`${days[i]}: ${v} reseñas`}
               />
             ))}
           </div>
@@ -216,20 +225,57 @@ function EmployeeModal({ employee, rank, total, onClose }) {
   );
 }
 
+/* ─── Empty states ──────────────────────────────────────────── */
+/* Mismo criterio que Dispositivos y Ubicaciones: "todavía no hay empleados" y
+   "el filtro no devolvió nada" son dos cosas distintas, y acá las dos decían
+   "No hay empleados que coincidan con tu búsqueda". A una cuenta del día uno
+   eso le dice que no matcheó una búsqueda que nunca hizo.
+
+   `hasAny` se calcula sobre la lista completa, no sobre la filtrada.
+
+   El vacío de día uno no lleva botón a propósito: los empleados todavía no se
+   pueden crear —necesitan las tarjetas personales— y un botón que no resuelve
+   nada es peor que ninguno. */
+function EmployeesEmpty({ hasAny, onClearFilters }) {
+  if (hasAny) {
+    return (
+      <div className="emp-empty">
+        <div className="emp-empty__icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </div>
+        <div className="emp-empty__title">Sin resultados</div>
+        <div className="emp-empty__text">Ningún empleado coincide con la búsqueda o el filtro aplicado.</div>
+        <button className="emp-empty__btn" onClick={onClearFilters} type="button">Limpiar filtros</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="emp-empty">
+      <div className="emp-empty__icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      </div>
+      <div className="emp-empty__title">Todavía no hay empleados</div>
+      <div className="emp-empty__text">
+        Los empleados existen para saber quién consiguió cada reseña, y eso necesita las tarjetas
+        personales: el expositor está sobre la mesa y no es de nadie, la tarjeta sí. Cuando las
+        tengamos, vas a poder cargarlos acá.
+      </div>
+    </div>
+  );
+}
+
 /* ─── Card View ─────────────────────────────────────────────── */
-function EmployeeCardGrid({ employees, rankedIds, onSelect }) {
+function EmployeeCardGrid({ employees, hasAny, rankedIds, onSelect, onClearFilters }) {
   if (employees.length === 0) {
     return (
       <div className="emp-grid">
-        <div className="emp-empty">
-          <div className="emp-empty__icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </div>
-          <div className="emp-empty__title">Sin resultados</div>
-          <div className="emp-empty__text">No hay empleados que coincidan con tu búsqueda.</div>
-        </div>
+        <EmployeesEmpty hasAny={hasAny} onClearFilters={onClearFilters} />
       </div>
     );
   }
@@ -316,7 +362,12 @@ function EmployeeCardGrid({ employees, rankedIds, onSelect }) {
                   <div
                     key={i}
                     className={`emp-card__spark-bar ${emp.status === 'inactive' ? 'emp-card__spark-bar--inactive' : ''}`}
-                    style={{ height: `${(v / max) * 100}%` }}
+                    /* max(2px, …): la serie de reseñas por empleado es toda
+                       cero hasta que haya snapshots de Google, y sin el piso
+                       las barras desaparecen — la franja queda vacía y se lee
+                       como un gráfico roto en vez de como "no hubo actividad".
+                       Mismo criterio que Dispositivos y Ubicaciones. */
+                    style={{ height: `max(2px, ${(v / max) * 100}%)` }}
                   />
                 ))}
               </div>
@@ -355,7 +406,17 @@ function EmployeeCardGrid({ employees, rankedIds, onSelect }) {
 }
 
 /* ─── Table View ────────────────────────────────────────────── */
-function EmployeeTable({ employees, rankedIds, onSelect }) {
+function EmployeeTable({ employees, hasAny, rankedIds, onSelect, onClearFilters }) {
+  // Igual que en Dispositivos y Ubicaciones: con cero filas quedaba el
+  // encabezado solo flotando arriba de nada.
+  if (employees.length === 0) {
+    return (
+      <div className="emp-table-wrap">
+        <EmployeesEmpty hasAny={hasAny} onClearFilters={onClearFilters} />
+      </div>
+    );
+  }
+
   return (
     <div className="emp-table-wrap">
       <table className="emp-table">
@@ -420,13 +481,14 @@ function EmployeeTable({ employees, rankedIds, onSelect }) {
 }
 
 /* ─── Main Page ─────────────────────────────────────────────── */
+/* Estaban los tabs "Centro / Norte / Sur", que son los nombres de las
+   sucursales del mock: para una organización real con un local llamado de
+   cualquier otra forma, los tres devolvían siempre "Sin resultados". El filtro
+   por sucursal vuelve cuando se arme sobre la lista real de locales. */
 const FILTER_TABS = [
   { id: 'all',      label: 'Todos' },
   { id: 'active',   label: 'Activos' },
   { id: 'inactive', label: 'Inactivos' },
-  { id: 'centro',   label: 'Centro' },
-  { id: 'norte',    label: 'Norte' },
-  { id: 'sur',      label: 'Sur' },
 ];
 
 const SORT_OPTIONS = [
@@ -520,10 +582,7 @@ export default function EmployeesPage({ embedded = false }) {
       const matchFilter =
         filter === 'all'      ? true :
         filter === 'active'   ? e.status === 'active' :
-        filter === 'inactive' ? e.status === 'inactive' :
-        filter === 'centro'   ? e.location.includes('Centro') :
-        filter === 'norte'    ? e.location.includes('Norte') :
-        filter === 'sur'      ? e.location.includes('Sur') : true;
+        filter === 'inactive' ? e.status === 'inactive' : true;
 
       return matchSearch && matchFilter;
     });
@@ -531,6 +590,11 @@ export default function EmployeesPage({ embedded = false }) {
     list = [...list].sort((a, b) => (b[sort] ?? 0) - (a[sort] ?? 0));
     return list;
   }, [employees, search, filter, sort]);
+
+  function clearFilters() {
+    setSearch('');
+    setFilter('all');
+  }
 
   const selectedRank = selected ? rankedIds.indexOf(selected.id) + 1 : 1;
 
@@ -662,15 +726,15 @@ export default function EmployeesPage({ embedded = false }) {
 
       {/* ── Content ── */}
       {viewMode === 'grid'
-        ? <EmployeeCardGrid employees={displayed} rankedIds={rankedIds} onSelect={setSelected} />
-        : <EmployeeTable    employees={displayed} rankedIds={rankedIds} onSelect={setSelected} />
+        ? <EmployeeCardGrid employees={displayed} hasAny={employees.length > 0} rankedIds={rankedIds} onSelect={setSelected} onClearFilters={clearFilters} />
+        : <EmployeeTable    employees={displayed} hasAny={employees.length > 0} rankedIds={rankedIds} onSelect={setSelected} onClearFilters={clearFilters} />
       }
 
       {/* ── Footer ── */}
       {!embedded && (
       <div className="emp-page__footer">
         <p className="emp-page__footer-text">
-          © 2026 <span className="emp-page__footer-brand">
+          © {new Date().getFullYear()} <span className="emp-page__footer-brand">
             linkstar<span className="emp-page__footer-dot">.</span>
           </span> — Panel de gestión de reseñas
         </p>

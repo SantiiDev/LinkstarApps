@@ -5,6 +5,7 @@ import { useOrg } from '../../context/OrgContext';
 import { SALES_CONTACT_URL } from '../../lib/config';
 import { formatArs } from '../../lib/format';
 import { ONBOARDING_ROUTES, SECTION_PATHS, DEFAULT_SECTION } from '../../lib/routes';
+import { takeIntendedPlan } from '../../lib/planIntent';
 import OnboardingLayout from './OnboardingLayout';
 
 function CheckIcon() {
@@ -51,6 +52,26 @@ export default function PlanPicker() {
 
     return () => { cancelled = true; };
   }, []);
+
+  /* Si el usuario ya eligió un plan pago en la landing, no se lo volvemos a
+     preguntar: va derecho al resumen del checkout, que es donde confirma.
+     takeIntendedPlan() borra la marca al leerla, así que "Volver a los planes"
+     desde el pago muestra el selector en vez de rebotar de nuevo al pago.
+
+     Sólo salta con `subscription`: elegir el gratis cambia el estado de la
+     cuenta, y eso no se dispara solo por haber clickeado una tarjeta tres
+     pantallas atrás. */
+  useEffect(() => {
+    if (loading || plans.length === 0 || !canManageBilling) return;
+
+    const code = takeIntendedPlan();
+    if (!code) return;
+
+    const intended = plans.find((p) => p.code === code);
+    if (intended?.checkout_mode === 'subscription') {
+      navigate(`${ONBOARDING_ROUTES.payment}?plan=${encodeURIComponent(code)}`, { replace: true });
+    }
+  }, [loading, plans, canManageBilling, navigate]);
 
   async function handleFree(code) {
     setError('');
@@ -141,11 +162,16 @@ export default function PlanPicker() {
                   </p>
                 )}
 
-                {/* Decirlo acá y no después: el gratis no se abre sin
-                    expositor, y enterarse recién en la pantalla siguiente se
-                    siente como una trampa. */}
+                {/* La 0015 exigía un expositor vinculado para abrir el panel
+                    con el plan gratis, y esta nota avisaba de eso. La 0022 lo
+                    revirtió: el expositor llega días después del alta, así que
+                    la regla dejaba afuera justo al que ya había comprado. El
+                    paso siguiente ofrece vincularlo y se puede saltear. */}
                 {plan.checkout_mode === 'free' && !hasDevices && (
-                  <p className="onb-plan__note">Necesitás vincular tu expositor para activarlo.</p>
+                  <p className="onb-plan__note">
+                    Después te pedimos el código de tu expositor. Si todavía no te llegó, entrás
+                    igual.
+                  </p>
                 )}
 
                 <div className="onb-plan__features">

@@ -27,7 +27,7 @@ function isInactiveTooLong() {
 }
 
 // Le avisa al backend que hubo un login para que actualice
-// profiles.last_login_at (ver backend/server.js). Best-effort: si el
+// profiles.last_login_at (ver services/api/routes/auth.js). Best-effort: si el
 // backend está caído no debe romper el login del usuario.
 async function notifyLoginEvent(accessToken) {
   try {
@@ -137,6 +137,38 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(() => supabase.auth.signOut(), []);
 
+  // El nombre vive en user_metadata, que es de donde lo leen el Sidebar y el
+  // Perfil. El trigger on_auth_user_created (0002) lo copia a `profiles` sólo
+  // al registrarse, así que cambiarlo acá no actualiza esa tabla — hoy no la
+  // lee nadie para mostrar el nombre, pero conviene saberlo.
+  const updateFullName = useCallback(async (fullName) => {
+    const { error } = await supabase.auth.updateUser({
+      data: { full_name: fullName },
+    });
+    return { error };
+  }, []);
+
+  /* Supabase NO pide la contraseña actual para cambiarla mientras hay sesión
+     abierta. La pedimos igual y la verificamos con un signInWithPassword
+     contra el mismo mail, porque en este producto la computadora del local se
+     queda con la sesión iniciada: sin ese paso, cualquiera que pase por ahí se
+     queda con la cuenta. Un intento fallido no toca la sesión existente. */
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
+    const email = session?.user?.email;
+    if (!email) return { error: { message: 'No hay una sesión activa.' } };
+
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+    if (reauthError) {
+      return { error: { message: 'La contraseña actual no es correcta.' } };
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    return { error };
+  }, [session]);
+
   const clearSessionExpired = useCallback(() => setSessionExpired(false), []);
 
   const value = {
@@ -148,6 +180,8 @@ export function AuthProvider({ children }) {
     signIn,
     signUp,
     signOut,
+    updateFullName,
+    changePassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

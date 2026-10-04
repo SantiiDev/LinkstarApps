@@ -151,22 +151,35 @@ router.post('/api/orders/manual', paymentLimiter, validateBody(manualOrderSchema
       total,
     });
 
-    await sendEmailNotification({
-      order_number: orderNumber,
-      payment_method: 'manual',
-      customer_name: customer.name,
-      customer_email: customer.email,
-      customer_phone: customer.phone,
-      customer_address: customer.address,
-      customer_city: customer.city,
-      customer_zip: customer.zip,
-      items,
-      total,
-    });
+    // El aviso va DESPUÉS de persistir y en su propio try, a propósito: la
+    // orden ya está guardada, así que un fallo del proveedor de mail no puede
+    // devolver 500. Si lo hiciera, el navegador cae a su camino de respaldo,
+    // genera OTRO número de orden y manda un mail con el asunto "SIN
+    // REGISTRAR" — quedaría una orden en la base con un número y un aviso con
+    // otro distinto diciendo que hay que cargarla a mano.
+    let emailSent = true;
+    try {
+      await sendEmailNotification({
+        order_number: orderNumber,
+        payment_method: 'manual',
+        customer_name: customer.name,
+        customer_email: customer.email,
+        customer_phone: customer.phone,
+        customer_address: customer.address,
+        customer_city: customer.city,
+        customer_zip: customer.zip,
+        items,
+        total,
+      });
+    } catch (mailErr) {
+      emailSent = false;
+      console.error(`Pedido ${orderNumber} guardado, pero falló el aviso por mail:`, mailErr);
+    }
 
     res.json({
       order_number: orderNumber,
       total,
+      email_sent: emailSent,
     });
   } catch (err) {
     if (err.status === 400) return res.status(400).json({ error: err.message });

@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { API_URL, WEB3FORMS_KEY } from '../../lib/config';
+import { ROUTES } from '../../lib/routes';
 import './Checkout.css';
 
 
@@ -198,6 +200,18 @@ export default function Checkout({ onBack }) {
 
   const shipping = 0;
   const total = totalPrice + shipping;
+
+  /* Con el carrito vacío no hay pedido posible. Antes esta pantalla dejaba
+     llenar los datos, confirmar, y recién ahí el servidor rechazaba por falta
+     de ítems: el visitante leía "No pudimos validar tu pedido. Actualizá la
+     página y volvé a armar el carrito", que no describe lo que pasó.
+
+     `step !== 'success'` no es opcional: al confirmar se vacía el carrito, así
+     que sin esa condición el guard echaría al comprador de la pantalla que le
+     muestra el número de orden. */
+  if (items.length === 0 && step !== 'success') {
+    return <Navigate to={ROUTES.shop} replace />;
+  }
 
   // ── Success screen ──
   if (step === 'success') {

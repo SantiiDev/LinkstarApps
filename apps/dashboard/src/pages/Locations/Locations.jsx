@@ -9,6 +9,10 @@ import {
   colorForIndex,
   lastNDayLabels,
 } from '../../lib/dashboardApi';
+// TEMPORAL — las dos líneas de abajo se borran junto con NewLocationModal.jsx
+// el día que llegue el OAuth de Google. Ver lib/config.js.
+import { MANUAL_LOCATION_ENABLED } from '../../lib/config';
+import NewLocationModal from './NewLocationModal';
 import './Locations.css';
 
 // Largo de las sparklines de esta pantalla.
@@ -280,7 +284,7 @@ function LocationModal({ location, onClose }) {
 /* Mismo criterio que en Dispositivos: "no cargaste ninguna sucursal todavía" y
    "el filtro no devolvió nada" son dos situaciones distintas y antes decían la
    misma frase. `hasAny` mira la lista completa, no la filtrada. */
-function LocationsEmpty({ hasAny, onClearFilters }) {
+function LocationsEmpty({ hasAny, onClearFilters, onCreate }) {
   if (hasAny) {
     return (
       <div className="loc-empty">
@@ -309,16 +313,24 @@ function LocationsEmpty({ hasAny, onClearFilters }) {
         y después asignale los expositores: sin eso, un escaneo no sabe a qué
         formulario de reseña mandar al cliente.
       </div>
+      {/* TEMPORAL — el CTA sólo aparece con el flag de carga manual. Sin él no
+          hay forma de crear un local hasta que llegue el OAuth, y entonces el
+          vacío se queda sin botón a propósito: no hay nada que ofrecer. */}
+      {MANUAL_LOCATION_ENABLED && onCreate && (
+        <button className="loc-empty__btn" onClick={onCreate} type="button">
+          Cargar una sucursal
+        </button>
+      )}
     </div>
   );
 }
 
 /* ─── Card View ─────────────────────────────────────────────── */
-function LocationCardGrid({ locations, hasAny, onSelect, onClearFilters }) {
+function LocationCardGrid({ locations, hasAny, onSelect, onClearFilters, onCreate }) {
   if (locations.length === 0) {
     return (
       <div className="loc-grid">
-        <LocationsEmpty hasAny={hasAny} onClearFilters={onClearFilters} />
+        <LocationsEmpty hasAny={hasAny} onClearFilters={onClearFilters} onCreate={onCreate} />
       </div>
     );
   }
@@ -474,12 +486,12 @@ function LocationCardGrid({ locations, hasAny, onSelect, onClearFilters }) {
 }
 
 /* ─── Table View ────────────────────────────────────────────── */
-function LocationTable({ locations, hasAny, onSelect, onClearFilters }) {
+function LocationTable({ locations, hasAny, onSelect, onClearFilters, onCreate }) {
   // Igual que en Dispositivos: la vista tabla se quedaba con el encabezado solo.
   if (locations.length === 0) {
     return (
       <div className="loc-table-wrap">
-        <LocationsEmpty hasAny={hasAny} onClearFilters={onClearFilters} />
+        <LocationsEmpty hasAny={hasAny} onClearFilters={onClearFilters} onCreate={onCreate} />
       </div>
     );
   }
@@ -541,10 +553,14 @@ function LocationTable({ locations, hasAny, onSelect, onClearFilters }) {
 }
 
 /* ─── Main Page ─────────────────────────────────────────────── */
+/* No hay tab "Cerradas": mapLocationRow() pone `status: 'active'` en todas,
+   porque la vista del 0008 sólo excluye las borradas (deleted_at) y no existe
+   un flag de "cerrada" en el esquema. El tab estaba siempre vacío — clickearlo
+   devolvía "Sin resultados" sin que el usuario hubiera filtrado nada. Vuelve
+   el día que haya una columna que lo respalde. */
 const FILTER_TABS = [
   { id: 'all',      label: 'Todas' },
   { id: 'active',   label: 'Operativas' },
-  { id: 'inactive', label: 'Cerradas' },
 ];
 
 const SORT_OPTIONS = [
@@ -565,6 +581,11 @@ export default function LocationsPage({ embedded = false }) {
   const [sort, setSort]         = useState('totalReviews');
   const [viewMode, setViewMode] = useState('grid');
   const [selected, setSelected] = useState(null);
+  /* TEMPORAL — estado del alta manual, se borra junto con NewLocationModal.
+     `reloadKey` se incrementa al crear para volver a pedir la lista sin
+     recargar la página: el local recién cargado tiene que aparecer. */
+  const [creating, setCreating] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   /* Carga real desde Supabase (v_location_performance, cruzada con
      v_device_performance/v_employee_leaderboard para dispositivos/equipo
@@ -614,7 +635,7 @@ export default function LocationsPage({ embedded = false }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [reloadKey]);
 
   /* Derived stats */
   const totalActive    = locations.filter(l => l.status === 'active').length;
@@ -633,9 +654,8 @@ export default function LocationsPage({ embedded = false }) {
         l.city.toLowerCase().includes(q);
 
       const matchFilter =
-        filter === 'all'      ? true :
-        filter === 'active'   ? l.status === 'active' :
-        filter === 'inactive' ? l.status === 'inactive' : true;
+        filter === 'all'    ? true :
+        filter === 'active' ? l.status === 'active' : true;
 
       return matchSearch && matchFilter;
     });
@@ -773,19 +793,32 @@ export default function LocationsPage({ embedded = false }) {
             </svg>
           </button>
         </div>
+
+        {/* TEMPORAL — único acceso al alta manual cuando ya hay locales
+            cargados. Va en la toolbar y no en el header de la página porque
+            embebida en Configuración → Gestión local ese header está oculto, y
+            embebida es la única forma de llegar a esta pantalla. */}
+        {MANUAL_LOCATION_ENABLED && (
+          <button className="loc-page__btn-primary" onClick={() => setCreating(true)} type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Nueva ubicación
+          </button>
+        )}
       </div>
 
       {/* ── Content ── */}
       {viewMode === 'grid'
-        ? <LocationCardGrid locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} />
-        : <LocationTable    locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} />
+        ? <LocationCardGrid locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} onCreate={() => setCreating(true)} />
+        : <LocationTable    locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} onCreate={() => setCreating(true)} />
       }
 
       {/* ── Footer ── */}
       {!embedded && (
       <div className="loc-page__footer">
         <p className="loc-page__footer-text">
-          © 2026 <span className="loc-page__footer-brand">
+          © {new Date().getFullYear()} <span className="loc-page__footer-brand">
             linkstar<span className="loc-page__footer-dot">.</span>
           </span> — Panel de gestión de reseñas
         </p>
@@ -797,6 +830,14 @@ export default function LocationsPage({ embedded = false }) {
         <LocationModal
           location={selected}
           onClose={() => setSelected(null)}
+        />
+      )}
+
+      {/* TEMPORAL — alta manual. Se borra junto con NewLocationModal.jsx. */}
+      {MANUAL_LOCATION_ENABLED && creating && (
+        <NewLocationModal
+          onClose={() => setCreating(false)}
+          onCreated={() => setReloadKey(k => k + 1)}
         />
       )}
     </div>

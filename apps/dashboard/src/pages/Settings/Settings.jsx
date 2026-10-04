@@ -42,14 +42,9 @@ function Icon({ name, ...rest }) {
     check: <svg {...props}><polyline points="20 6 9 17 4 12" /></svg>,
     download: <svg {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>,
     gear: <svg {...props}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>,
-    google: (
-      <svg {...props} viewBox="0 0 48 48" fill="none" strokeWidth="0">
-        <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.6 32.9 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z" />
-        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.6 8.3 6.3 14.7z" />
-        <path fill="#4CAF50" d="M24 44c5.5 0 10.4-1.9 14.3-5.1l-6.6-5.6C29.6 34.9 26.9 36 24 36c-5.2 0-9.6-3.1-11.3-7.5l-6.6 5.1C9.5 39.6 16.2 44 24 44z" />
-        <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.7l6.6 5.6C39.9 37.1 44 31 44 24c0-1.3-.1-2.7-.4-3.5z" />
-      </svg>
-    ),
+    // El logo de Google se fue con la tarjeta de "Cuentas de Google conectadas"
+    // que esta pantalla fingía: ninguna <Icon name="google" /> quedó acá. Si
+    // vuelve a hacer falta, está en components/GoogleLogo/.
   };
   return icons[name] || null;
 }
@@ -168,10 +163,36 @@ function TeamTab() {
           porque "equipo" a secas es ambiguo en este producto. */}
       <TeamMembers />
 
-      {/* Empleados reales. Mismo caso que Ubicaciones en la pestaña "Gestión
-          local": la página existía y leía datos reales, pero acá había un
-          placeholder "Próximamente" y ningún camino hasta ella. Se renderiza
-          con `embedded` para no repetir encabezado y pie. */}
+      {/* Empleados reales. La página lee v_employee_leaderboard de verdad y se
+          renderiza con `embedded` para no repetir encabezado y pie.
+
+          Pero arriba va un aviso, porque la pantalla funciona y la función no:
+          atribuirle un escaneo a una persona necesita que esa persona tenga su
+          propia tarjeta, y hoy sólo se venden expositores, que están sobre la
+          mesa y no son de nadie. Hasta que existan las tarjetas el ranking va a
+          estar vacío, y un ranking vacío sin explicación se lee como que algo
+          se rompió. La pantalla NO se reemplaza por un placeholder: el día que
+          haya tarjetas funciona sin reescribir nada, sólo se saca este aviso. */}
+      <div className="settings-card">
+        <CardHead
+          icon="userPlus"
+          iconVariant="gold"
+          title="Empleados"
+          badge={<span className="settings-badge settings-badge--soon">Próximamente</span>}
+          subtitle={
+            <p className="settings-card__subtitle">
+              Son el mozo y el cajero: no inician sesión, existen para saber quién consiguió cada
+              reseña.
+            </p>
+          }
+        />
+        <p className="settings-card__hint settings-card__hint--block">
+          La atribución por empleado llega con las tarjetas personales. Un expositor está sobre la
+          mesa y no es de nadie; una tarjeta sí. Hasta entonces el ranking de acá abajo va a estar
+          vacío, y es correcto que lo esté.
+        </p>
+      </div>
+
       <EmployeesPage embedded />
 
       <ActivityLog />

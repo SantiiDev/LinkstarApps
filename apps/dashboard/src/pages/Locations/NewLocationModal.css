@@ -1,0 +1,133 @@
+/* ─── TEMPORAL — se borra junto con NewLocationModal.jsx ──────────────────
+   Ver la cabecera del .jsx: esto existe sólo para poder probar el circuito
+   completo mientras el acceso a la API de Google Business Profile está en
+   trámite. Todo lo de acá está prefijado con .nlm para que borrar el archivo
+   no se lleve puesto nada más.
+
+   La estructura (overlay, caja, botón de cerrar, botones del pie) se reusa de
+   Locations.css; acá sólo está el formulario.
+   ----------------------------------------------------------------------- */
+
+.loc-modal.nlm {
+  max-width: 620px;
+}
+
+.nlm__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--glass-border-inner);
+}
+
+.nlm__title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.nlm__subtitle {
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.nlm__body {
+  padding: 1.25rem 1.5rem 1.5rem;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.nlm__section {
+  margin: 1.25rem 0 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.nlm__section:first-child {
+  margin-top: 0;
+}
+
+.nlm__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+
+.nlm__field {
+  display: block;
+  margin-bottom: 0.85rem;
+}
+
+.nlm__label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.nlm__input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.6rem;
+  transition: border-color var(--transition-base), background-color var(--transition-base);
+}
+
+.nlm__input:focus {
+  background: var(--color-white);
+  border-color: var(--color-orange);
+}
+
+.nlm__input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.nlm__hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.73rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.nlm__hint--block {
+  margin: -0.35rem 0 0.85rem;
+}
+
+.nlm__error {
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 0.6rem;
+}
+
+.nlm__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--glass-border-inner);
+}
+
+@media (max-width: 640px) {
+  .nlm__row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

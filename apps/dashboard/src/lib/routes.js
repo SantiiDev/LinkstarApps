@@ -41,8 +41,10 @@ export const ONBOARDING_ROUTES = {
   plan: `${ONBOARDING_BASE}/plan`,
   payment: `${ONBOARDING_BASE}/pago`,
   paymentResult: `${ONBOARDING_BASE}/pago/resultado`,
-  // Último paso del plan gratis: sin expositor vinculado no hay panel (0015).
-  // Los planes pagos no pasan por acá.
+  // Vincular el expositor. Era el último paso OBLIGATORIO del plan gratis
+  // (0015), hasta que la 0022 sacó esa exigencia: el expositor llega días
+  // después del alta y la regla dejaba afuera del panel justo al que ya había
+  // comprado. Hoy es opcional y también se llega desde Dispositivos.
   device: `${ONBOARDING_BASE}/dispositivo`,
 };
 
