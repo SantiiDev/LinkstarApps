@@ -655,10 +655,21 @@ split below before wiring anything — the shell is finished, the data mostly is
   Attributing a scan to a person needs personal cards; an expositor sits on a table and belongs to nobody.
   Cards aren't sold yet, so `v_employee_leaderboard` will stay empty — but the screen reads it for real,
   so it keeps its markup and only carries a notice above it (in `Settings.jsx`'s "Equipo" tab, plus the
-  badge on the Devices teaser). When cards exist, delete the notice and it works. `EmployeeForm.jsx` does
-  exist and creates employees — that is a change of mind about the older rule here ("don't build the form
-  until cards ship"), not an oversight: a branch can register its waiters before the cards arrive, and the
-  rows are what `v_employee_leaderboard` will attribute scans to.
+  badge on the Devices teaser). When cards exist, delete the notice and it works.
+- **OPEN: the card-vs-expositor rule is written down but not enforced, and the UI now contradicts it.**
+  The rule is that an employee is attributable through a **personal card** — an expositor sits on a table
+  and belongs to nobody. The schema already supports it: `device_form` (`0001`) is
+  `nfc_stand | nfc_sticker | nfc_card | qr_stand | qr_sticker`, `devices.form_factor` defaults to
+  `'nfc_stand'`, and `v_device_performance` has exposed the column since `0008` (kept by `0018`).
+  **Nothing in `apps/dashboard` or `services/api` reads it — not one line.** So the device edit modal
+  offers the "Empleado" dropdown for every device, a table stand included, and since `scan_events`
+  snapshots `employee_id` at scan time (invariant 1), assigning a waiter to a stand credits them in
+  `v_employee_leaderboard` with reviews the table earned. Two pieces of copy still state the old rule
+  while the screens do the opposite: `Settings.jsx` ("la atribución por empleado llega con las tarjetas
+  personales") and the day-one empty state of `Employees.jsx` ("todavía no se pueden crear"), which sits
+  two lines from the "Nuevo empleado" button. Deciding this needs both of the people on the project:
+  either gate the dropdown on `form_factor = 'nfc_card'` and fix the copy, or drop the rule and say so
+  here. Do not let it sit as is — it is the kind of contradiction that gets resolved by accident.
 - **Locations are loaded by hand, and that is no longer provisional.** `LocationForm.jsx` creates *and*
   edits a branch through `locations_insert`/`locations_update` of `0014` and `enforce_plan_limit()` of
   `0007`. It used to be a dev-only modal behind `VITE_ENABLE_MANUAL_LOCATION`, because branches were
