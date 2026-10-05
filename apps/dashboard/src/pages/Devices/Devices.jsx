@@ -9,6 +9,7 @@ import {
   fetchDevicePerformance,
   fetchLocationPerformance,
   fetchDeviceScansSeries,
+  fetchEmployeeLeaderboard,
   fetchScansDaily,
   formatRelativeTime,
   colorForIndex,

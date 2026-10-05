@@ -7,14 +7,15 @@ import './Reviews.css';
  * iniciales, estrellas, texto, fecha y estado de respuesta, más filtros y
  * buscador sobre ese array.
  *
- * Es la sección que más lejos está de tener datos, y conviene ser exacto sobre
- * por qué: no alcanza con conectar Google. NO EXISTE una tabla de reseñas
- * individuales en el esquema — `location_review_snapshots` guarda un total
- * diario por sucursal, no reseñas. Hacen falta las dos cosas: la conexión
- * (fase 4.2) y una migración que cree la tabla (fase 4.4).
+ * Desde la 0024 los datos existen: la conexión con Google es real (el botón
+ * del placeholder la inicia) y sync-reviews guarda cada reseña en
+ * `google_reviews`, vinculada a su ficha en `google_locations`. Lo que falta es
+ * esta pantalla: reescribirla contra esas dos tablas. Es también la página a la
+ * que vuelve el navegador después de autorizar en Google (?google=…), así que
+ * el placeholder muestra ese resultado.
  *
- * Por eso todo lo demás del producto habla de "reseñas estimadas": lo único
- * medible hoy es la diferencia del contador día a día.
+ * El conteo que alimenta las "reseñas estimadas" sigue siendo otro:
+ * `location_review_snapshots`, el total diario por sucursal (invariante 6).
  */
 
 /* Recuperar la maqueta ─────────────────────────────────────────

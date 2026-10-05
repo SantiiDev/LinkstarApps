@@ -8,7 +8,8 @@
     "dev": "node --watch server.js",
     "provision-devices": "node scripts/provision-devices.js",
     "rebuild-today-rollup": "node scripts/rebuild-today-rollup.js",
-    "send-alerts": "node scripts/send-alerts.js"
+    "send-alerts": "node scripts/send-alerts.js",
+    "sync-reviews": "node scripts/sync-reviews.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",

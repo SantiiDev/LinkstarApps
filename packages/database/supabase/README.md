@@ -151,10 +151,23 @@ viven ahí:
 |---|---|---|
 | `redirect` | ✅ Hecho | `services/api/routes/redirect.js` — `GET /d/:publicId`, llama `resolve_scan()` con `p_medium`, 302 |
 | `mp-webhook` | ✅ Hecho | `services/api/routes/webhooks.js` — `POST /api/webhook/mercadopago` |
-| `sync-reviews` | ❌ **Falta** | Job diario: consulta Google por cada `google_place_id` y guarda el snapshot. Necesita `SERVICE_ROLE_KEY` + `GOOGLE_API_KEY` |
+| `sync-reviews` | 🟡 Escrito, sin programar | `services/api/scripts/sync-reviews.js` (`npm run sync-reviews`) — lee con OAuth, no con API key (la Business Profile API no acepta API key). Tablas y RPC en `0024` |
 
-Mientras `sync-reviews` no exista, `location_review_snapshots` queda vacía y todo lo que dependa de
-`review_deltas` (las "reseñas estimadas" de las vistas de `0008`) no tiene de dónde salir.
+`sync-reviews` no puede ser un `pg_cron`: habla con Google y descifra el refresh token con
+`GOOGLE_TOKEN_ENC_KEY`, que vive sólo en `services/api`. Va a ser un cron diario del host del API.
+Hasta que se programe —y hasta que un cliente conecte su ficha y la vincule a una sucursal—,
+`location_review_snapshots` queda vacía y todo lo que dependa de `review_deltas` (las "reseñas
+estimadas" de las vistas de `0008`) no tiene de dónde salir.
+
+Lo de `0024` que es fácil de romper:
+
+- **El refresh token no se lee desde el cliente, ni siquiera la owner.** Vive en
+  `private.google_oauth_tokens` (fuera de PostgREST, RLS forzado sin políticas) y cifrado con una clave
+  que no está en la base. Todo acceso pasa por RPC con `grant` sólo a `service_role`.
+- **Sin vínculo ficha → sucursal no hay snapshot.** El vínculo automático es sólo por `place_id`; el
+  resto se hace con `link_google_location()`.
+- **Desconectar borra fichas y reseñas, no los snapshots.** Los snapshots son la serie de la que salen
+  los deltas.
 
 Las tres reglas del webhook de Mercado Pago **ya están implementadas** en `routes/webhooks.js` — quedan
 acá escritas porque son fáciles de romper en un refactor:
@@ -175,7 +188,8 @@ plan de migración de datos. Esta lista es lo que sí hay que tener antes de ven
 
 - [ ] Correr `tests/rls_isolation.sql` (verifica que un tenant no vea al otro) — también antes de cada cambio de RLS
 - [ ] Habilitar `pg_cron` y descomentar los `cron.schedule` de `0007`
-- [ ] Construir `sync-reviews`, o el dashboard no tiene reseñas reales que mostrar
+- [x] Construir `sync-reviews` (`0024` + `services/api/scripts/sync-reviews.js`)
+- [ ] Programar `sync-reviews` una vez por día en el host del API, y publicar la app OAuth de Google (en modo Testing los refresh tokens vencen a los 7 días)
 - [ ] Cargar precios reales y `mp_preapproval_plan_id` en `plans` (hoy los precios están hardcodeados en el front — ver "Pricing" en `CLAUDE.md`)
 - [ ] Activar backups diarios (plan Pro de Supabase)
 - [ ] Rotar `private.app_secrets.ip_pepper` **nunca**: si lo cambiás, se rompe la deduplicación histórica

@@ -73,7 +73,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0023 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0024 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -89,8 +89,9 @@ first run with "ports are not available"** — Hyper-V reserves the whole 54320�
 `packages/database/supabase/README.md` for the temporary port remap.
 
 Ops scripts live in `services/api/scripts/` and run with `node scripts/<name>.js` from `services/api`
-(`provision-devices.js` and `rebuild-today-rollup.js` also have npm aliases — `npm run provision-devices`,
-`npm run rebuild-today-rollup`; `seed-test-device.js` doesn't). They use the same `service_role` client as
+(`provision-devices.js`, `rebuild-today-rollup.js`, `send-alerts.js` and `sync-reviews.js` also have npm
+aliases — `npm run provision-devices`, `npm run rebuild-today-rollup`, `npm run send-alerts`,
+`npm run sync-reviews`; `seed-test-device.js` doesn't). They use the same `service_role` client as
 the server, so `services/api/.env` decides whether you are writing to local or production.
 
 No test runner is configured in any workspace.
@@ -107,7 +108,12 @@ to `.env`, don't rename them away.
 
 - `services/api/.env` — see `services/api/.env.example`. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
   `PORT`, `FRONTEND_URL`, `DASHBOARD_URL`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `WEBHOOK_URL`,
-  `WEB3FORMS_KEY`, `REDIRECT_DOMAIN` (optional, defaults to `l.linkstarapp.com`).
+  `WEB3FORMS_KEY`, `REDIRECT_DOMAIN` (optional, defaults to `l.linkstarapp.com`), and the four Google
+  ones — `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_TOKEN_ENC_KEY` — which
+  are optional as a group: without all four the Google routes answer 503 and everything else works.
+  `GOOGLE_REDIRECT_URI` must match the console entry byte for byte, port included; locally that is
+  `PORT` (3001), and `lib/googleOAuth.js` warns at boot if they differ. Losing `GOOGLE_TOKEN_ENC_KEY`
+  makes every stored refresh token unreadable — every customer has to reconnect.
   `DASHBOARD_URL` is optional too (defaults to the *second* entry of `FRONTEND_URL`) and is where the
   subscription returns from Mercado Pago — it cannot be `FRONTEND_URL`, which points at the sales site.
   `FRONTEND_URL` is **comma-separated**: this one service serves both frontends, so CORS needs both
@@ -195,14 +201,19 @@ never registered (the only owned zone is `linkstarapp.com`), so the one URL that
 scan never dead-ends was sending people to somebody else's domain · `0022` product decision:
 `org_is_activated()` stops requiring a linked device on the free plan (see "Subscription gate") ·
 `0023` notification preferences + send log, and `pending_notifications()` — the half of phase 7 that
-doesn't need Google (see "Alerts" below).
+doesn't need Google (see "Alerts" below) · `0024` Google Business Profile: OAuth connection, encrypted
+refresh token, `google_locations` / `google_reviews`, and the RPCs `sync-reviews` writes through (see
+"Google Business Profile" below).
 
 **Everything up to `0020` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
 16 Aug after running it locally with `db:reset` and `rls_isolation.sql` green; both verified with
-`supabase migration list`). **`0021`, `0022` and `0023` are written but NOT applied anywhere** — until
+`supabase migration list`). **`0021`–`0024` are written but NOT applied in production** — until
 someone runs `npm run db:push`, the database still redirects to the unregistered domain, still locks
-free-plan accounts out of the panel until they link a device, and has no notification tables at all
-(so `npm run send-alerts` fails), while the repo and the frontend say otherwise. Applying it needs the Supabase project, which not every developer here
+free-plan accounts out of the panel until they link a device, has no notification tables at all
+(so `npm run send-alerts` fails) and no Google tables (so `/api/google/*`, `npm run sync-reviews` and the
+panel's Google status fail), while the repo and the frontend say otherwise. All four went through
+`db:reset` + `rls_isolation.sql` green locally on 5 Oct 2026 — that run is also what found section 6 of
+the test still asserting the `0015` rule that `0022` reverted, now fixed. Applying it needs the Supabase project, which not every developer here
 has. Correcting an already-applied migration by editing
 its file changes nothing in the database — `db push` skips migrations already in the history table. That
 is exactly how `0017` came to exist: `0013` was fixed in place on the reasonable assumption that it had
@@ -447,6 +458,54 @@ Routes, one router per file, all mounted at the app root:
 - `routes/auth.js` — `POST /api/auth/login-event`, behind `requireAuth`. The only writer of
   `profiles.last_login_at`.
 - `routes/health.js` — `GET /api/health`.
+- `routes/google.js` — `POST /api/google/oauth/start`, `GET /auth/google/callback` (note: no `/api`
+  prefix — it is the URI registered in the Google console), `POST /api/google/disconnect`. See below.
+
+### Google Business Profile — OAuth connection and `sync-reviews` (`0024`)
+
+Reading reviews needs OAuth on behalf of someone who manages the ficha; there is no API key path. One
+connection per organization, owner/admin only, resolved with the same active-org rule as the panel
+(`0024` extracts `private.active_org_id_for(user)` and makes `active_org_id()` call it — the API runs as
+`service_role` and has no `auth.uid()`, and connecting Google to a different org than the one on screen is
+the failure this prevents).
+
+- **The flow.** The panel `fetch`es `POST /api/google/oauth/start` with its Bearer JWT and
+  `credentials: 'include'`, gets `{ url }`, and navigates there itself — a browser navigation can't carry
+  the JWT. Google returns to `/auth/google/callback`, which exchanges the code and redirects to
+  `DASHBOARD_URL/panel/resenas?google=<conectado|cancelado|sin_permiso|sin_rol|error_estado|error>`. The
+  callback never renders an error itself. On the panel side, `lib/googleApi.js` (calls +
+  `useGoogleConnection`) and `components/GoogleConnect/` (button, status, return message, disconnect)
+  are used by `SectionPlaceholder`'s `google` variant and by the two connect banners (Devices, Company),
+  which hide once the ficha is connected. The return lands on `/panel/resenas` because that page always
+  renders a `google` placeholder — move `RETURN_PATH` in `routes/google.js` and the `?google=` message has
+  nowhere to show.
+- **The state is double-bound, and the cookie is the part that matters.** A row in
+  `private.google_oauth_states` (sha256, single-use via an atomic `update … where used_at is null`,
+  10 min) is not enough on its own: the attacker's state exists too, and the OAuth login-CSRF is exactly
+  "victim completes the attacker's flow", which would connect the victim's ficha to the attacker's org —
+  with `business.manage`, that includes replying to their reviews. The callback also requires the state to
+  equal an HttpOnly `SameSite=Lax` cookie set by `/start`. That cookie is set from a cross-origin fetch,
+  which only works because panel and API are the same *site* and CORS has `credentials: true`
+  (`server.js`). Put the API on a different registrable domain from the panel and the flow breaks.
+  PKCE (S256) sits on top; the verifier lives in the state row and never leaves the server.
+- **The refresh token is encrypted in the app, not in the DB** (`lib/tokenCrypto.js`, AES-256-GCM,
+  `GOOGLE_TOKEN_ENC_KEY`), with the organization id as AAD so a ciphertext copied to another org's row
+  doesn't decrypt. It lives in `private.google_oauth_tokens` — unreachable through PostgREST, RLS forced
+  with no policies — and only `service_role` RPCs touch it. `public.google_connections` holds the status
+  the panel can show, no secrets.
+- **`invalid_grant` → `needs_reauth`, and in Testing mode that happens every 7 days.** Google expires
+  refresh tokens of apps whose consent screen is in "Testing" after a week. `sync-reviews` marks the
+  connection and stops retrying it until someone reconnects; it is expected, not a bug, until the app is
+  published (which for `business.manage` means Google's verification).
+- **`sync-reviews`** (`lib/reviewSync.js`, run by `scripts/sync-reviews.js` and once in the background
+  after each successful connect): Account Management → Business Information (`readMask` is mandatory) →
+  `google_locations`; auto-link ficha → sucursal **only by `place_id`**; My Business v4 reviews, newest
+  `updateTime` first, paging until it crosses the newest stored one; then
+  `record_google_review_snapshot()` and `compute_review_deltas(today)`. A ficha with no linked sucursal
+  gets its reviews stored but **no snapshot** (`location_review_snapshots.location_id` is not null) —
+  `link_google_location()` is the manual mapping, callable by owner/admin, with no UI yet.
+- Disconnecting revokes at Google (best-effort) and deletes the connection; fichas and reviews cascade,
+  `location_review_snapshots` stays — it is our aggregate and the delta series depends on it.
 
 ### `apps/dashboard`
 
@@ -508,7 +567,9 @@ split below before wiring anything — the shell is finished, the data mostly is
   (a fabricated connected account carrying a real person's name and an address on the unregistered
   domain, plus a "0 de 1 locales activos" counter backed by nothing) and the topbar's invented support
   phone number. Same rule as the rest — no button, since connecting the Business Profile lands in phase 4.
-  Note the `google` variant's connect button is itself inert today: no caller passes `onConnect`.
+  The `google` variant's button is real since 5 Oct 2026 (`components/GoogleConnect`); once connected,
+  the placeholder says the ficha is being read and the screen is what's pending — the data exists in
+  `google_reviews`, the JSX doesn't.
 - **The mock JSX is a deliverable, not discarded history — and it does not come back on its own.** The tag
   `maquetas-pre-fase-2` points at the last commit where those ten screens were still drawing their grids,
   tables and charts, and every converted file's header repeats the `git show` line that recovers its own
@@ -594,7 +655,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   showing invented numbers, so a failure is reported.
   The review KPIs render `'—'`, never `0`, and the page says why. That distinction is the whole point: a
   `0` is indistinguishable from "we measured and there were none", and the truth is nothing measures them
-  yet — `location_review_snapshots` has no writer until `sync-reviews` exists. The gate is
+  yet — `location_review_snapshots` is written only by `sync-reviews` (`0024`), which nothing schedules
+  yet and which needs a connected Google account plus a ficha linked to a sucursal. The gate is
   `hasReviewData`, derived from whether any location has a non-null `total_reviews`, so the numbers appear
   on their own once the first snapshot lands and nobody has to remember to edit this file.
 - `pages/Settings/TeamMembers.jsx` + `lib/teamApi.js` are the members UI (invite by link, change role,
@@ -721,9 +783,9 @@ only real contact channel in the repo. Replace it when there's a sales email or 
   the same `not_found_handling` the ventas Worker already sets.
 - Of the three services `packages/database/supabase/README.md` originally assumed would be Edge Functions,
   two now live in `services/api` (`routes/redirect.js`, `routes/webhooks.js`) and are not planned as
-  separate functions. Only `sync-reviews` (the daily Google Business Profile job that fills
-  `location_review_snapshots`) still doesn't exist anywhere — and until it does, every "reseñas" number in
-  the product is either mock or unfed.
+  separate functions. The third, `sync-reviews`, is `services/api/scripts/sync-reviews.js` — not an Edge
+  Function and not `pg_cron` either, because it talks to Google and needs `GOOGLE_TOKEN_ENC_KEY`, which
+  lives only in this service. It has to become a daily cron on the API host; until then it runs by hand.
 
 ## Language note
 

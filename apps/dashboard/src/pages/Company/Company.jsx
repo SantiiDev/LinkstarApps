@@ -4,6 +4,8 @@ import PageHeader from '../../components/PageHeader/PageHeader';
 import StatCard from '../../components/StatCard/StatCard';
 import TrendChart from '../../components/TrendChart/TrendChart';
 import SectionPlaceholder from '../../components/SectionPlaceholder/SectionPlaceholder';
+import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
+import { useGoogleConnection } from '../../lib/googleApi';
 import {
   fetchDashboardKpis,
   fetchRecentActivity,
@@ -145,6 +147,8 @@ function buildSeries(rows, days) {
 
 export default function Company({ onNavigate }) {
   const { org } = useOrg();
+  const google = useGoogleConnection(org?.organization_id);
+  const showGoogleBanner = !google.loading && google.connection?.status !== 'active';
 
   const [kpis, setKpis] = useState(null);
   const [activity, setActivity] = useState([]);
@@ -229,22 +233,22 @@ export default function Company({ onNavigate }) {
     <div className="company-page">
       {header}
 
-      {/* ── Conectar Google: sigue siendo una invitación, nunca bloquea la vista ── */}
-      <div className="company-banner">
-        <div className="company-banner__icon"><Icon name="google" width={26} height={26} /></div>
-        <div className="company-banner__body">
-          <div className="company-banner__title">Gestioná todo tu perfil de Google Business</div>
-          <p className="company-banner__text">
-            Conectá tu ficha para ver cuántas reseñas nuevas generan tus expositores, responderlas desde acá y medir tu posicionamiento local.
-          </p>
+      {/* ── Conectar Google: sigue siendo una invitación, nunca bloquea la vista.
+             Conectada la ficha, desaparece. ── */}
+      {showGoogleBanner && (
+        <div className="company-banner">
+          <div className="company-banner__icon"><Icon name="google" width={26} height={26} /></div>
+          <div className="company-banner__body">
+            <div className="company-banner__title">Gestioná todo tu perfil de Google Business</div>
+            <p className="company-banner__text">
+              Conectá tu ficha para ver cuántas reseñas nuevas generan tus expositores, responderlas desde acá y medir tu posicionamiento local.
+            </p>
+          </div>
+          <div className="company-banner__actions">
+            <GoogleConnect google={google} buttonClassName="company-banner__connect-btn" align="start" />
+          </div>
         </div>
-        <div className="company-banner__actions">
-          <button className="company-banner__connect-btn">
-            <Icon name="google" width={16} height={16} />
-            Conectar mi ficha de Google
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* ── Chips de estado. Sólo lo que sabemos de verdad: antes decía "Perfil
              de Google Business conectado" y "Ficha completada al 92%" sin que

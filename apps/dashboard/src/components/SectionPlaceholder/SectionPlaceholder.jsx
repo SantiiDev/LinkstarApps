@@ -1,3 +1,6 @@
+import { useOrg } from '../../context/OrgContext';
+import { useGoogleConnection } from '../../lib/googleApi';
+import GoogleConnect from '../GoogleConnect/GoogleConnect';
 import './SectionPlaceholder.css';
 
 /*
@@ -19,7 +22,16 @@ import './SectionPlaceholder.css';
  *
  * `preview` es la lista de lo que la sección va a mostrar cuando tenga datos.
  * No es relleno: es lo que hace que la pantalla siga explicando para qué sirve.
+ *
+ * La variante google consulta el estado de la conexión (0024). Conectada, el
+ * texto que pide permiso deja de ser cierto, así que se reemplaza por uno que
+ * dice la verdad: ya leemos la ficha, lo que falta es esta pantalla. Conectar
+ * Google NO devuelve las maquetas solas — hay que reescribir cada sección
+ * contra google_reviews / google_locations (ver el tag maquetas-pre-fase-2).
  */
+
+const CONNECTED_DESCRIPTION =
+  'Ya estamos leyendo tu ficha de Google todos los días. Esta pantalla todavía no muestra esos datos: la estamos armando, y no hace falta que hagas nada más.';
 
 function GoogleIcon({ size = 18 }) {
   return (
@@ -54,9 +66,12 @@ export default function SectionPlaceholder({
   description,
   preview = [],
   note,
-  onConnect,
 }) {
   const isGoogle = variant === 'google';
+  const { org } = useOrg();
+  // Sin organización (o variante soon) el hook no consulta nada.
+  const google = useGoogleConnection(isGoogle ? org?.organization_id : null);
+  const connected = isGoogle && google.connection?.status === 'active';
 
   return (
     <div className={`sph sph--${variant}`}>
@@ -65,7 +80,7 @@ export default function SectionPlaceholder({
       </div>
 
       <h3 className="sph__title">{title}</h3>
-      <p className="sph__text">{description}</p>
+      <p className="sph__text">{connected ? CONNECTED_DESCRIPTION : description}</p>
 
       {preview.length > 0 && (
         <>
@@ -82,9 +97,9 @@ export default function SectionPlaceholder({
       )}
 
       {isGoogle && (
-        <button className="sph__btn" onClick={onConnect} type="button">
-          <GoogleIcon /> Conectar mi ficha de Google
-        </button>
+        <div className="sph__action">
+          <GoogleConnect google={google} buttonClassName="sph__btn" />
+        </div>
       )}
 
       {note && <p className="sph__note">{note}</p>}

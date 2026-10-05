@@ -1,0 +1,116 @@
+/* Acción "Conectar Google" y su estado. Sin animaciones de blur: ver la nota de
+   rendimiento del glass en CLAUDE.md. */
+
+.gc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.gc--center { align-items: center; text-align: center; }
+.gc--start  { align-items: flex-start; text-align: left; }
+
+/* Botón por defecto (el de SectionPlaceholder usa este). Los banners pasan su
+   propia clase para conservar su estilo. */
+.gc__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.3rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-button);
+  background: var(--color-white);
+  color: var(--color-navy);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--glass-shadow);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.gc__btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--glass-shadow-hover);
+}
+
+.gc button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.gc__status {
+  display: flex;
+  flex-direction: column;
+  align-items: inherit;
+  gap: 0.35rem;
+}
+
+.gc__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.gc__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-forest);
+}
+
+.gc__meta {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.gc__meta--warn { color: #b45309; }
+
+.gc__msg {
+  margin: 0;
+  max-width: 34rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.gc__msg--ok    { background: rgba(16, 185, 129, 0.1);  color: #047857; }
+.gc__msg--info  { background: rgba(26, 38, 57, 0.06);   color: var(--color-navy); }
+.gc__msg--error { background: rgba(239, 68, 68, 0.09);  color: #b91c1c; }
+
+.gc__link {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.gc__link--danger { color: var(--color-danger); }
+
+.gc__confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: inherit;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  max-width: 34rem;
+  font-size: 0.78rem;
+  color: var(--color-text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gc__btn:hover:not(:disabled) { transform: none; }
+}

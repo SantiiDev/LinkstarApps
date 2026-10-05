@@ -26,11 +26,9 @@ insert into public.organizations (id, name, slug, created_by) values
   ('bbbbbbbb-0000-0000-0000-000000000002', 'Bar Dos', 'bar-dos', '22222222-2222-2222-2222-222222222222');
 
 -- El trigger organizations_bootstrap (0013) le crea a cada org una suscripción
--- 'free' activa, que limita a 1 sola ubicación y que además exige un expositor
--- vinculado para dar acceso (org_is_activated, 0015). Este test no prueba ni
--- límites de plan ni activación, sino aislamiento entre tenants, así que las
--- dos organizaciones arrancan en un plan pago. La activación se prueba aparte,
--- en la sección 5.
+-- 'free' activa, que limita a 1 sola ubicación. Este test no prueba límites de
+-- plan sino aislamiento entre tenants, así que las dos organizaciones arrancan
+-- en un plan pago. El acceso se prueba aparte, en las secciones 5 y 6.
 update public.subscriptions set plan_code = 'business';
 
 -- Caro es manager de Bar Uno, acotada a una sola sucursal.
@@ -230,12 +228,13 @@ end;
 $$;
 
 -- =========================================================================
--- 6. Plan gratis sin expositor vinculado: tampoco entra (0015)
+-- 6. Plan gratis sin expositor vinculado: SÍ entra (0022, que revirtió 0015)
 --
--- La suscripción está perfecta (gratis, activa) pero no hay ningún
--- dispositivo, así que org_is_activated() es falso y el panel queda cerrado.
--- Al vincular uno, se abre. Este es el caso que separa org_has_access() de
--- org_is_activated().
+-- Hasta la 0022 esta sección probaba lo contrario —gratis sin dispositivo
+-- quedaba afuera—. La regla se sacó porque el expositor llega días después del
+-- alta y dejaba afuera justo al que ya había comprado. Ahora org_is_activated()
+-- vale lo mismo que org_has_access(), y esto asegura que nadie reintroduzca la
+-- condición del dispositivo sin darse cuenta.
 -- =========================================================================
 reset role;
 
@@ -247,33 +246,34 @@ set plan_code        = 'free',
 where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 select pg_temp.check(
-  'Plan gratis SIN expositor: org_has_access sí, org_is_activated no',
+  'Plan gratis SIN expositor: org_has_access y org_is_activated (0022)',
   public.org_has_access('aaaaaaaa-0000-0000-0000-000000000001')
-  and not public.org_is_activated('aaaaaaaa-0000-0000-0000-000000000001')
+  and public.org_is_activated('aaaaaaaa-0000-0000-0000-000000000001')
 );
 
 select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
 
 select pg_temp.check(
-  'Ana en gratis sin expositor NO ve sus ubicaciones',
-  (select count(*) from public.locations) = 0
+  'Ana en gratis sin expositor SÍ ve sus ubicaciones',
+  (select count(*) from public.locations) = 2
 );
 
--- Vincula el expositor y se abre el panel.
+-- Vincular un expositor no cambia nada del acceso. Se inserta igual porque las
+-- secciones siguientes parten de este estado.
 reset role;
 
 insert into public.devices (organization_id, kind, form_factor, status, claimed_at)
 values ('aaaaaaaa-0000-0000-0000-000000000001', 'google_review', 'nfc_stand', 'active', now());
 
 select pg_temp.check(
-  'Con un expositor vinculado, la organización queda activada',
+  'Con un expositor vinculado, la organización sigue activada',
   public.org_is_activated('aaaaaaaa-0000-0000-0000-000000000001')
 );
 
 select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
 
 select pg_temp.check(
-  'Ana en gratis CON expositor vuelve a ver sus ubicaciones',
+  'Ana en gratis CON expositor sigue viendo sus ubicaciones',
   (select count(*) from public.locations) = 2
 );
 
@@ -515,6 +515,149 @@ begin
     exception
       when insufficient_privilege then
         raise notice '   OK   anon no tiene permiso ni para consultar %', v_view;
+    end;
+  end loop;
+end $$;
+
+reset role;
+
+-- =========================================================================
+-- 8. Google Business Profile (0024)
+-- =========================================================================
+-- Bar Uno conectó Google: una ficha por sucursal y una reseña en cada una.
+-- Lo que se prueba: que el token cifrado no lo alcance nadie desde el cliente,
+-- que las fichas y reseñas respeten el tenant y el alcance del manager, y que
+-- las RPC del flujo OAuth y del job no se puedan llamar con sesión de usuario.
+insert into public.google_connections (organization_id, connected_by) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111');
+
+insert into private.google_oauth_tokens (organization_id, refresh_token_enc, key_id) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'texto-cifrado-de-prueba', 'v1');
+
+insert into public.google_locations
+  (id, organization_id, google_account, google_location, title, location_id) values
+  ('9a000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'accounts/1', 'locations/1', 'Bar Uno Centro',    'dddddddd-0000-0000-0000-000000000001'),
+  ('9a000000-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'accounts/1', 'locations/2', 'Bar Uno Pichincha', 'dddddddd-0000-0000-0000-000000000002');
+
+insert into public.google_reviews
+  (organization_id, google_location_id, review_id, star_rating, created_time, updated_time) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', '9a000000-0000-0000-0000-000000000001', 'r1', 5, now(), now()),
+  ('aaaaaaaa-0000-0000-0000-000000000001', '9a000000-0000-0000-0000-000000000002', 'r2', 4, now(), now());
+
+-- Una ficha no se puede vincular a la sucursal de otra organización.
+do $$
+begin
+  update public.google_locations
+     set location_id = 'dddddddd-0000-0000-0000-000000000003'   -- Fisherton, de Bar Dos
+   where id = '9a000000-0000-0000-0000-000000000002';
+  raise exception 'FALLA: una ficha de Bar Uno quedó vinculada a una sucursal de Bar Dos';
+exception
+  when raise_exception then
+    if sqlerrm like 'FALLA:%' then raise; end if;
+    raise notice '  OK   el trigger rechaza vincular una ficha a una sucursal ajena';
+end $$;
+
+-- --- Ana (owner) ve todo lo de Bar Uno -------------------------------------
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+
+select pg_temp.check('Ana ve la conexión de Google de Bar Uno',
+  (select count(*) from public.google_connections) = 1);
+select pg_temp.check('Ana ve las dos fichas de Bar Uno',
+  (select count(*) from public.google_locations) = 2);
+select pg_temp.check('Ana ve las dos reseñas de Bar Uno',
+  (select count(*) from public.google_reviews) = 2);
+
+-- Ni siquiera la owner llega al token: vive en `private`, sin USAGE para
+-- authenticated.
+do $$
+begin
+  perform count(*) from private.google_oauth_tokens;
+  raise exception 'FALLA: authenticated pudo leer private.google_oauth_tokens';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   authenticated no puede leer los tokens cifrados';
+end $$;
+
+-- Las escrituras son del API (service_role), no del cliente.
+do $$
+begin
+  update public.google_connections set status = 'active';
+  raise exception 'FALLA: authenticated pudo escribir google_connections';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   authenticated no puede escribir google_connections';
+end $$;
+
+-- Las RPC del flujo OAuth y del job son sólo de service_role.
+do $$
+declare
+  v_fn text;
+begin
+  foreach v_fn in array array[
+    'select public.google_oauth_begin(''11111111-1111-1111-1111-111111111111'', ''x'', ''y'')',
+    'select * from public.google_oauth_consume(''x'')',
+    'select * from public.google_sync_targets()',
+    'select * from public.google_connection_for_admin(''11111111-1111-1111-1111-111111111111'')',
+    'select public.google_save_connection(''aaaaaaaa-0000-0000-0000-000000000001'', ''11111111-1111-1111-1111-111111111111'', ''x'', ''v1'', ''{}'')'
+  ]
+  loop
+    begin
+      execute v_fn;
+      raise exception 'FALLA: authenticated pudo ejecutar %', v_fn;
+    exception
+      when insufficient_privilege then
+        raise notice '  OK   authenticated no puede ejecutar %', split_part(split_part(v_fn, 'public.', 2), '(', 1);
+    end;
+  end loop;
+end $$;
+
+-- --- Caro (manager de Centro) ve sólo la ficha de su sucursal ---------------
+select pg_temp.login('33333333-3333-3333-3333-333333333333', 'caro@bar-uno.test');
+
+select pg_temp.check('Caro ve que Bar Uno tiene Google conectado',
+  (select count(*) from public.google_connections) = 1);
+select pg_temp.check('Caro ve sólo la ficha de Centro',
+  (select count(*) from public.google_locations) = 1
+  and (select location_id from public.google_locations) = 'dddddddd-0000-0000-0000-000000000001');
+select pg_temp.check('Caro ve sólo la reseña de Centro',
+  (select count(*) from public.google_reviews) = 1);
+
+-- --- Beto (Bar Dos) no ve nada de Bar Uno, ni puede vincular sus fichas ------
+select pg_temp.login('22222222-2222-2222-2222-222222222222', 'beto@bar-dos.test');
+
+select pg_temp.check('Beto no ve la conexión de Bar Uno',
+  (select count(*) from public.google_connections) = 0);
+select pg_temp.check('Beto no ve las fichas de Bar Uno',
+  (select count(*) from public.google_locations) = 0);
+select pg_temp.check('Beto no ve las reseñas de Bar Uno',
+  (select count(*) from public.google_reviews) = 0);
+
+do $$
+begin
+  perform public.link_google_location('9a000000-0000-0000-0000-000000000001', null);
+  raise exception 'FALLA: Beto pudo desvincular una ficha de Bar Uno';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   Beto no puede vincular ni desvincular fichas de Bar Uno';
+end $$;
+
+-- --- anon no llega ni a consultar ------------------------------------------
+select set_config('role', 'anon', true);
+select set_config('request.jwt.claims', null, true);
+
+do $$
+declare
+  v_table text;
+begin
+  foreach v_table in array array['google_connections', 'google_locations', 'google_reviews'] loop
+    begin
+      execute format('select count(*) from public.%I', v_table);
+      raise exception 'FALLA: anon pudo consultar %', v_table;
+    exception
+      when insufficient_privilege then
+        raise notice '  OK   anon no tiene permiso ni para consultar %', v_table;
     end;
   end loop;
 end $$;

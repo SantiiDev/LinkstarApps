@@ -1,0 +1,210 @@
+import { supabase } from './supabase.js';
+import { refreshAccessToken } from './googleOAuth.js';
+import { decryptToken } from './tokenCrypto.js';
+import {
+  listAccounts,
+  listLocations,
+  listReviewsPage,
+  starRatingToNumber,
+  formatAddress,
+} from './googleBusiness.js';
+
+/* sync-reviews: lo que hace el job diario por cada organización conectada.
+ *
+ *   1. refresh token → access token (una hora; no se guarda)
+ *   2. Account Management: qué cuentas administra quien conectó
+ *   3. Business Information: qué fichas tiene cada cuenta → google_locations
+ *   4. Vinculación automática ficha → sucursal por place_id
+ *   5. My Business v4: reseñas de cada ficha, incrementales → google_reviews
+ *   6. Snapshot del total de la ficha → location_review_snapshots (sólo las
+ *      vinculadas a una sucursal: es lo que alimenta review_deltas)
+ *
+ * Lo usan scripts/sync-reviews.js (todas las organizaciones) y el callback de
+ * OAuth (sólo la que acaba de conectar, para que el panel no espere a mañana).
+ *
+ * Una ficha que falla no frena a las demás: se anota y se sigue. Lo que sí
+ * corta es no poder conseguir el access token — sin eso no hay nada que leer.
+ */
+
+const UPSERT_CHUNK = 200;
+
+function toRating(value) {
+  const n = Number(value);
+  // average_rating tiene check between 1 and 5; una ficha sin reseñas viene
+  // con 0 o sin el campo, y eso es "sin puntaje", no un puntaje de 0.
+  return Number.isFinite(n) && n >= 1 ? Math.round(n * 10) / 10 : null;
+}
+
+async function upsertInChunks(table, rows, onConflict) {
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
+    const { error } = await supabase
+      .from(table)
+      .upsert(rows.slice(i, i + UPSERT_CHUNK), { onConflict });
+    if (error) throw error;
+  }
+}
+
+/* Reseñas nuevas o editadas desde la última corrida. La API las devuelve de la
+ * más recientemente actualizada para atrás, así que se pagina hasta cruzar la
+ * más nueva que ya está guardada. La primera vez no hay marca de agua y se trae
+ * todo el historial (50 por página): una ficha con 2.000 reseñas son 40
+ * llamadas, una sola vez. */
+async function syncLocationReviews(accessToken, organizationId, gl, watermark) {
+  let pageToken = null;
+  let first = null;
+  const rows = [];
+
+  pages: do {
+    const page = await listReviewsPage(accessToken, gl.google_account, gl.google_location, pageToken);
+    first ??= page;
+
+    for (const review of page.reviews ?? []) {
+      // `<` y no `<=`: una reseña editada en el mismo instante que la marca se
+      // vuelve a escribir (upsert, inofensivo) en vez de perderse.
+      if (watermark && new Date(review.updateTime) < watermark) break pages;
+
+      rows.push({
+        organization_id: organizationId,
+        google_location_id: gl.id,
+        review_id: review.reviewId,
+        reviewer_name: review.reviewer?.isAnonymous ? null : review.reviewer?.displayName ?? null,
+        is_anonymous: Boolean(review.reviewer?.isAnonymous),
+        star_rating: starRatingToNumber(review.starRating),
+        comment: review.comment ?? null,
+        created_time: review.createTime,
+        updated_time: review.updateTime,
+        reply_comment: review.reviewReply?.comment ?? null,
+        reply_updated_time: review.reviewReply?.updateTime ?? null,
+        fetched_at: new Date().toISOString(),
+      });
+    }
+    pageToken = page.nextPageToken || null;
+  } while (pageToken);
+
+  const total = Number(first?.totalReviewCount ?? 0);
+  const rating = toRating(first?.averageRating);
+
+  if (rows.length) await upsertInChunks('google_reviews', rows, 'google_location_id,review_id');
+
+  const { error } = await supabase
+    .from('google_locations')
+    .update({ total_reviews: total, average_rating: rating, reviews_synced_at: new Date().toISOString() })
+    .eq('id', gl.id);
+  if (error) throw error;
+
+  let snapshot = false;
+  if (gl.location_id) {
+    const { data, error } = await supabase.rpc('record_google_review_snapshot', {
+      p_google_location_id: gl.id,
+      p_total_reviews: total,
+      p_average_rating: rating,
+      p_raw: { totalReviewCount: first?.totalReviewCount ?? null, averageRating: first?.averageRating ?? null },
+    });
+    if (error) throw error;
+    snapshot = Boolean(data);
+  }
+
+  return { newOrUpdated: rows.length, total, rating, snapshot };
+}
+
+export async function syncOrganization(
+  { organization_id: organizationId, refresh_token_enc: refreshTokenEnc, key_id: keyId },
+  { dryRun = false, log = console.log } = {}
+) {
+  const refreshToken = decryptToken(refreshTokenEnc, keyId, organizationId);
+  const { accessToken } = await refreshAccessToken(refreshToken);
+
+  // --- Cuentas y fichas -----------------------------------------------------
+  const accounts = await listAccounts(accessToken);
+
+  // Una misma ficha puede aparecer en dos cuentas (la personal y un grupo). Se
+  // queda la primera: cualquiera de las dos sirve para leer las reseñas.
+  const byLocation = new Map();
+  for (const account of accounts) {
+    for (const location of await listLocations(accessToken, account.name)) {
+      if (!byLocation.has(location.name)) byLocation.set(location.name, { account: account.name, location });
+    }
+  }
+
+  log(`  ${accounts.length} cuenta(s), ${byLocation.size} ficha(s) en Google`);
+
+  const now = new Date().toISOString();
+  const locationRows = [...byLocation.values()].map(({ account, location }) => ({
+    organization_id: organizationId,
+    google_account: account,
+    google_location: location.name,
+    title: location.title ?? null,
+    address: formatAddress(location.storefrontAddress),
+    place_id: location.metadata?.placeId ?? null,
+    maps_uri: location.metadata?.mapsUri ?? null,
+    new_review_uri: location.metadata?.newReviewUri ?? null,
+    last_seen_at: now,
+  }));
+
+  if (dryRun) {
+    for (const row of locationRows) {
+      log(`    · ${row.title ?? row.google_location} (${row.google_location}) place_id=${row.place_id ?? '—'}`);
+    }
+    return { accounts: accounts.length, locations: locationRows.length, reviews: 0, snapshots: 0, failures: 0 };
+  }
+
+  if (!locationRows.length) {
+    return { accounts: accounts.length, locations: 0, reviews: 0, snapshots: 0, failures: 0 };
+  }
+  await upsertInChunks('google_locations', locationRows, 'organization_id,google_location');
+
+  const { data: linked, error: linkError } = await supabase.rpc('google_autolink_locations', {
+    p_org: organizationId,
+  });
+  if (linkError) throw linkError;
+  if (linked) log(`  ${linked} ficha(s) vinculada(s) por place_id`);
+
+  // Sólo las que vinieron en ESTA corrida: una ficha que la cuenta ya no
+  // administra queda en la tabla con su last_seen_at viejo, pero no se lee.
+  const { data: glRows, error: glError } = await supabase
+    .from('google_locations')
+    .select('id, google_account, google_location, title, location_id')
+    .eq('organization_id', organizationId)
+    .in('google_location', locationRows.map((row) => row.google_location));
+  if (glError) throw glError;
+
+  // --- Reseñas por ficha ----------------------------------------------------
+  let reviews = 0;
+  let snapshots = 0;
+  let failures = 0;
+
+  for (const gl of glRows ?? []) {
+    try {
+      const { data: latest, error: latestError } = await supabase
+        .from('google_reviews')
+        .select('updated_time')
+        .eq('google_location_id', gl.id)
+        .order('updated_time', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestError) throw latestError;
+
+      const result = await syncLocationReviews(
+        accessToken,
+        organizationId,
+        gl,
+        latest ? new Date(latest.updated_time) : null
+      );
+      reviews += result.newOrUpdated;
+      if (result.snapshot) snapshots++;
+
+      log(
+        `    ✓ ${gl.title ?? gl.google_location}: ${result.total} reseña(s), ` +
+        `${result.rating ?? '—'}★, ${result.newOrUpdated} nueva(s)/editada(s)` +
+        (gl.location_id ? '' : ' — sin sucursal vinculada, sin snapshot')
+      );
+    } catch (err) {
+      // Pasa con fichas sin verificar o suspendidas: la v4 no deja leer sus
+      // reseñas. No es motivo para frenar las demás.
+      failures++;
+      log(`    ✗ ${gl.title ?? gl.google_location}: ${err.message}`);
+    }
+  }
+
+  return { accounts: accounts.length, locations: locationRows.length, reviews, snapshots, failures };
+}
