@@ -1,35 +1,79 @@
+import { Link } from 'react-router-dom';
+import { ROUTES } from '../../lib/routes';
 import './Info.css';
 
+/* El punto 3 decía que el usuario "deberá realizar el pago mediante los medios
+ * habilitados", que contradice al checkout: hoy el pedido se confirma sin pago
+ * online y el cobro se coordina a mano. Es el modelo de venta elegido para los
+ * primeros meses, no una etapa a medio terminar, así que los términos lo tienen
+ * que decir igual que la pantalla.
+ *
+ * Datos de la empresa: marcadores hasta que estén los papeles del monotributo.
+ * Buscar "[RAZÓN SOCIAL]" para completarlos todos de una. */
 export default function Terms() {
   return (
     <section className="info-page">
       <div className="container info-page__inner">
         <h1 className="info-page__title">Términos y condiciones</h1>
         <div className="info-page__content">
-          <h2>1. Objeto de los Términos</h2>
+          <h2>1. Objeto</h2>
           <p>
-            Las presentes Condiciones Generales regulan el uso de este sitio web, así como la compra de nuestros dispositivos de tecnología NFC y el uso de la plataforma asociada (LinkstarApp).
-          </p>
-          
-          <h2>2. Productos y Servicios</h2>
-          <p>
-            Linkstar ofrece carteles expositores físicos equipados con tecnología NFC que permiten redireccionar a los usuarios hacia enlaces preconfigurados (reseñas en Google, perfiles de Instagram, entre otros).
-            La gestión y medición de las interacciones se realiza desde LinkstarApp, que se contrata por separado del dispositivo mediante una suscripción mensual, sin permanencia y cancelable en cualquier momento. Las condiciones y el precio vigente de cada plan se indican en LinkstarApp antes de contratar.
+            Estas condiciones generales regulan el uso de este sitio, la compra de los dispositivos
+            NFC de Linkstar y el uso de la plataforma asociada (LinkstarApp). El vendedor es
+            [RAZÓN SOCIAL], CUIT [CUIT], con domicilio en [DOMICILIO].
           </p>
 
-          <h2>3. Proceso de Compra y Envíos</h2>
+          <h2>2. Productos y servicios</h2>
           <p>
-            El usuario deberá seguir el procedimiento de compra online y realizar el pago correspondiente mediante los medios habilitados. Los plazos de entrega estimados se indicarán en el momento de confirmar el carrito y pueden variar según la disponibilidad y destino.
+            Linkstar comercializa carteles expositores físicos con tecnología NFC y QR que
+            redirigen a enlaces preconfigurados (reseñas en Google, perfiles de Instagram, entre
+            otros). La gestión y la medición de las interacciones se hacen desde LinkstarApp, que se
+            contrata por separado del dispositivo mediante una suscripción mensual, sin permanencia
+            y cancelable en cualquier momento. El precio y las condiciones vigentes de cada plan se
+            muestran en LinkstarApp antes de contratar.
           </p>
 
-          <h2>4. Política de Uso de la Plataforma</h2>
+          <h2>3. Compra, pago y envío</h2>
           <p>
-            El acceso a LinkstarApp es estrictamente personal e intransferible. El usuario se compromete a hacer un uso lícito de la plataforma. Linkstar se reserva el derecho a suspender o cancelar cuentas que realicen actividades fraudulentas, spam o uso malintencionado de la redirección NFC.
+            El pedido se confirma desde este sitio <strong>sin pago online</strong>: una vez
+            recibido, nos comunicamos por correo electrónico para coordinar la forma de pago y el
+            envío. El precio informado al confirmar el carrito es el precio final en pesos
+            argentinos, con los impuestos incluidos.
+          </p>
+          <p>
+            Los plazos de entrega son estimados y pueden variar según la disponibilidad y el
+            destino. Te los informamos al coordinar el envío.
           </p>
 
-          <h2>5. Modificaciones</h2>
+          <h2>4. Derecho de revocación</h2>
           <p>
-            Linkstar se reserva la facultad de modificar, actualizar o alterar en cualquier momento los presentes Términos y Condiciones, así como el funcionamiento, diseño o estructura de la plataforma LinkstarApp.
+            Podés arrepentirte de la compra dentro de los <strong>10 días corridos</strong> desde
+            que recibís el producto, sin expresar causa y sin costo, conforme al artículo 34 de la
+            Ley 24.240. El procedimiento está en el{' '}
+            <Link to={ROUTES.withdrawal}>botón de arrepentimiento</Link>. Esto es independiente de
+            la <Link to={ROUTES.warranty}>garantía legal de 6 meses</Link>.
+          </p>
+
+          <h2>5. Uso de la plataforma</h2>
+          <p>
+            El acceso a LinkstarApp es personal e intransferible. El usuario se compromete a hacer
+            un uso lícito de la plataforma. Nos reservamos el derecho de suspender o cancelar
+            cuentas que realicen actividades fraudulentas, spam o un uso malintencionado de la
+            redirección NFC.
+          </p>
+
+          <h2>6. Modificaciones</h2>
+          <p>
+            Podemos modificar estos Términos y Condiciones, así como el funcionamiento, el diseño o
+            la estructura de LinkstarApp. Los cambios que afecten condiciones ya contratadas se
+            comunican con antelación razonable.
+          </p>
+
+          <h2>7. Ley aplicable</h2>
+          <p>
+            Estas condiciones se rigen por las leyes de la República Argentina. Ante cualquier
+            controversia serán competentes los tribunales ordinarios del domicilio del consumidor,
+            conforme al artículo 36 de la Ley 24.240.
           </p>
         </div>
       </div>

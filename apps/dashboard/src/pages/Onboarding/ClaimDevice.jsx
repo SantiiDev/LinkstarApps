@@ -84,7 +84,11 @@ export default function ClaimDevice() {
                  en pantalla algo distinto a lo que dice el expositor hace
                  dudar de si se escribió bien. */
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="LS-XXXXXX"
+              /* El formato real lo genera private.generate_claim_code() (0001):
+                 cuatro caracteres, guion, cuatro caracteres. Acá decía
+                 "LS-XXXXXX", que además es el prefijo de los NÚMEROS DE ORDEN
+                 de la tienda, no el de los códigos de vinculación. */
+              placeholder="7K2M-94XQ"
               maxLength={40}
               required
               autoFocus

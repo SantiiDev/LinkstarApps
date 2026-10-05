@@ -1,18 +1,20 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ALL_DEVICES } from '../../data/devices';
 import { ALL_LOCATIONS } from '../../data/locations';
-import { updateDevice, catalogErrorMessage } from '../../lib/catalogApi';
+import { updateDevice, catalogErrorMessage, fetchDeviceDestinations } from '../../lib/catalogApi';
 import GoogleConnectBanner from '../../components/GoogleConnectBanner/GoogleConnectBanner';
 import TrendChart from '../../components/TrendChart/TrendChart';
 import Select from '../../components/Select/Select';
 import {
   fetchDevicePerformance,
   fetchLocationPerformance,
+  fetchEmployeeLeaderboard,
   fetchDeviceScansSeries,
   fetchScansDaily,
   formatRelativeTime,
   colorForIndex,
   lastNDayLabels,
+  lastNDayKeys,
 } from '../../lib/dashboardApi';
 import { REDIRECT_DOMAIN } from '../../lib/config';
 import { downloadQrPng } from '../../lib/qr';
@@ -34,19 +36,25 @@ const SPARKLINE_DAYS = 7;
 // dispositivo sin escaneos en la ventana no está en el Map: siete ceros es la
 // respuesta correcta ahí, porque el dato existe y es cero — a diferencia de
 // `reviews`/`conversion`, que se dejan en null porque no hay de dónde sacarlos.
-function mapDeviceRow(row, series) {
+function mapDeviceRow(row, series, destinations) {
   return {
     id: row.device_id,
     publicId: row.public_id,
     name: row.label,
     type: row.kind === 'instagram' ? 'instagram' : 'google',
-    // El id, además del nombre: el nombre es lo que se muestra y el id es lo
-    // que se guarda. Editar un dispositivo escribe `location_id`, y hasta ahora
-    // el formulario sólo tenía el nombre — por eso ofrecía las sucursales del
-    // mock, que era lo único que tenía a mano con forma de lista.
+    // Los ids, además de los nombres: el nombre es lo que se muestra y el id es
+    // lo que se guarda. Editar un dispositivo escribe `location_id` y
+    // `employee_id`, y hasta ahora el formulario sólo tenía el nombre — por eso
+    // ofrecía las sucursales del mock, que era lo único que tenía a mano con
+    // forma de lista.
     locationId: row.location_id ?? '',
     employeeId: row.employee_id ?? '',
+    // `destination_url` no está en v_device_performance (es una vista de
+    // métricas): se trae aparte, con fetchDeviceDestinations().
+    destinationUrl: destinations?.get(row.device_id) ?? '',
     location: row.location_name || 'Sin ubicación asignada',
+    // El enum tiene cinco valores pero el panel muestra dos: todo lo que no
+    // esté activo se ve como Inactivo. Ver handleToggleStatus más abajo.
     status: row.status === 'active' ? 'active' : 'inactive',
     scans: row.total_scans ?? 0,
     reviews: null,
@@ -172,10 +180,15 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus, locations, emplo
       locationId: device.locationId ?? '',
       employeeId: device.employeeId ?? '',
       type: device.type,
+      destinationUrl: device.destinationUrl ?? '',
     });
     setEditing(true);
   }
 
+  /* Guardar y activar/desactivar ESCRIBEN en la base. Hasta acá los dos
+     mutaban nada más que el useState: el nombre cambiaba en pantalla y volvía
+     al anterior al recargar. Era el mismo tipo de mentira que el modal de
+     vinculación antes de que llamara a claim_device(). */
   async function handleSave(e) {
     e.preventDefault();
     const ok = await onSave(device, form);
@@ -214,6 +227,8 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus, locations, emplo
           {editing ? (
             /* Edit form */
             <form id="device-edit-form" className="device-edit-form" onSubmit={handleSave}>
+              {error && <p className="claim-modal__error">{error}</p>}
+
               <label className="device-edit-form__field">
                 <span>Nombre</span>
                 <input
@@ -238,6 +253,11 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus, locations, emplo
                   ]}
                   triggerClassName="device-edit-form__select-trigger"
                 />
+                {locations.length === 0 && (
+                  <span className="device-edit-form__hint">
+                    Todavía no hay locales cargados. Un expositor sin local usa el destino de acá abajo.
+                  </span>
+                )}
               </div>
               {/* La sucursal es la que decide a dónde redirige el escaneo
                   (resolve_scan lee locations.google_review_url), así que un
@@ -268,6 +288,22 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus, locations, emplo
                   triggerClassName="device-edit-form__select-trigger"
                 />
               </div>
+              <label className="device-edit-form__field">
+                <span>¿A dónde lleva este expositor?</span>
+                <input
+                  type="url"
+                  value={form.destinationUrl}
+                  onChange={e => setForm(f => ({ ...f, destinationUrl: e.target.value }))}
+                  placeholder="https://…"
+                />
+                {/* Paso 1 de la cascada de resolve_scan(): si está cargado, pisa
+                    todo lo demás. Sirve para mandar un expositor a una carta, una
+                    promo o cualquier otro lado en vez de a la ficha del local. */}
+                <span className="device-edit-form__hint">
+                  Dejalo vacío para que use la ficha del local. Si ponés un link, este expositor
+                  va a llevar ahí y no a la reseña.
+                </span>
+              </label>
               {error && <p className="device-edit-form__error" role="alert">{error}</p>}
             </form>
           ) : (
@@ -333,6 +369,7 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus, locations, emplo
         </div>
 
         {/* Footer actions */}
+        {!editing && error && <p className="claim-modal__error">{error}</p>}
         <div className="device-modal__footer">
           {editing ? (
             <>
@@ -361,7 +398,7 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus, locations, emplo
                     Editar
                   </button>
                   <button className="device-modal__action-btn device-modal__action-btn--danger" onClick={() => onToggleStatus(device)} disabled={busy}>
-                    {device.status === 'active' ? 'Desactivar' : 'Activar'}
+                    {busy ? 'Guardando…' : device.status === 'active' ? 'Desactivar' : 'Activar'}
                   </button>
                 </>
               )}
@@ -662,7 +699,7 @@ function ClaimDeviceModal({ onClose, onClaimed }) {
             <form className="claim-modal__form" onSubmit={handleSubmit}>
               <input
                 type="text"
-                placeholder="Código de vinculación (ej. LNK-4F2A9C)"
+                placeholder="Código de vinculación (ej. 7K2M-94XQ)"
                 value={code}
                 onChange={(e) => { setCode(e.target.value.toUpperCase()); if (error) setError(''); }}
                 autoFocus
@@ -706,33 +743,26 @@ function buildDailyScansMock() {
   const totals = Array.from({ length: days }, (_, i) =>
     ALL_DEVICES.reduce((sum, d) => sum + (d.weeklyScans[i] ?? 0), 0)
   );
-  const today = new Date();
-  const labels = totals.map((_, i) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - (days - 1 - i));
-    return date.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }).replace('.', '');
-  });
-  return { totals, labels };
+  return { totals, labels: lastNDayLabels(days) };
 }
 
 /* v_scans_daily trae un total por día ya agregado para toda la organización
    (decisión 2: nunca se consulta scan_events/scan_daily_rollups directo). Se
    rellenan con 0 los días sin fila (sin escaneos ese día).
    `human_scans` y no `scans`: mismo criterio que las sparklines de las
-   tarjetas, para que el gráfico grande y las chicas cuenten lo mismo. */
+   tarjetas, para que el gráfico grande y las chicas cuenten lo mismo.
+
+   Las claves y las etiquetas salen las dos de lib/dashboardApi.js. Acá se
+   armaban por separado —clave con toISOString() en UTC, etiqueta con
+   toLocaleDateString() en hora local— y en UTC-3, de las 21:00 en adelante,
+   caían en días distintos: cada barra mostraba el total del día siguiente al
+   que decía rotular. */
 function buildDailyScansFromRows(rows, days) {
   const byDay = new Map(rows.map(r => [r.day, r.human_scans]));
-  const today = new Date();
-  const totals = [];
-  const labels = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - i);
-    const key = date.toISOString().slice(0, 10);
-    totals.push(byDay.get(key) ?? 0);
-    labels.push(date.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }).replace('.', ''));
-  }
-  return { totals, labels };
+  return {
+    totals: lastNDayKeys(days).map(key => byDay.get(key) ?? 0),
+    labels: lastNDayLabels(days),
+  };
 }
 
 export default function DevicesPage({ onNavigate, onNavigateSettings }) {
@@ -768,7 +798,7 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
     let cancelled = false;
     (async () => {
       try {
-        const [deviceRows, locationRows, employeeRows, deviceSeries] = await Promise.all([
+        const [deviceRows, locationRows, employeeRows, deviceSeries, destinations] = await Promise.all([
           fetchDevicePerformance(),
           fetchLocationPerformance(),
           // Para el desplegable de empleado del formulario. Catch propio: sin
@@ -787,9 +817,16 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
             console.error('No se pudo cargar la serie diaria por dispositivo, las sparklines quedan en cero:', err);
             return new Map();
           }),
+          // Catch propio por el mismo motivo que la serie: el destino por
+          // dispositivo es un extra para editar, y que falle no justifica tirar
+          // toda la pantalla al mock y esconder totales que sí son reales.
+          fetchDeviceDestinations().catch(err => {
+            console.error('No se pudieron cargar los destinos por dispositivo:', err);
+            return new Map();
+          }),
         ]);
         if (cancelled) return;
-        setDevices(deviceRows.map(row => mapDeviceRow(row, deviceSeries)));
+        setDevices(deviceRows.map(row => mapDeviceRow(row, deviceSeries, destinations)));
         setLocations(locationRows.map(mapLocationForRanking));
         setLocationOptions(locationRows.map(l => ({ id: l.location_id, name: l.name })));
         setEmployeeOptions(employeeRows.map(e => ({ id: e.employee_id, name: e.full_name })));
@@ -873,6 +910,11 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
         // la UI; la columna es el enum device_kind, donde Google es
         // 'google_review'. Sin esta traducción el update falla con 22P02.
         kind: form.type === 'instagram' ? 'instagram' : 'google_review',
+        // Vacío tiene que ser null, nunca '': resolve_scan() hace coalesce
+        // sobre esta columna y una cadena vacía contaría como destino válido,
+        // así que el escaneo terminaría en ninguna parte. Es el paso 1 de la
+        // cascada, o sea que le gana a `kind` y a la sucursal.
+        destination_url: form.destinationUrl.trim() || null,
       });
       setSelected(null);
       reload();
@@ -887,7 +929,13 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
   }
 
   async function handleToggleStatus(device) {
-    const next = device.status === 'active' ? 'inactive' : 'active';
+    /* El enum device_status es ('unassigned','active','paused','lost','retired'):
+       'inactive' NO existe en la base y escribirlo falla con 22P02. El panel
+       muestra sólo dos estados —Activo e Inactivo—, así que apagar un expositor
+       lo deja en 'paused'. 'lost' y 'retired' siguen existiendo (los usan
+       org_is_activated() y el aprovisionamiento) y también se ven como
+       "Inactivo", pero no se escriben desde acá. */
+    const next = device.status === 'active' ? 'paused' : 'active';
     setDeviceBusy(true);
     setDeviceError(null);
     try {
@@ -1026,15 +1074,15 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
           </svg>
         </span>
         <span className="devices-teaser__body">
-          {/* Sin badge "Próximamente": este botón navega a la pestaña Equipo,
-              donde la pantalla de Empleados existe y lee v_employee_leaderboard
-              de verdad desde la fase 1. El cartel quedó de cuando el destino era
-              un placeholder, y anunciar como futuro algo a lo que el mismo click
-              te lleva es peor que no decir nada. */}
+          {/* Vuelve el badge, por un motivo distinto al de antes: la pantalla
+              de Empleados existe y lee datos reales, pero la atribución por
+              persona necesita las tarjetas personales, que todavía no se
+              venden. El expositor está sobre la mesa y no es de nadie. */}
           <span className="devices-teaser__title">
             Ranking de Empleados
+            <span className="devices-teaser__badge">Próximamente</span>
           </span>
-          <span className="devices-teaser__text">Controlá qué empleado consigue más reseñas en Google con cada dispositivo Linkstar.</span>
+          <span className="devices-teaser__text">Cuando existan las tarjetas personales vas a poder ver qué empleado consigue más reseñas.</span>
         </span>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
@@ -1125,7 +1173,7 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
       {/* ── Footer ── */}
       <div className="devices-page__footer">
         <p className="devices-page__footer-text">
-          © 2026 <span className="devices-page__footer-brand">linkstar<span className="devices-page__footer-dot">.</span></span> — Panel de gestión de reseñas
+          © {new Date().getFullYear()} <span className="devices-page__footer-brand">linkstar<span className="devices-page__footer-dot">.</span></span> — Panel de gestión de reseñas
         </p>
       </div>
 

@@ -28,11 +28,19 @@ Desde la raíz del monorepo son `npm run db:reset`, `npm run db:push` y `npm run
 | `0012_rebuild_today_rollup_rpc.sql` | `public.rebuild_today_rollup()`, wrapper para recalcular un día a demanda |
 | `0013_subscription_onboarding.sql` | Catálogo real de `plans`, `plan_selected_at`, `my_org_context()`, `select_free_plan()`, RPCs de preapproval |
 | `0014_enforce_subscription_access.sql` | `private.orgs_with_access()` y el RLS que exige plan pago para leer y escribir |
-| `0015_free_plan_requires_device.sql` | `org_is_activated()` — el plan gratis además necesita un expositor vinculado |
+| `0015_free_plan_requires_device.sql` | `org_is_activated()` — el plan gratis además necesita un expositor vinculado. **Revertida por la `0022`** |
 | `0016_entity_daily_series.sql` | Serie diaria por dispositivo / local / empleado, con `human_scans` y `bot_scans` |
 | `0017_fix_subscription_rpcs.sql` | Correctiva: reaplica los dos arreglos del `0013` que nunca llegaron a Postgres |
 | `0018_human_scans_in_dashboard_views.sql` | `human_scans` / `bot_scans` en las cinco vistas del `0008` que agregan rollups |
 | `0019_fix_check_same_org_trigger.sql` | Correctiva: `insert into employees` fallaba **siempre** desde el `0003` |
+| `0020_team_invitations.sql` | `invite_member()`, `list_org_members()`, `set_member_role()`, `private.active_org_id()` y el límite de `max_members` |
+| `0021_redirect_fallback_domain.sql` | Correctiva: el fallback de `resolve_scan()` apuntaba a `linkstar.com.ar`, un dominio que nunca se registró |
+| `0022_free_plan_without_device.sql` | Decisión de producto: el plan gratis **ya no** exige expositor vinculado. `org_is_activated()` queda como alias de `org_has_access()` |
+
+> **Al aplicar la `0022` hay que actualizar `tests/rls_isolation.sql` en el mismo cambio.** El test
+> assertea la regla de la `0015` —"plan gratis sin expositor: `org_has_access` sí,
+> `org_is_activated` no"— y esa condición deja de ser cierta, así que el test falla. No es un
+> problema del test: es la regla que cambió.
 
 Si una migración se aplicó a mano fuera de la CLI (ya pasó con `0010`),
 `supabase migration repair --status applied <version>` arregla el historial sin volver a correr el SQL.

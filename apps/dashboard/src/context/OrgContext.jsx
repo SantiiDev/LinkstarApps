@@ -56,10 +56,18 @@ export function OrgProvider({ children }) {
     /* Atajos, para que las pantallas no repitan la misma lógica de estado. */
     hasOrg: Boolean(context?.organization_id),
     hasChosenPlan: Boolean(context?.plan_selected_at),
-    /* hasAccess = la suscripción está vigente. isActivated = eso Y, si el plan
-       es gratis, hay un expositor vinculado. Son dos cosas distintas y el
-       guard las usa para decidir a qué paso mandar al usuario: al selector de
-       planes o a vincular su expositor. */
+    /* hasAccess = la suscripción está vigente, y es lo único que mira el guard
+       del panel.
+
+       `isActivated` llegó con la 0015, cuando el plan gratis además exigía un
+       expositor vinculado. La 0022 revirtió esa regla y dejó org_is_activated()
+       como alias de org_has_access(), así que hoy los dos valores son iguales.
+       Se mantienen los dos en el contrato porque las policies de la 0014 siguen
+       llamando a esa función por nombre: es el punto único donde volver a
+       agregar una condición de activación sin tocar veinte políticas.
+
+       `hasDevices` sí sigue siendo útil por su cuenta: responde "¿hay algo que
+       medir todavía?", que es otra pregunta. */
     hasAccess: Boolean(context?.has_access),
     hasDevices: Boolean(context?.has_devices),
     isActivated: Boolean(context?.is_activated),

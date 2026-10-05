@@ -408,13 +408,24 @@ Routes, one router per file, all mounted at the app root:
   avoid. Does not pass `p_country`/`p_region`/`p_city`/`p_latency_ms`; those are geo/latency enrichment
   nothing computes yet, so those `scan_events` columns stay null in practice.
 - `routes/orders.js` — `POST /api/create-preference` (pending order + MP preference; `auto_return` only
-  for non-localhost `FRONTEND_URL`), `POST /api/orders/transfer`, `POST /api/process-payment`,
-  `GET /api/orders/:orderNumber`. Nothing here is reachable from a browser today — `apps/ventas` checkout
-  doesn't call the API (see below) — but the hardening is already in place and must not be undone when it
-  reconnects:
-  - The three POSTs run `validateBody(...)` then `assertCatalogPrices(...)`, and `/api/process-payment`
+  for non-localhost `FRONTEND_URL`), `POST /api/orders/manual` (the no-online-payment order the ventas
+  checkout actually uses), `POST /api/orders/transfer`, `POST /api/process-payment`,
+  `GET /api/orders/:orderNumber`. Only `/api/orders/manual` is reachable from a browser today — the rest
+  are dormant because `apps/ventas` checkout has no online payment (see below) — but the hardening is
+  already in place and must not be undone when it reconnects:
+  - The four POSTs run `validateBody(...)` then `assertCatalogPrices(...)`, and `/api/process-payment`
     additionally runs `assertMatchesCatalogTotal(...)` and rejects a body with no `cartItems` rather than
     charging a client-supplied `transaction_amount` blind.
+  - **`assertCatalogPrices` validates packs, not discounted units.** The "2 unidades" tier used to push
+    two loose items at the discounted unit price, so a single unit at that price was indistinguishable
+    from half a promo and the `−` button in the cart bought one expositor for $32.800 instead of $41.000.
+    Per-item validation could not catch it (two units of different colours are two lines of `qty: 1`), so
+    the tier became a bundle like the combo: loose items are only ever valid at `UNIT_PRICE`, and the three
+    bundle ids carry a fixed price and `qty: 1`. Reintroducing a per-unit discount reopens the hole.
+  - **In `/api/orders/manual` the email is sent inside its own `try`, after the order is persisted.** If a
+    mail failure returned 500 the browser would fall back to mailing the order itself, with a *different*
+    order number and a "SIN REGISTRAR" subject — leaving a saved order under one number and an alert under
+    another saying it was never saved.
   - `GET /api/orders/:orderNumber` **requires `?email=<buyer_email>`** and matches it against
     `buyer_email` (`ilike`). This client is `service_role`, so it bypasses the `orders_select` policy of
     `0006` — the email check re-implements that policy by hand. Without it, guessing an order number
@@ -433,8 +444,11 @@ Routes, one router per file, all mounted at the app root:
   through `external_reference`, and hand off to `apply_preapproval_event()` / `record_subscription_payment()`
   so all the period and grace arithmetic happens in one statement — the 200 already went out, so nothing
   retries a half-written row.
-- `routes/subscriptions.js` — `POST /api/subscriptions/checkout` and `POST /api/subscriptions/cancel`,
-  both behind `requireAuth` and both owner/admin only (checked by hand against `memberships`, because the
+- `routes/subscriptions.js` — `POST /api/subscriptions/checkout`, `POST /api/subscriptions/cancel` and
+  `POST /api/subscriptions/sync` (asks MP how the preapproval ended and applies it; it is what the
+  "Volver a consultar" button of `PlanResult` calls, so a webhook that never arrived doesn't leave a
+  paying customer stuck in the waiting room forever),
+  all behind `requireAuth` and all owner/admin only (checked by hand against `memberships`, because the
   `service_role` client bypasses RLS — same reasoning as the mandatory `?email=` on the order lookup).
   The body carries **only a plan code**: price and trial length are read from `plans`, never from the
   request. Neither route writes the subscription state — that is the webhook's job, so a failure in MP
@@ -493,32 +507,62 @@ split below before wiring anything — the shell is finished, the data mostly is
   `lib/dashboardApi.js`), `devices`, `employees` / `locations` (embedded in `settings`), the whole `/alta`
   onboarding, and the "Facturación" tab of `settings` (plan and status from `OrgContext`, history from
   `subscription_payments`). `profile` reads the logged-in user from `AuthContext`.
-  **Every remaining section renders `components/SectionPlaceholder`** instead of the hardcoded arrays it
-  used to show — `gb-*`, `reviews`, `reports-*`, `monthly-reports`, `automations`. The rule that replaced
-  them: a page with no data source says so; it never prints a number that can't be distinguished from a
-  measured one. The placeholder has two variants and picking the wrong one misleads:
+  The sections with no data source do **not** print numbers: the three that depend on us (`reports-nps`,
+  `monthly-reports`, `automations`) render `components/SectionPlaceholder`, and the seven that depend on
+  the customer's Google profile render their old mock behind `components/GoogleGate` (see below). The rule
+  that replaced the hardcoded arrays: a page with no data source says so; it never prints a number that
+  can't be distinguished from a measured one. The placeholder has two variants and picking the wrong one
+  misleads:
   `google` for what the *customer* can unblock by connecting their Business Profile (it carries the connect
   button), `soon` for what *we* haven't built — NPS, monthly reports, automations — which gets no button,
   because a button that resolves nothing is worse than none. Each converted file keeps a header comment
-  saying what it used to fake and which roadmap phase feeds it; the original mock markup and its CSS are
-  still in git (and the CSS files are deliberately left in place — they are the design target for when the
-  data arrives).
+  saying what it used to fake and which roadmap phase feeds it. Since `GoogleGate` landed, `variant="google"`
+  has exactly one caller left — the one on `company` — so changing that variant barely moves anything; the
+  copy that used to live in the other seven (`description`, `preview`, `note`) moved into the gate's modal.
   Two mocks outlived that sweep because they were embedded in `Settings.jsx` and in `AppShell` rather than
   being screens of their own, and were removed on 18 Aug 2026: the "Cuentas de Google conectadas" card
   (a fabricated connected account carrying a real person's name and an address on the unregistered
   domain, plus a "0 de 1 locales activos" counter backed by nothing) and the topbar's invented support
   phone number. Same rule as the rest — no button, since connecting the Business Profile lands in phase 4.
-  Note the `google` variant's connect button is itself inert today: no caller passes `onConnect`.
-- **The mock JSX is a deliverable, not discarded history — and it does not come back on its own.** The tag
-  `maquetas-pre-fase-2` points at the last commit where those ten screens were still drawing their grids,
-  tables and charts, and every converted file's header repeats the `git show` line that recovers its own
-  screen. Connecting Google flips no switch: the JSX is gone from the working tree, so a connected account
-  still renders the placeholder until somebody rewrites the screen against the real data. Budget that
-  front-end work into phase 4 alongside the API work. Two consequences that look like dead code and are
-  not: `components/PieChart/` (plus `lib/shares.js`) and `lib/chartColors.js` have no importer today
-  **only because** the screens that used them — `reports-nps`, `reports-sentiment`, `gb-metrics` — were the
-  ones converted. Same for the now-unused CSS in `GoogleBusiness.css`, `Reviews.css`, `Reports.css`,
-  `Automations.css` and `MonthlyReports.css`. None of it gets swept in a dead-code pass.
+  Note the `google` variant's connect button is itself inert today: no caller passes `onConnect`. So is
+  `GoogleGate`'s and `GoogleConnectBanner`'s — the OAuth is phase 4, and the three are wired together.
+- **`components/GoogleGate` is the only place a mock is allowed to render, and that is what makes it
+  legal.** The seven sections that depend on the customer's Google profile — `reviews`, the four `gb-*`,
+  `reports-sentiment`, `reports-keywords` — show their pre-phase-2 mock *as the background* of a modal that
+  invites you to connect: blurred, `inert` (no clicks, no tab stops, no text selection, no screen reader),
+  and with no way to close the modal and no `Escape`. The page file is a thin wrapper that passes copy to
+  the gate; the recovered JSX lives next to it in a `*Mockup.jsx`, with `data/reviews.js` back for the
+  three that read it. The blur is **deliberately light** (`filter: blur(3px)`) — the mock is there so the
+  customer sees what the section is for, so parts of it are legible. What keeps the invented numbers on the
+  right side of "never print a number that can't be distinguished from a measured one" is therefore the
+  whole set of conditions, not illegibility: a `*Mockup.jsx` rendered outside the gate, or a gate that can
+  be dismissed, breaks the rule. Three mechanics that are not decorative:
+  **(a)** the section scrolls normally (the mock runs past behind) but the modal does not — it is
+  `position: fixed` over the content area, offset by the sidebar width (264px, 88px under 1024, 0 under
+  640, where the topbar also grows 44px → 52px), because the sidebar must stay visible and clickable as the
+  only way out; **(b)** the modal never scrolls inside and is never cut: it has no `max-height`, its layer
+  is `overflow: hidden` (with `auto`, one pixel of overflow turned the layer into a scroller and the wheel
+  moved the modal instead of the page behind it), and a ladder of `max-height` media queries drops the
+  modal's optional parts — small print, then the description, then the review skeleton — so it fits short
+  windows instead of overflowing; **(c)** the blur is `filter` on the mock, **not**
+  `backdrop-filter` on a veil over it: the section scrolls, and a backdrop-filter would re-blur the mock's
+  ~20 glass cards every frame (rule 2 below). `SubscriptionBanner` is hidden on these sections
+  (`GOOGLE_GATED_SECTIONS` in `lib/routes.js`, read by `AppShell`) — behind the modal it is unreachable and
+  only steals height. That list is fixed because nothing records whether a profile is connected; when that
+  exists, it and the gate read the same condition. This was asked for as the MyTapStar pattern, so match
+  that screen if it's ever redesigned.
+- **The mock JSX is a deliverable, not discarded history.** The tag `maquetas-pre-fase-2` points at the last
+  commit where those ten screens were still drawing their grids, tables and charts; seven of them now live
+  in the tree as `*Mockup.jsx` and the three "próximamente" ones (`reports-nps`, `monthly-reports`,
+  `automations`) are still only in the tag, with the `git show` line in each file's header. Connecting
+  Google flips no switch either way: the mock is a *drawing*, not a screen wired to data, so a connected
+  account does not get a working section — somebody has to rewrite each one against the real data and
+  delete the `*Mockup.jsx`. Budget that front-end work into phase 4 alongside the API work. What looks like
+  dead code and is not: the now-unused CSS in `Automations.css` and `MonthlyReports.css` (the design target
+  for when the data arrives), and `components/DateField/`, a working date picker with no caller yet — the
+  date-range filters of the reports screens are what it was built for. Neither gets swept in a dead-code
+  pass. (`components/PieChart/`, `lib/shares.js` and `lib/chartColors.js` used to be on this list; the
+  recovered mocks import them again.)
 - **Scroll performance: the glass look is expensive, so the cheap frames are load-bearing.** The design is
   glassmorphism — around sixty surfaces carry `backdrop-filter: var(--glass-blur)`, and each one re-blurs
   whatever is behind it. That only stays affordable because the backdrop itself is cheap, which took three
@@ -578,11 +622,67 @@ split below before wiring anything — the shell is finished, the data mostly is
   optional, so this modal is the path for everyone whose expositor arrives after signup.
 - `pages/Devices/`, `pages/Employees/`, `pages/Locations/` read real data with the same pattern: fall back
   to `data/*.js` mock **only if the query throws**; an empty result (new org) renders as-is. Fields with no
-  backing in the views render `'—'` instead of being fabricated. Devices and Locations distinguish **two**
+  backing in the views render `'—'` instead of being fabricated. All three distinguish **two**
   empty states, and the distinction is `hasAny` (computed over the unfiltered list, not the filtered one):
   "you haven't linked an expositor / loaded a branch yet" carries an instruction and a CTA, while "the
   filter matched nothing" offers to clear the filter. Telling a day-one account that nothing matched a
   search it never ran is what this replaced.
+- **`lib/catalogApi.js` is the only module that writes the catalog** — `locations`, `employees` and
+  `devices`. It is the counterpart of `lib/dashboardApi.js`, which reads only views, and it goes straight
+  through PostgREST rather than RPC because `0014` rewrote those three tables' policies precisely so the
+  logged-in client can write them (`teamApi.js` needs RPC only because the email lives in `auth.users`).
+  Three things in it that look like details and are not: `createLocation` / `createEmployee` deliberately
+  skip `.select()`, because the RETURNING would be evaluated against `locations_select`, whose
+  `visible_location_ids()` is `stable` and cannot see the row being inserted — the insert succeeds and the
+  client reads "no rows", which looks like a failure and invites a retry that duplicates the branch; the
+  UPDATEs do use `.select()`, where the row already exists in the snapshot. Deletes are logical
+  (`deleted_at`), never physical, or `devices.location_id`'s `on delete set null` would orphan the
+  expositores silently. And `catalogErrorMessage()` branches on `hint`/`code`, never on the message text.
+- **Devices writes, and the status enum is wider than the UI.** Editing a device
+  and activating/pausing it used to mutate `useState` and nothing else, so every change vanished on
+  reload. The panel shows two states, Activo/Inactivo, while `device_status` has five
+  (`unassigned | active | paused | lost | retired`): pausing writes `'paused'`, because `'inactive'` does
+  not exist in the enum — writing it fails with `22P02`, and it is an easy mistake because the UI's own
+  label *is* "Inactivo". The enum is not shrunk to match the UI — `unassigned` is what provisioning
+  writes before anyone claims a device, and `org_is_activated()` / `has_devices` filter on
+  `status <> 'retired'`. The edit modal also assigns the **employee**, and both Edit and Activar/Desactivar
+  are hidden for anyone outside owner/admin/manager (`devices_update`): offering a button the database will
+  reject is worse than not showing it.
+- **The per-device destination is real.** `devices.destination_url` is step 1 of the `resolve_scan()`
+  cascade and now has a field in the edit modal. Empty must be stored as `null`, never `''`: the cascade
+  is a `coalesce` and an empty string would count as a valid destination and send the scan nowhere.
+- **Employees is marked "Próximamente", and the screen was deliberately NOT replaced by a placeholder.**
+  Attributing a scan to a person needs personal cards; an expositor sits on a table and belongs to nobody.
+  Cards aren't sold yet, so `v_employee_leaderboard` will stay empty — but the screen reads it for real,
+  so it keeps its markup and only carries a notice above it (in `Settings.jsx`'s "Equipo" tab, plus the
+  badge on the Devices teaser). When cards exist, delete the notice and it works.
+- **OPEN: the card-vs-expositor rule is written down but not enforced, and the UI now contradicts it.**
+  The rule is that an employee is attributable through a **personal card** — an expositor sits on a table
+  and belongs to nobody. The schema already supports it: `device_form` (`0001`) is
+  `nfc_stand | nfc_sticker | nfc_card | qr_stand | qr_sticker`, `devices.form_factor` defaults to
+  `'nfc_stand'`, and `v_device_performance` has exposed the column since `0008` (kept by `0018`).
+  **Nothing in `apps/dashboard` or `services/api` reads it — not one line.** So the device edit modal
+  offers the "Empleado" dropdown for every device, a table stand included, and since `scan_events`
+  snapshots `employee_id` at scan time (invariant 1), assigning a waiter to a stand credits them in
+  `v_employee_leaderboard` with reviews the table earned. Two pieces of copy still state the old rule
+  while the screens do the opposite: `Settings.jsx` ("la atribución por empleado llega con las tarjetas
+  personales") and the day-one empty state of `Employees.jsx` ("todavía no se pueden crear"), which sits
+  two lines from the "Nuevo empleado" button. Deciding this needs both of the people on the project:
+  either gate the dropdown on `form_factor = 'nfc_card'` and fix the copy, or drop the rule and say so
+  here. Do not let it sit as is — it is the kind of contradiction that gets resolved by accident.
+- **Locations are loaded by hand, and that is no longer provisional.** `LocationForm.jsx` creates *and*
+  edits a branch through `locations_insert`/`locations_update` of `0014` and `enforce_plan_limit()` of
+  `0007`. It used to be a dev-only modal behind `VITE_ENABLE_MANUAL_LOCATION`, because branches were
+  supposed to arrive by connecting the customer's Google profile — that needs the `business.manage` scope,
+  approved by hand at the Cloud-project level and still pending. The form stays either way: with no
+  `locations` row a scan has nowhere to go, so this is the only path that makes the product work today.
+  The part that earns its keep is the **live destination preview**: it mirrors `resolve_scan()`'s coalesce
+  cascade in JS and shows where a scan would land with what is typed so far. That mirror is a copy of the
+  SQL, not the source of truth — if the cascade's order changes in a migration, `googleDestinationOf()` /
+  `instagramDestinationOf()` change with it. Saving a branch with no destination at all is allowed and
+  warned about, on purpose; the list screen also counts them above the table, because the failure is
+  invisible until somebody taps an expositor and nothing happens. Create/edit/delete are hidden from a
+  `manager`, who has no insert policy on `locations`.
 - `pages/Employees/` and `pages/Locations/` are reachable through `pages/Settings/Settings.jsx`, rendered
   inside the "Equipo" and "Gestión local" tabs with an `embedded` prop that hides their own page header and
   footer (Settings already has a `PageHeader`, and they'd otherwise show two titles and two footers). They
@@ -615,14 +715,26 @@ split below before wiring anything — the shell is finished, the data mostly is
 
 - Routing is `react-router-dom` (v7, `BrowserRouter` in `main.jsx`), with the paths in `src/lib/routes.js`:
   `/`, `/tienda`, `/linkstarapp`, `/contacto`, `/finalizar-compra`, `/nosotros`, `/garantia`, `/legal`,
-  `/privacidad`, `/terminos`. Unknown paths redirect to `/`.
+  `/privacidad`, `/terminos`, `/arrepentimiento`. Unknown paths redirect to `/`.
+- **The legal pages are written for Argentina and carry placeholders.** `[RAZÓN SOCIAL]`, `[CUIT]`,
+  `[DOMICILIO]` and `[EMAIL]` are waiting on the monotributo paperwork — grep for `[RAZÓN SOCIAL]` to
+  fill them all in one pass. Two numbers that are not interchangeable and must not be merged again:
+  the **legal warranty is 6 months** (Ley 24.240 art. 11, a floor that cannot be lowered) and the
+  **right of withdrawal is 10 calendar days** (art. 34). `/arrepentimiento` exists as its own page
+  linked from the footer because Res. 424/2020 requires a direct, visible access from the site, and the
+  footer also carries the Defensa del Consumidor link that Res. 1033/2021 asks for.
 - `SiteLayout` (navbar + `<Outlet />` + footer) wraps every page **except** `/finalizar-compra`: checkout
   is a purchase funnel and deliberately renders without navbar or footer, as it did before.
 - `Navbar` and `Footer` use `<Link>`/`<NavLink>` — real `<a href>`s, crawlable and openable in a new tab.
   In-page CTAs (Hero, Features, FAQ…) keep their `onShop`/`onContact` callbacks, now wired to `navigate`:
   they are styled buttons, not navigation, so they were left alone.
 - Cart state is global via `CartContext`; the `Cart` drawer is mounted outside `<Routes>` (it is a drawer,
-  not a page) and navigates to checkout by itself.
+  not a page) and navigates to checkout by itself. It **persists to `localStorage`** under a version
+  number: bump `STORAGE_VERSION` in the same commit as any price or item-shape change, or a cart saved
+  weeks ago reaches the checkout with prices the server catalog no longer accepts and the buyer gets a
+  400 they can't act on. `/finalizar-compra` with an empty cart redirects to the shop — but the guard
+  must keep its `step !== 'success'` condition, because confirming empties the cart and without it the
+  buyer would be thrown off the screen showing their order number.
 - `src/lib/config.js` — `API_URL` and `WEB3FORMS_KEY`. The key is in **one** place on purpose: it is
   public (it ships in the bundle), both forms now send through `services/api` instead, and the constant
   plus the two fallback paths that use it get deleted the day the API is deployed. Until then the only

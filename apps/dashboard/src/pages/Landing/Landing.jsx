@@ -744,7 +744,10 @@ function PriceCard({ plan, onEnterDashboard }) {
             'landing-price-card__btn ' +
             (featured ? 'landing-price-card__btn--solid' : 'landing-price-card__btn--outline')
           }
-          onClick={onEnterDashboard}
+          /* El código del plan viaja: antes esta tarjeta llamaba al mismo
+             callback que "Iniciar sesión" del navbar y la elección se perdía,
+             así que el usuario volvía a elegir el mismo plan en el alta. */
+          onClick={() => onEnterDashboard(plan.code)}
         >
           {featured && plan.trial_days > 0 ? `Probar ${plan.trial_days} días gratis` : 'Empezar gratis'}
         </button>
@@ -882,7 +885,7 @@ function Footer() {
         <div className="landing-footer__brand">
           linkstar<span className="landing-footer__brand-dot">.</span>
         </div>
-        <p className="landing-footer__copy">© 2026 linkstar — Panel de gestión de reseñas con NFC inteligente</p>
+        <p className="landing-footer__copy">© {new Date().getFullYear()} linkstar — Panel de gestión de reseñas con NFC inteligente</p>
       </footer>
     </div>
   );

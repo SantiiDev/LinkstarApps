@@ -27,6 +27,7 @@ import PlanResult from './pages/Onboarding/PlanResult';
 import ClaimDevice from './pages/Onboarding/ClaimDevice';
 import { useAuth } from './context/AuthContext';
 import { useOrg } from './context/OrgContext';
+import { rememberIntendedPlan } from './lib/planIntent';
 import {
   PUBLIC_ROUTES,
   ONBOARDING_ROUTES,
@@ -108,9 +109,17 @@ function OnboardingStep({ children, requiresOrg = true, redirectIfOrg = false })
 function LandingRoute() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  return (
-    <Landing onEnterDashboard={() => navigate(user ? HOME_SECTION_PATH : PUBLIC_ROUTES.login)} />
-  );
+
+  /* Las tarjetas de precio pasan el código del plan; el navbar y el hero
+     llaman a esto sin argumentos (el `onClick` les pasa el evento del click,
+     por eso `rememberIntendedPlan` ignora todo lo que no sea un string). La
+     intención se guarda y la consume PlanPicker: no activa ni cobra nada. */
+  const enterDashboard = (planCode) => {
+    rememberIntendedPlan(planCode);
+    navigate(user ? HOME_SECTION_PATH : PUBLIC_ROUTES.login);
+  };
+
+  return <Landing onEnterDashboard={enterDashboard} />;
 }
 
 /* Con sesión activa, /iniciar-sesion y /registro no tienen nada que ofrecer:

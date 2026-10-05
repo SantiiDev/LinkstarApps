@@ -20,4 +20,14 @@ export const ROUTES = {
   legal: '/legal',
   privacy: '/privacidad',
   terms: '/terminos',
+  /* Botón de arrepentimiento (Res. 424/2020 de la Secretaría de Comercio
+   * Interior): toda tienda online tiene que ofrecer un acceso directo y
+   * fácilmente visible desde la home para revocar una compra. Por eso es una
+   * página propia enlazada en el footer y no un párrafo adentro de Términos. */
+  withdrawal: '/arrepentimiento',
 };
+
+/* Portal oficial de Defensa de las y los Consumidores. La Res. 1033/2021 pide
+ * un enlace visible en el sitio, así que vive con las rutas para que no se
+ * pierda en el medio del JSX del footer. */
+export const CONSUMER_DEFENSE_URL = 'https://autogestion.produccion.gob.ar/consumidores';

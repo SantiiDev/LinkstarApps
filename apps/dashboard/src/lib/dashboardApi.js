@@ -17,9 +17,12 @@ import { supabase } from './supabaseClient';
 // `scans` en los rollups es un count(*) crudo con bots adentro, y el bot típico
 // acá no es un atacante: la preview de WhatsApp golpea la URL del expositor
 // cada vez que alguien comparte el link. Para el dueño del local eso no es un
-// escaneo. Desde el 0018 las seis vistas del 0008 exponen `human_scans` al lado
-// de `scans`, igual que ya hacían las tres del 0016, y este módulo pide SIEMPRE
-// la columna humana. La cruda queda disponible en la vista para depurar.
+// escaneo. Desde el 0018 las cinco vistas AGREGADORAS del 0008 exponen
+// `human_scans` al lado de `scans`, igual que ya hacían las tres del 0016, y
+// este módulo pide SIEMPRE la columna humana. La cruda queda disponible en la
+// vista para depurar. (La sexta vista del 0008, v_recent_activity, no entra en
+// la cuenta: filtra `not is_bot` desde el principio y no tiene columnas del
+// 0018.)
 //
 // Consecuencia operativa: si el 0018 no está aplicado en el entorno, estas
 // queries fallan con "column ... does not exist" en vez de devolver un número
@@ -132,7 +135,7 @@ export async function fetchScansDaily(days = 7) {
 // nueva. Usa UTC igual que `day` en scan_daily_rollups, que la escribe el
 // rollup con el current_date de Postgres — mezclar husos acá desalinearía la
 // serie un día para quien mire el panel de noche.
-function lastNDayKeys(days) {
+export function lastNDayKeys(days) {
   const today = new Date();
   const keys = [];
   for (let i = days - 1; i >= 0; i--) {
@@ -149,6 +152,13 @@ function lastNDayKeys(days) {
 // Dispositivos rotulaba las barras con ['L','M','X','J','V','S','D'] — eso
 // asume que la semana arranca un lunes, pero la serie son los últimos N días
 // terminando hoy.
+//
+// Y hay un segundo desalineamiento, más difícil de ver, que es la razón por la
+// que lastNDayKeys() también se exporta: el gráfico de Dispositivos armaba las
+// CLAVES con toISOString() (UTC) y las ETIQUETAS con toLocaleDateString()
+// (hora local). En UTC-3, después de las 21:00 las dos cosas caen en días
+// distintos, así que cada barra mostraba el valor del día siguiente al que
+// decía rotular. Las dos listas tienen que salir de la misma función.
 export function lastNDayLabels(days) {
   return lastNDayKeys(days).map(key => {
     const [y, m, d] = key.split('-').map(Number);
@@ -229,8 +239,14 @@ export function colorForIndex(i) {
   return PALETTE[i % PALETTE.length];
 }
 
+/* Las iniciales del avatar. Estaba repetida en Sidebar, Perfil y TeamMembers
+   con tres implementaciones que no coincidían; ésta es la única y toma el caso
+   de un solo nombre (o un mail) como las dos primeras letras, que es lo que
+   hacían las copias del Sidebar y el Perfil. */
 export function initialsFor(fullName) {
-  if (!fullName) return '?';
-  const parts = fullName.trim().split(/\s+/);
-  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase();
+  const source = (fullName || '').trim();
+  if (!source) return '?';
+  const parts = source.split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
 }

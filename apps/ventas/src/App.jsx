@@ -17,6 +17,7 @@ const Legal = lazy(() => import('./pages/Info/Legal'));
 const Privacy = lazy(() => import('./pages/Info/Privacy'));
 const Terms = lazy(() => import('./pages/Info/Terms'));
 const Warranty = lazy(() => import('./pages/Info/Warranty'));
+const Withdrawal = lazy(() => import('./pages/Info/Withdrawal'));
 const About = lazy(() => import('./pages/Info/About'));
 
 /* Cada ruta arranca desde arriba. Antes cada `goToX` hacía su propio
@@ -83,6 +84,7 @@ export default function App() {
           <Route path={ROUTES.contact} element={<Contact />} />
           <Route path={ROUTES.about} element={<About />} />
           <Route path={ROUTES.warranty} element={<Warranty />} />
+          <Route path={ROUTES.withdrawal} element={<Withdrawal />} />
           <Route path={ROUTES.legal} element={<Legal />} />
           <Route path={ROUTES.privacy} element={<Privacy />} />
           <Route path={ROUTES.terms} element={<Terms />} />
