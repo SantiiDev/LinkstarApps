@@ -63,7 +63,13 @@ create table if not exists public.notification_preferences (
   -- A quién se le manda. NULL = al correo de quien creó la organización, que es
   -- el caso normal. Se separa para que una cadena pueda mandarlo a una casilla
   -- de operaciones en vez de a la persona que abrió la cuenta.
-  recipient_email        citext,
+  --
+  -- `extensions.citext` calificado, no `citext` a secas: citext vive en el
+  -- schema `extensions` (0001), y el rol con el que `supabase db push` aplica
+  -- las migraciones no lo tiene en el search_path. Sin calificar, el push a
+  -- producción falla con "type citext does not exist" aunque `db reset` local
+  -- (que corre como postgres) pase. Ver también la nota de 0013.
+  recipient_email        extensions.citext,
 
   created_at             timestamptz not null default now(),
   updated_at             timestamptz not null default now()
@@ -87,7 +93,7 @@ create table if not exists public.notification_log (
   -- el aviso es de toda la organización.
   entity_id        uuid,
 
-  recipient_email  citext not null,
+  recipient_email  extensions.citext not null,   -- calificado: ver notification_preferences
   sent_at          timestamptz not null default now(),
 
   -- Qué se mandó, para poder responder "¿por qué me llegó esto?" sin adivinar.

@@ -207,13 +207,24 @@ refresh token, `google_locations` / `google_reviews`, and the RPCs `sync-reviews
 
 **Everything up to `0020` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
 16 Aug after running it locally with `db:reset` and `rls_isolation.sql` green; both verified with
-`supabase migration list`). **`0021`–`0024` are written but NOT applied in production** — until
-someone runs `npm run db:push`, the database still redirects to the unregistered domain, still locks
-free-plan accounts out of the panel until they link a device, has no notification tables at all
-(so `npm run send-alerts` fails) and no Google tables (so `/api/google/*`, `npm run sync-reviews` and the
-panel's Google status fail), while the repo and the frontend say otherwise. All four went through
-`db:reset` + `rls_isolation.sql` green locally on 5 Oct 2026 — that run is also what found section 6 of
-the test still asserting the `0015` rule that `0022` reverted, now fixed. Applying it needs the Supabase project, which not every developer here
+`supabase migration list`). **`0021` and `0022` reached production on 5 Oct 2026; `0023` and `0024` did NOT** — that push
+stopped at `0023` (see below). Until someone runs `npm run db:push` again, production has no
+notification tables (so `npm run send-alerts` fails) and no Google tables (so `/api/google/*`,
+`npm run sync-reviews` and the panel's Google status fail), while the repo and the frontend say
+otherwise. All of `0021`–`0024` went through `db:reset` + `rls_isolation.sql` green locally on
+5 Oct 2026 — that run is also what found section 6 of the test still asserting the `0015` rule that
+`0022` reverted, now fixed.
+
+**A green `db:reset` does not prove `db:push` will pass — schema-qualify extension types.** The
+current Supabase CLI pushes through a temporary login role ("Initialising login role…") whose
+`search_path` does not include `extensions`, while the local reset runs as `postgres`, whose does. So a
+bare `citext` (or anything else from `0001`'s extensions) applies locally and fails remotely with
+`type "citext" does not exist` — exactly what stopped `0023`, which was fixed in place (`extensions.citext`)
+because it had never applied anywhere. Migrations up to `0020` use bare `citext` and are fine only because
+they were pushed in August with an older CLI. To reproduce the remote condition locally, reset to the
+previous version (`supabase db reset --version <n>`) and feed the new file through psql with
+`set search_path = "$user", public;` prepended. Note the session `search_path` also decides whether a
+`citext = 'literal'` comparison is case-insensitive — PostgREST includes `extensions`, so the API is fine. Applying it needs the Supabase project, which not every developer here
 has. Correcting an already-applied migration by editing
 its file changes nothing in the database — `db push` skips migrations already in the history table. That
 is exactly how `0017` came to exist: `0013` was fixed in place on the reasonable assumption that it had
