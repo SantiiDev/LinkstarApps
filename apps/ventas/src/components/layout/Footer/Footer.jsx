@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ROUTES } from '../../../lib/routes';
+import { ROUTES, CONSUMER_DEFENSE_URL } from '../../../lib/routes';
 import './Footer.css';
 
 // Antes eran anclas `#tienda` con un onClick que interceptaba el click y
@@ -18,10 +18,16 @@ const footerLinks = {
     { label: 'Contacto', to: ROUTES.contact },
     { label: 'Garantía', to: ROUTES.warranty },
   ],
+  /* El botón de arrepentimiento y el enlace a Defensa del Consumidor no son
+     decoración: la Res. 424/2020 pide el primero accesible desde la home y la
+     Res. 1033/2021 el segundo visible en el sitio. El footer está en todas las
+     páginas, así que es donde corresponde que vivan. */
   Legal: [
+    { label: 'Botón de arrepentimiento', to: ROUTES.withdrawal },
     { label: 'Aviso legal', to: ROUTES.legal },
     { label: 'Política de privacidad', to: ROUTES.privacy },
     { label: 'Términos y condiciones', to: ROUTES.terms },
+    { label: 'Defensa del Consumidor', href: CONSUMER_DEFENSE_URL },
   ],
 };
 
@@ -60,11 +66,25 @@ export default function Footer() {
               <div className="footer__column" key={category}>
                 <h4 className="footer__column-title">{category}</h4>
                 <ul className="footer__column-links">
+                  {/* `href` en vez de `to` para los enlaces que salen del
+                      sitio: <Link> renderiza una ruta interna y mandaría a
+                      /autogestion... dentro de nuestro propio dominio. */}
                   {links.map((link) => (
-                    <li key={link.to}>
-                      <Link to={link.to} className="footer__link">
-                        {link.label}
-                      </Link>
+                    <li key={link.to ?? link.href}>
+                      {link.href ? (
+                        <a
+                          href={link.href}
+                          className="footer__link"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {link.label}
+                        </a>
+                      ) : (
+                        <Link to={link.to} className="footer__link">
+                          {link.label}
+                        </Link>
+                      )}
                     </li>
                   ))}
                 </ul>

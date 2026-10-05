@@ -668,10 +668,13 @@ export default function LinkstarApp({ onShop, onContact }) {
           <div className="lapp__pricing-content">
             <span className="lapp__pricing-overline">Sin permanencia</span>
             <h3 className="lapp__pricing-title">¿Cuánto cuesta la plataforma?</h3>
-            {/* Los precios viven en un solo lugar, la Landing del dashboard
-                (apps/dashboard/src/pages/Landing/Landing.jsx). Acá se explica
-                el modelo — dispositivo una vez, plataforma por mes — sin
-                repetir importes, para que no queden dos fuentes de verdad
+            {/* El precio de la plataforma sale de la tabla `plans` de la base,
+                que es la fuente de verdad: la lee el selector de planes del
+                alta, el checkout y la sección de precios de la landing del
+                dashboard (que además guarda un PRICING_FALLBACK por si la
+                consulta falla, no como segunda fuente de verdad). Acá se
+                explica el modelo — dispositivo una vez, plataforma por mes —
+                sin repetir importes, para que no queden dos fuentes de verdad
                 que se desincronicen. */}
             <p className="lapp__pricing-desc">
               El dispositivo se paga una sola vez. La plataforma va aparte, por suscripción mensual y sin

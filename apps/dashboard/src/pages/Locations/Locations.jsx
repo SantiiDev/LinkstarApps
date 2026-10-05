@@ -316,7 +316,7 @@ function LocationModal({ location, onClose, onEdit, onDelete, canEdit }) {
 /* Mismo criterio que en Dispositivos: "no cargaste ninguna sucursal todavía" y
    "el filtro no devolvió nada" son dos situaciones distintas y antes decían la
    misma frase. `hasAny` mira la lista completa, no la filtrada. */
-function LocationsEmpty({ hasAny, onClearFilters }) {
+function LocationsEmpty({ hasAny, onClearFilters, onCreate }) {
   if (hasAny) {
     return (
       <div className="loc-empty">
@@ -345,16 +345,24 @@ function LocationsEmpty({ hasAny, onClearFilters }) {
         y después asignale los expositores: sin eso, un escaneo no sabe a qué
         formulario de reseña mandar al cliente.
       </div>
+      {/* El CTA sólo aparece si quien mira puede crear: a un manager, que no
+          tiene la política de insert del 0014, un botón acá le ofrecería algo
+          que la base le va a rechazar. */}
+      {onCreate && (
+        <button className="loc-empty__btn" onClick={onCreate} type="button">
+          Cargar una sucursal
+        </button>
+      )}
     </div>
   );
 }
 
 /* ─── Card View ─────────────────────────────────────────────── */
-function LocationCardGrid({ locations, hasAny, onSelect, onClearFilters }) {
+function LocationCardGrid({ locations, hasAny, onSelect, onClearFilters, onCreate }) {
   if (locations.length === 0) {
     return (
       <div className="loc-grid">
-        <LocationsEmpty hasAny={hasAny} onClearFilters={onClearFilters} />
+        <LocationsEmpty hasAny={hasAny} onClearFilters={onClearFilters} onCreate={onCreate} />
       </div>
     );
   }
@@ -510,12 +518,12 @@ function LocationCardGrid({ locations, hasAny, onSelect, onClearFilters }) {
 }
 
 /* ─── Table View ────────────────────────────────────────────── */
-function LocationTable({ locations, hasAny, onSelect, onClearFilters }) {
+function LocationTable({ locations, hasAny, onSelect, onClearFilters, onCreate }) {
   // Igual que en Dispositivos: la vista tabla se quedaba con el encabezado solo.
   if (locations.length === 0) {
     return (
       <div className="loc-table-wrap">
-        <LocationsEmpty hasAny={hasAny} onClearFilters={onClearFilters} />
+        <LocationsEmpty hasAny={hasAny} onClearFilters={onClearFilters} onCreate={onCreate} />
       </div>
     );
   }
@@ -577,10 +585,14 @@ function LocationTable({ locations, hasAny, onSelect, onClearFilters }) {
 }
 
 /* ─── Main Page ─────────────────────────────────────────────── */
+/* No hay tab "Cerradas": mapLocationRow() pone `status: 'active'` en todas,
+   porque la vista del 0008 sólo excluye las borradas (deleted_at) y no existe
+   un flag de "cerrada" en el esquema. El tab estaba siempre vacío — clickearlo
+   devolvía "Sin resultados" sin que el usuario hubiera filtrado nada. Vuelve
+   el día que haya una columna que lo respalde. */
 const FILTER_TABS = [
   { id: 'all',      label: 'Todas' },
   { id: 'active',   label: 'Operativas' },
-  { id: 'inactive', label: 'Cerradas' },
 ];
 
 const SORT_OPTIONS = [
@@ -731,9 +743,8 @@ export default function LocationsPage({ embedded = false }) {
         l.city.toLowerCase().includes(q);
 
       const matchFilter =
-        filter === 'all'      ? true :
-        filter === 'active'   ? l.status === 'active' :
-        filter === 'inactive' ? l.status === 'inactive' : true;
+        filter === 'all'    ? true :
+        filter === 'active' ? l.status === 'active' : true;
 
       return matchSearch && matchFilter;
     });
@@ -883,6 +894,7 @@ export default function LocationsPage({ embedded = false }) {
             </svg>
           </button>
         </div>
+
       </div>
 
       {actionError && <p className="loc-action-error" role="alert">{actionError}</p>}
@@ -903,15 +915,15 @@ export default function LocationsPage({ embedded = false }) {
 
       {/* ── Content ── */}
       {viewMode === 'grid'
-        ? <LocationCardGrid locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} />
-        : <LocationTable    locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} />
+        ? <LocationCardGrid locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} onCreate={canEdit ? () => setEditing({ location: null }) : undefined} />
+        : <LocationTable    locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} onCreate={canEdit ? () => setEditing({ location: null }) : undefined} />
       }
 
       {/* ── Footer ── */}
       {!embedded && (
       <div className="loc-page__footer">
         <p className="loc-page__footer-text">
-          © 2026 <span className="loc-page__footer-brand">
+          © {new Date().getFullYear()} <span className="loc-page__footer-brand">
             linkstar<span className="loc-page__footer-dot">.</span>
           </span> — Panel de gestión de reseñas
         </p>

@@ -15,29 +15,47 @@
 // ============================================================================
 
 const UNIT_PRICE = 41000;          // tier "1 unidad" y "Pedido grande" (bulk, sin descuento — ver Shop.jsx)
-const DOUBLE_UNIT_PRICE = 32800;   // tier "2 unidades": 65.600 total / 2, 20% off
-const COMBO_TOTAL_PRICE = 61500;   // tier "Combo Google + Instagram": precio fijo del bundle completo
+const DOUBLE_TOTAL_PRICE = 65600;  // tier "2 unidades": pack de dos, 20% off
+const COMBO_TOTAL_PRICE = 61500;   // tier "Combo Google + Instagram": uno de cada uno, 25% off
 
 const BASE_PRODUCT_IDS = new Set(['google-nfc', 'instagram-nfc']);
-const COMBO_ID = 'combo-google-nfc-instagram-nfc';
-const VALID_UNIT_PRICES = new Set([UNIT_PRICE, DOUBLE_UNIT_PRICE]);
+
+// Los packs se venden enteros, con precio fijo y de a uno: no son N unidades
+// con descuento, son un producto con su propio precio.
+//
+// El tier "2 unidades" entraba como DOS ÍTEMS SUELTOS a 32.800 cada uno, y
+// entonces una unidad sola a 32.800 era indistinguible de media promo: con
+// bajar la cantidad en el carrito (o mandando el pedido a mano contra la API)
+// se compraba un expositor a $32.800 en vez de $41.000. Validarlo por ítem no
+// alcanzaba, porque dos unidades de distinto color son dos líneas de qty 1.
+// Convertirlo en pack lo resuelve de raíz y además simplifica esto: un ítem
+// suelto sólo puede ir al precio de lista.
+const BUNDLE_PRICES = new Map([
+  ['combo-google-nfc-instagram-nfc', COMBO_TOTAL_PRICE],
+  ['double-google-nfc', DOUBLE_TOTAL_PRICE],
+  ['double-instagram-nfc', DOUBLE_TOTAL_PRICE],
+]);
 
 // Devuelve null si el item es válido, o el motivo del rechazo si no.
 function catalogViolation(item) {
   const id = String(item.id ?? item.key ?? '');
 
-  if (item.isBundle || id === COMBO_ID) {
-    if (id !== COMBO_ID) return `Bundle desconocido: ${id}`;
-    if (item.price !== COMBO_TOTAL_PRICE) {
-      return `Precio inválido para ${id}: esperado ${COMBO_TOTAL_PRICE}`;
+  if (item.isBundle || BUNDLE_PRICES.has(id)) {
+    const expected = BUNDLE_PRICES.get(id);
+    if (expected === undefined) return `Bundle desconocido: ${id}`;
+    if (item.price !== expected) {
+      return `Precio inválido para ${id}: esperado ${expected}`;
     }
+    // El carrito no dibuja controles de cantidad para un pack, así que qty
+    // distinto de 1 sólo puede venir de un pedido armado a mano.
+    if (item.qty !== 1) return `El pack ${id} se vende de a uno`;
     return null;
   }
 
   if (!BASE_PRODUCT_IDS.has(id)) {
     return `Producto desconocido: ${id}`;
   }
-  if (!VALID_UNIT_PRICES.has(item.price)) {
+  if (item.price !== UNIT_PRICE) {
     return `Precio inválido para ${id}: ${item.price}`;
   }
   return null;

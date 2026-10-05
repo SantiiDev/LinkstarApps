@@ -266,6 +266,18 @@ export async function deleteEmployee(id) {
  * Dispositivos — sólo update
  * ------------------------------------------------------------------------- */
 
+/* `destination_url` no está en v_device_performance, que es una vista de
+ * métricas: hay que traerlo de la tabla para poder mostrarlo y editarlo.
+ * Devuelve Map<device_id, url>. */
+export async function fetchDeviceDestinations() {
+  const { data, error } = await supabase
+    .from('devices')
+    .select('id, destination_url');
+
+  if (error) throw error;
+  return new Map((data ?? []).map(d => [d.id, d.destination_url ?? '']));
+}
+
 /* Lo que el cliente puede cambiar de un expositor ya vinculado. Deliberadamente
  * corto: `public_id`, `claim_code`, `organization_id` y los contadores no están
  * y no deben estar — el primero es lo que está grabado en el chip NFC y lo que

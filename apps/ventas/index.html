@@ -2,10 +2,28 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <!-- Apuntaba a /vite.svg, que no existe en public/: el sitio servía un 404
+         como favicon y el navegador mostraba el ícono genérico. -->
+    <link rel="icon" type="image/png" href="/logo-linkstar.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Linkstar — Carteles expositores NFC para tu negocio. Conecta con tus clientes de forma inteligente." />
     <meta name="keywords" content="NFC, carteles expositores, señalización digital, Linkstar, tecnología NFC" />
+
+    <!-- Open Graph / Twitter: el sitio se comparte por WhatsApp e Instagram y
+         hasta acá la previsualización salía vacía. La URL de la imagen tiene
+         que ser absoluta: los lectores de OG no resuelven rutas relativas. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Linkstar" />
+    <meta property="og:title" content="Linkstar — Carteles Expositores NFC" />
+    <meta property="og:description" content="Carteles expositores con NFC y QR: tus clientes apoyan el teléfono y dejan su reseña en Google al instante." />
+    <meta property="og:url" content="https://linkstarapp.com/" />
+    <meta property="og:image" content="https://linkstarapp.com/google-nfc-black.webp" />
+    <meta property="og:locale" content="es_AR" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Linkstar — Carteles Expositores NFC" />
+    <meta name="twitter:description" content="Carteles expositores con NFC y QR: tus clientes apoyan el teléfono y dejan su reseña en Google al instante." />
+    <meta name="twitter:image" content="https://linkstarapp.com/google-nfc-black.webp" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />

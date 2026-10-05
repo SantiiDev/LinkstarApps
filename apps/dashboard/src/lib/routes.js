@@ -46,8 +46,10 @@ export const ONBOARDING_ROUTES = {
   plan: `${ONBOARDING_BASE}/plan`,
   payment: `${ONBOARDING_BASE}/pago`,
   paymentResult: `${ONBOARDING_BASE}/pago/resultado`,
-  // Último paso del plan gratis: sin expositor vinculado no hay panel (0015).
-  // Los planes pagos no pasan por acá.
+  // Vincular el expositor. Era el último paso OBLIGATORIO del plan gratis
+  // (0015), hasta que la 0022 sacó esa exigencia: el expositor llega días
+  // después del alta y la regla dejaba afuera del panel justo al que ya había
+  // comprado. Hoy es opcional y también se llega desde Dispositivos.
   device: `${ONBOARDING_BASE}/dispositivo`,
 };
 
@@ -76,6 +78,27 @@ export const SECTION_PATHS = {
 
 /* Sección a la que se entra después de iniciar sesión. */
 export const DEFAULT_SECTION = 'company';
+
+/* Secciones bloqueadas por el modal de "conectá tu ficha de Google"
+ * (components/GoogleGate). No se les muestra el aviso de suscripción: quedaría
+ * detrás del modal, desenfocado y sin poder tocarse, y encima le corre el alto
+ * a la pantalla. El aviso vuelve solo en cuanto la sección deje de estar
+ * bloqueada.
+ *
+ * Es una lista fija aunque desde la 0024 la conexión sí se registra
+ * (google_connections): con la ficha conectada la puerta SIGUE puesta, porque la
+ * maqueta sigue siendo inventada y la pantalla real todavía no existe. Cuando una
+ * sección se reescriba contra el dato real, sale de esta lista y de GoogleGate a
+ * la vez. */
+export const GOOGLE_GATED_SECTIONS = new Set([
+  'reviews',
+  'gb-metrics',
+  'gb-profile',
+  'gb-posts',
+  'gb-seo',
+  'reports-sentiment',
+  'reports-keywords',
+]);
 
 /* Pestañas de Configuración: van en la URL para poder enlazar directo a una
  * (Dispositivos enlaza a la de ubicaciones, por ejemplo). Los alias son los
