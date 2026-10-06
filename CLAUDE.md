@@ -15,12 +15,12 @@ below before touching any price or plan wording, and "Subscription gate" for how
 
 **Status: pre-launch.** Nothing is sold yet. Deployed: the schema, the sales site, and — since 6 Oct
 2026 — the dashboard at `app.linkstarapp.com` (published ahead of the API for Google's OAuth verification,
-see "Deployment"). There are no real
+see "Deployment") and, since the same day, `services/api` on Railway at `api.linkstarapp.com`. There are no real
 tenants, so the schema and the API can still change shape without a migration story for production data —
 but the invariants under "Data model" are the part that gets expensive to undo *after* launch, so they
-hold now too. Concretely: `services/api` has no deploy target, so the deployed panel shows "el servicio no
-está disponible" for every API-backed action and offers Business as "Contactar con ventas"; checkout is
-disconnected, and large parts of the dashboard are UI ahead of their data (see `apps/dashboard` below).
+hold now too. Concretely: the API is live but has no Mercado Pago production credentials yet, so the panel still
+offers Business as "Contactar con ventas" (`VITE_BUSINESS_CHECKOUT=off`); checkout is disconnected, and
+large parts of the dashboard are UI ahead of their data (see `apps/dashboard` below).
 This file describes what is actually wired today, not the roadmap — when something lands, update the
 section that claimed it was missing.
 
@@ -35,7 +35,7 @@ npm workspaces, one `package-lock.json` at the root. Four packages:
 | Path                | Package               | What it is |
 |---------------------|-----------------------|------------|
 | `apps/ventas`       | `@linkstar/ventas`    | Marketing site + shop. React 19 + Vite, deployed to Cloudflare Workers at `linkstarapp.com/*`. |
-| `apps/dashboard`    | `@linkstar/dashboard` | The SaaS dashboard + its own landing page. React 19 + Vite, deployed to Cloudflare Workers at `app.linkstarapp.com` (API not deployed yet). |
+| `apps/dashboard`    | `@linkstar/dashboard` | The SaaS dashboard + its own landing page. React 19 + Vite, deployed to Cloudflare Workers at `app.linkstarapp.com` (the API is on Railway, `api.linkstarapp.com`). |
 | `services/api`      | `@linkstar/api`       | The only backend. Express: scan redirect, Mercado Pago orders/webhooks, login tracking. |
 | `packages/database` | `@linkstar/database`  | Postgres schema as ordered migrations, RLS policies, SQL tests. Source of truth for the data model. |
 
@@ -224,14 +224,12 @@ reply to what) and `google_record_reply()` · `0027` org switcher: `list_my_orga
 `set_active_organization()`, and `accept_invitation()` now also makes the accepted org the active one
 (see "Org switcher" under `apps/dashboard`).
 
-**`0027` is written but NOT applied in production** (6 Oct 2026). It went through the push simulation
-described below and `rls_isolation.sql` locally (96 green, sections 11 and 12 new). Until
-`npm run db:push`, the deployed panel simply shows no org selector — `OrgContext` treats a failing
-`list_my_organizations()` as an empty list — and everything else works.
-
-**Everything up to `0026` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
-16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` by 6 Oct 2026 — local and remote matched on `npm run db:status`
-that day). `0026` went through the push simulation described below and `rls_isolation.sql` (84 green)
+**Everything up to `0027` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
+16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026 — local and remote matched on
+`npm run db:status` that day). `0027` went through the push simulation described below and
+`rls_isolation.sql` locally first (96 green, sections 11 and 12 new). If an environment ever lacks it,
+the panel just shows no org selector — `OrgContext` treats a failing `list_my_organizations()` as an
+empty list. `0026` went through the push simulation described below and `rls_isolation.sql` (84 green)
 before shipping. The 5 Oct push went in two
 attempts: the first stopped at `0023` on the `citext` problem described below, after `0021` and `0022`
 had already applied. All of `0021`–`0024` went through `db:reset` + `rls_isolation.sql` green locally
@@ -996,9 +994,11 @@ only real contact channel in the repo. Replace it when there's a sales email or 
   root directory is the **repo root**, not `services/api` (the only lockfile is at the root, and the
   Docker build context needs it); the Cloudflare CNAMEs are **DNS-only**, because `trust proxy = 1`
   counts exactly one proxy and Cloudflare's would make the rate limit see Cloudflare's IP; and a second
-  Railway service runs `npm run daily` (`scripts/daily.js` → `sync-reviews` then `send-alerts`, both
-  always, non-zero exit if either fails) on a cron. Not deployed yet as of 6 Oct 2026. When it goes
-  live, update `apps/ventas/.env.production`'s `VITE_API_URL` and the API's `FRONTEND_URL` together.
+  Railway service, `daily`, runs `npm run daily` (`scripts/daily.js` → `sync-reviews` then `send-alerts`,
+  both always, non-zero exit if either fails) at `0 11 * * *` (08:00 Argentina); its secrets are Railway
+  references to the `api` service's (`${{api.SUPABASE_SERVICE_ROLE_KEY}}`…), so they live in one place.
+  **Live since 6 Oct 2026**, and ventas' `VITE_API_URL` points at it. Still missing there: Mercado Pago
+  production credentials and webhook.
 - `apps/dashboard` deploys to `app.linkstarapp.com` with `wrangler.jsonc` (`custom_domain: true`, so the
   deploy itself creates the DNS record and certificate; SPA fallback) and `.env.production`.
   `apps/dashboard/DEPLOY.md` has the steps and the two decisions, both settled on 6 Oct 2026: publish
