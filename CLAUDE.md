@@ -139,8 +139,8 @@ to `.env`, don't rename them away.
   `VITE_REDIRECT_DOMAIN`, `VITE_BUSINESS_CHECKOUT=off` until the API is deployed). It overrides **every**
   key of the developer's `.env`; a variable added to `.env` but not here leaks its dev value into the
   production bundle.
-- `apps/ventas/.env.production` — `VITE_API_URL`, still the `BACKEND_URL_PENDIENTE` placeholder until the
-  API is deployed. Tracked in git on purpose (`.gitignore` whitelists `.env.production`); it holds no
+- `apps/ventas/.env.production` — `VITE_API_URL=https://api.linkstarapp.com` since 6 Oct 2026 (it was the
+  `BACKEND_URL_PENDIENTE` placeholder until the API went live on Railway). Tracked in git on purpose (`.gitignore` whitelists `.env.production`); it holds no
   secrets.
 
 ## Architecture
@@ -919,9 +919,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   Since 18 Aug 2026 it **does** persist: it POSTs to `/api/orders/manual`, which writes `orders` +
   `order_items` and sends the notification server-side. Before that the order existed only as an email,
   so a lost email was a lost order.
-  It keeps a **fallback path** for exactly one reason: `services/api` has no deploy target yet
-  (`apps/ventas/.env.production` still carries the `BACKEND_URL_PENDIENTE` placeholder), so if the API
-  doesn't answer the page mails the order straight from the browser as it used to, with the subject
+  It keeps a **fallback path** that was there for one reason: `services/api` had no deploy target
+  until 6 Oct 2026. If the API doesn't answer the page mails the order straight from the browser as it used to, with the subject
   flagged "SIN REGISTRAR". A `400` is not part of that path — it means the cart didn't match the server
   catalog, and it's shown to the user instead of being mailed around. **When the API is deployed, delete
   the fallback and with it `WEB3FORMS_KEY` from the bundle.**
