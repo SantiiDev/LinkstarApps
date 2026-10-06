@@ -614,10 +614,19 @@ split below before wiring anything — the shell is finished, the data mostly is
 - Sections wired in `App.jsx` (and in `components/Sidebar/Sidebar.jsx`, which groups them):
   `company`, `devices`, `reviews`, the `gb-*` group (`gb-metrics`, `gb-profile`, `gb-posts`, `gb-seo`),
   the `reports-*` group (`reports-nps`, `reports-sentiment`, `reports-keywords`), `monthly-reports`,
-  `automations`, `settings`, `profile`. Pages and `Sidebar` still speak in those **section ids**; the
+  `automations`, `settings`, `contact`, `profile`. Pages and `Sidebar` still speak in those **section ids**; the
   id → path translation happens in `App.jsx` and `AppShell.jsx`, so no page imports the router. Adding a
   section means touching three files: `SECTION_PATHS` in `lib/routes.js`, the `<Route>` in `App.jsx`, and
   the item in `Sidebar.jsx`.
+- **Contact** (Oct 2026): `components/ContactForm` is the ventas contact form (same fields, validation
+  and copy) posting to `POST /api/contact` through `lib/contactApi.js`. It renders in two places: the
+  public landing (`#contact`, linked from the navbar and the footer, for people without an account) and
+  `/panel/contacto` (`pages/Contact`), reached from the sidebar and from the topbar's "¿Necesitás ayuda?
+  Escribinos", which used to be a `mailto`. Inside the panel the form is prefilled from the session and
+  appends a `— Enviado desde el panel · Organización: … (id) · Plan: …` line to the message, so a support
+  request arrives knowing which account it's about; the screen says so. Unlike ventas there is **no**
+  browser-side Web3Forms fallback — the panel never shipped that key and must not start; if the API
+  doesn't answer, the form shows the support address instead.
 - `AppShell` is the parent route of everything under `/panel`: it renders the sidebar + topbar once and
   the section into its `<Outlet />`. It derives the active section from `useLocation()` (never from its
   own state, or a deep link would leave the wrong sidebar item marked) and resets scroll to the top on

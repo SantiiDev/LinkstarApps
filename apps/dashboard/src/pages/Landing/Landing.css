@@ -1415,6 +1415,35 @@
   line-height: 1.7;
 }
 
+/* ---------- Contacto ---------- */
+.landing-contact {
+  padding: 5rem 3rem 4rem;
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.landing-contact .landing-section-title,
+.landing-contact .landing-section-subtitle {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.landing-contact .landing-section-subtitle a {
+  color: var(--color-orange);
+  font-weight: 600;
+}
+
+.landing-contact__form {
+  margin-top: 2rem;
+}
+
+@media (max-width: 768px) {
+  .landing-contact {
+    padding: 3rem 1.25rem;
+  }
+}
+
 /* ---------- Footer ---------- */
 .landing-footer {
   text-align: center;

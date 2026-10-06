@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { SALES_CONTACT_URL, effectiveCheckoutMode } from '../../lib/config';
 import { PUBLIC_ROUTES } from '../../lib/routes';
 import { formatArs } from '../../lib/format';
+import ContactForm from '../../components/ContactForm/ContactForm';
 import './Landing.css';
 
 /* ───────────────── FAQ DATA ───────────────── */
@@ -71,6 +72,7 @@ const NAV_LINKS = [
   { id: 'features', label: 'Funciones' },
   { id: 'how', label: 'Cómo funciona' },
   { id: 'pricing', label: 'Planes' },
+  { id: 'contact', label: 'Contacto' },
 ];
 const NAV_SECTION_IDS = NAV_LINKS.map((link) => link.id);
 
@@ -882,6 +884,27 @@ function FAQ({ openFaq, setOpenFaq }) {
   );
 }
 
+/* ─── Contacto ──────────────────────────── */
+/* El mismo formulario que el sitio de ventas (components/ContactForm), por
+   POST /api/contact. Está en la landing porque es la única página del panel que
+   ve alguien sin cuenta: quien todavía no se registró también tiene que poder
+   preguntar algo. */
+function Contact() {
+  return (
+    <RevealSection className="landing-contact" id="contact" bg="dark">
+      <span className="landing-section-tag">Contacto</span>
+      <h2 className="landing-section-title">¿Tenés alguna consulta?</h2>
+      <p className="landing-section-subtitle">
+        Escribinos y te respondemos en menos de 24 horas. También podés hacerlo a{' '}
+        <a href="mailto:linkstar.app1@gmail.com">linkstar.app1@gmail.com</a>.
+      </p>
+      <div className="landing-contact__form">
+        <ContactForm idPrefix="landing-contact" />
+      </div>
+    </RevealSection>
+  );
+}
+
 /* ─── Footer ────────────────────────────── */
 function Footer() {
   return (
@@ -898,7 +921,12 @@ function Footer() {
         <nav className="landing-footer__links" aria-label="Legales">
           <Link to={PUBLIC_ROUTES.privacy}>Política de privacidad</Link>
           <a href="https://linkstarapp.com/terminos">Términos y condiciones</a>
-          <a href="mailto:linkstar.app1@gmail.com">Contacto</a>
+          <a
+            href="#contact"
+            onClick={(e) => { e.preventDefault(); scrollTo('contact'); }}
+          >
+            Contacto
+          </a>
         </nav>
       </footer>
     </div>
@@ -919,6 +947,7 @@ export default function Landing({ onEnterDashboard }) {
       <HowItWorks />
       <Pricing onEnterDashboard={onEnterDashboard} />
       <FAQ openFaq={openFaq} setOpenFaq={setOpenFaq} />
+      <Contact />
       <Footer />
     </div>
   );

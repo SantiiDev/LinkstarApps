@@ -15,6 +15,7 @@ import MonthlyReports from './pages/MonthlyReports/MonthlyReports';
 import Automations from './pages/Automations/Automations';
 import SettingsPage from './pages/Settings/Settings';
 import ProfilePage from './pages/Profile/Profile';
+import ContactPage from './pages/Contact/Contact';
 import DevicesPage from './pages/Devices/Devices';
 import Landing from './pages/Landing/Landing';
 import Login from './pages/Login/Login';
@@ -305,6 +306,7 @@ export default function App() {
         <Route path={SECTION_PATHS.settings} element={<SettingsPage />} />
         <Route path={`${SECTION_PATHS.settings}/:tab`} element={<SettingsPage />} />
 
+        <Route path={SECTION_PATHS.contact} element={<ContactPage />} />
         <Route path={SECTION_PATHS.profile} element={<ProfilePage />} />
 
         {/* /panel/lo-que-sea -> la sección de inicio del panel. */}

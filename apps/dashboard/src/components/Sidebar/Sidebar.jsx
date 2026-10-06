@@ -86,6 +86,11 @@ function Icon({ name, className }) {
         <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
       </svg>
     ),
+    mail: (
+      <svg {...props}>
+        <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 6-10 7L2 6" />
+      </svg>
+    ),
     user: (
       <svg {...props}>
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
@@ -130,6 +135,7 @@ const TAIL_ITEMS = [
   { id: 'monthly-reports', label: 'Informes mensuales', icon: 'file-text' },
   { id: 'automations', label: 'Automatizaciones', icon: 'zap' },
   { id: 'settings', label: 'Configuración', icon: 'settings' },
+  { id: 'contact', label: 'Contacto', icon: 'mail' },
 ];
 
 export default function Sidebar({ activeSection, onNavigate, onLogout, open = false, onClose }) {

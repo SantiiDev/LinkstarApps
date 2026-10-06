@@ -73,6 +73,7 @@ export const SECTION_PATHS = {
   'monthly-reports': `${DASHBOARD_BASE}/informes-mensuales`,
   automations: `${DASHBOARD_BASE}/automatizaciones`,
   settings: `${DASHBOARD_BASE}/configuracion`,
+  contact: `${DASHBOARD_BASE}/contacto`,
   profile: `${DASHBOARD_BASE}/perfil`,
 };
 
