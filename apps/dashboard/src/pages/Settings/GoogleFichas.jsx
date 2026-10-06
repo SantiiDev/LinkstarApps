@@ -41,8 +41,9 @@ const NONE = '';
 
 export default function GoogleFichas() {
   const { org } = useOrg();
+  const orgId = org?.organization_id;
   const canEdit = org?.role === 'owner' || org?.role === 'admin';
-  const google = useGoogleConnection(org?.organization_id);
+  const google = useGoogleConnection(orgId);
   const { connection, reload } = google;
   const connected = connection?.status === 'active' || connection?.status === 'needs_reauth';
 
@@ -55,8 +56,9 @@ export default function GoogleFichas() {
   const [waitingSync, setWaitingSync] = useState(null); // last_synced_at al pedir
 
   const load = useCallback(async () => {
+    if (!orgId) return;
     try {
-      const [locations, rows] = await Promise.all([fetchGoogleLocations(), fetchLocationRows()]);
+      const [locations, rows] = await Promise.all([fetchGoogleLocations(orgId), fetchLocationRows(orgId)]);
       setFichas(locations);
       setBranches(rows);
       setError(null);
@@ -64,7 +66,7 @@ export default function GoogleFichas() {
       console.error('No se pudieron leer las fichas de Google:', err);
       setError('No pudimos leer tus fichas de Google. Probá recargar la página.');
     }
-  }, []);
+  }, [orgId]);
 
   // Se recarga cuando termina una lectura (last_synced_at avanza): es lo que
   // trae las fichas nuevas y los totales de las recién vinculadas.

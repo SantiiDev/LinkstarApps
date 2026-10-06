@@ -1,11 +1,11 @@
 /* Email transaccional: los mails que le llegan al CLIENTE.
  *
- * No confundir con lib/email.js, que manda a NUESTRA casilla los avisos de
- * pedidos y las consultas del formulario de contacto, y lo hace por Web3Forms.
- * Web3Forms no sirve para esto: es un reenviador de formularios a una casilla
- * fija, no tiene destinatario variable ni plantillas ni reputación de dominio.
- * Ese fue justamente el motivo por el que la fase 3 resolvió las invitaciones
- * de equipo con un link copiable en vez de un mail.
+ * No confundir con lib/email.js, que arma los avisos a NUESTRA casilla (pedidos
+ * y consultas del formulario de contacto). Ese módulo usa `send()` de acá
+ * cuando hay SALES_NOTIFY_EMAIL, y Web3Forms si no. Web3Forms no sirve para los
+ * mails al cliente: es un reenviador de formularios a una casilla fija, sin
+ * destinatario variable, sin plantillas y sin reputación de dominio. Por eso la
+ * fase 3 resolvió las invitaciones de equipo con un link copiable.
  *
  * Proveedor: Resend. La costura está en `send()`: es la única función que sabe
  * de Resend, y todo lo demás arma contenido y la llama. Cambiar de proveedor es
@@ -34,13 +34,22 @@ if (!process.env.RESEND_API_KEY) {
   );
 }
 
+/* Si hay proveedor configurado. Lo usa lib/email.js para elegir entre Resend y
+ * Web3Forms sin tener que saber qué variable mira Resend. */
+export function isMailerConfigured() {
+  return Boolean(process.env.RESEND_API_KEY);
+}
+
 /* Único punto que conoce el proveedor.
  *
- * Devuelve { sent, simulated, id }. No lanza por un rechazo del proveedor: quien
- * llama decide qué hacer. En el ejecutor de alertas eso importa — un mail que
- * falló NO se registra, así vuelve a intentarse en la próxima corrida en vez de
- * perderse en silencio. */
-export async function send({ to, subject, html, text }) {
+ * Devuelve { sent, simulated, id }. Si Resend rechaza el envío, LANZA, con el
+ * motivo del proveedor en el mensaje: quien llama decide qué hacer. En el
+ * ejecutor de alertas eso importa — un mail que falló NO se registra, así
+ * vuelve a intentarse en la próxima corrida en vez de perderse en silencio.
+ *
+ * `replyTo` es opcional: en los avisos a nuestra casilla es el mail del
+ * cliente, para contestarle con "Responder". */
+export async function send({ to, subject, html, text, replyTo }) {
   if (!process.env.RESEND_API_KEY) {
     console.log('\n──────── MAIL SIMULADO (falta RESEND_API_KEY) ────────');
     console.log(`Para:    ${to}`);
@@ -56,7 +65,14 @@ export async function send({ to, subject, html, text }) {
       Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from: FROM, to: [to], subject, html, text }),
+    body: JSON.stringify({
+      from: FROM,
+      to: [to],
+      subject,
+      html,
+      text,
+      ...(replyTo ? { reply_to: replyTo } : {}),
+    }),
   });
 
   const result = await response.json().catch(() => ({}));
@@ -98,7 +114,7 @@ function layout({ heading, body, cta }) {
       ${cta ? `<div style="margin-top:24px;"><a href="${cta.href}" style="display:inline-block;padding:11px 22px;border-radius:999px;background:${BRAND};color:#fff;text-decoration:none;font-weight:600;font-size:14px;">${cta.label}</a></div>` : ''}
     </td></tr>
     <tr><td style="padding:16px 28px 26px;border-top:1px solid #eef0f7;font-size:12px;color:#8a93a6;">
-      Recibís este mail porque tenés avisos activados en LinkstarApp. Podés apagarlos en Configuración.
+      Recibís este mail porque tenés avisos activados en LinkstarApp. Podés apagarlos en Automatizaciones.
     </td></tr>
   </table>
 </body></html>`;

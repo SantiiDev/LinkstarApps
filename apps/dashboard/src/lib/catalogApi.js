@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { requireOrg } from './dashboardApi';
 
 /* Catálogo del cliente: sucursales, empleados y dispositivos.
  *
@@ -42,7 +43,7 @@ import { supabase } from './supabaseClient';
  * estas columnas son nullable y opcionales; guardar "" hace que después
  * `coalesce(google_review_url, ...)` en resolve_scan tome la cadena vacía como
  * un valor presente y el escaneo termine redirigiendo a ninguna parte. */
-function blankToNull(value) {
+export function blankToNull(value) {
   if (value === null || value === undefined) return null;
   const trimmed = String(value).trim();
   return trimmed === '' ? null : trimmed;
@@ -114,10 +115,11 @@ const LOCATION_FIELDS = `
  * formulario de edición, y la vista no expone address, teléfono ni ninguno de
  * los campos de Google. La vista sigue siendo la que alimenta las métricas
  * (invariante 2: las MÉTRICAS salen de las vistas; esto no es una métrica). */
-export async function fetchLocationRows() {
+export async function fetchLocationRows(organizationId) {
   const { data, error } = await supabase
     .from('locations')
     .select(LOCATION_FIELDS)
+    .eq('organization_id', requireOrg(organizationId))
     .order('created_at', { ascending: true });
 
   if (error) throw error;
@@ -208,10 +210,11 @@ const EMPLOYEE_FIELDS = `
   email, phone, is_active, started_at, created_at
 `;
 
-export async function fetchEmployeeRows() {
+export async function fetchEmployeeRows(organizationId) {
   const { data, error } = await supabase
     .from('employees')
     .select(EMPLOYEE_FIELDS)
+    .eq('organization_id', requireOrg(organizationId))
     .order('created_at', { ascending: true });
 
   if (error) throw error;
@@ -269,10 +272,11 @@ export async function deleteEmployee(id) {
 /* `destination_url` no está en v_device_performance, que es una vista de
  * métricas: hay que traerlo de la tabla para poder mostrarlo y editarlo.
  * Devuelve Map<device_id, url>. */
-export async function fetchDeviceDestinations() {
+export async function fetchDeviceDestinations(organizationId) {
   const { data, error } = await supabase
     .from('devices')
-    .select('id, destination_url');
+    .select('id, destination_url')
+    .eq('organization_id', requireOrg(organizationId));
 
   if (error) throw error;
   return new Map((data ?? []).map(d => [d.id, d.destination_url ?? '']));

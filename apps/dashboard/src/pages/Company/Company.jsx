@@ -143,7 +143,8 @@ function buildSeries(rows, days) {
 
 export default function Company({ onNavigate }) {
   const { org } = useOrg();
-  const google = useGoogleConnection(org?.organization_id);
+  const orgId = org?.organization_id;
+  const google = useGoogleConnection(orgId);
   const showGoogleBanner = !google.loading && google.connection?.status !== 'active';
 
   const [kpis, setKpis] = useState(null);
@@ -154,14 +155,15 @@ export default function Company({ onNavigate }) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    if (!orgId) return;
     let cancelled = false;
     (async () => {
       try {
         const [kpiRow, activityRows, dailyRows, locationRows] = await Promise.all([
-          fetchDashboardKpis(),
-          fetchRecentActivity(ACTIVITY_LIMIT),
-          fetchScansDaily(TREND_DAYS),
-          fetchLocationPerformance(),
+          fetchDashboardKpis(orgId),
+          fetchRecentActivity(orgId, ACTIVITY_LIMIT),
+          fetchScansDaily(orgId, TREND_DAYS),
+          fetchLocationPerformance(orgId),
         ]);
         if (cancelled) return;
         setKpis(kpiRow);
@@ -182,7 +184,7 @@ export default function Company({ onNavigate }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [orgId]);
 
   const today = new Date();
   // es-AR, como el resto del panel: era el único lugar con es-ES.

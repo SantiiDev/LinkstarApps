@@ -41,12 +41,8 @@ app.use(teamRoutes);
 app.use(googleRoutes);
 app.use(webhookRoutes);
 
+// Sin host en el mensaje: en Railway "localhost" sólo confunde al leer los logs.
 app.listen(PORT, () => {
-  console.log(`
-  ╔════════════════════════════════════════════╗
-  ║   🚀  Linkstar Backend running            ║
-  ║   📍  http://localhost:${PORT}              ║
-  ║   🔗  Frontend: ${FRONTEND_URLS.join(', ')}    ║
-  ╚════════════════════════════════════════════╝
-  `);
+  console.log(`🚀 Linkstar API escuchando en el puerto ${PORT}`);
+  console.log(`🔗 CORS: ${FRONTEND_URLS.join(', ')}`);
 });

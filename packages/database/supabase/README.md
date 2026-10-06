@@ -36,6 +36,11 @@ Desde la raíz del monorepo son `npm run db:reset`, `npm run db:push` y `npm run
 | `0020_team_invitations.sql` | `invite_member()`, `list_org_members()`, `set_member_role()`, `private.active_org_id()` y el límite de `max_members` |
 | `0021_redirect_fallback_domain.sql` | Correctiva: el fallback de `resolve_scan()` apuntaba a `linkstar.com.ar`, un dominio que nunca se registró |
 | `0022_free_plan_without_device.sql` | Decisión de producto: el plan gratis **ya no** exige expositor vinculado. `org_is_activated()` queda como alias de `org_has_access()` |
+| `0023_notifications.sql` | Preferencias de avisos por organización, registro de envíos y `pending_notifications()` (expositor inactivo, resumen semanal) |
+| `0024_google_business_profile.sql` | Conexión OAuth con Google, refresh token cifrado, `google_locations` / `google_reviews` y las RPC de `sync-reviews` |
+| `0025_google_reviews_only_linked.sql` | Reseñas sólo de fichas vinculadas a una sucursal viva, y la poda que lo hace cumplir |
+| `0026_google_review_replies.sql` | Responder reseñas: `google_review_reply_target()` (quién responde qué) y `google_record_reply()` |
+| `0027_org_switcher.sql` | Selector de organización: `list_my_organizations()`, `set_active_organization()`, y `accept_invitation()` deja activa la organización aceptada |
 
 > **Al aplicar la `0022` hay que actualizar `tests/rls_isolation.sql` en el mismo cambio.** El test
 > assertea la regla de la `0015` —"plan gratis sin expositor: `org_has_access` sí,
@@ -201,10 +206,10 @@ del usuario (nunca `scan_events` ni `scan_daily_rollups` directo — decisión 3
 Todavía no salimos a la venta: no hay tenants reales, así que el esquema puede cambiar de forma sin
 plan de migración de datos. Esta lista es lo que sí hay que tener antes de vender la primera suscripción.
 
-- [ ] Correr `tests/rls_isolation.sql` (verifica que un tenant no vea al otro) — también antes de cada cambio de RLS
+- [x] Correr `tests/rls_isolation.sql` (verifica que un tenant no vea al otro) — en verde de punta a punta desde agosto de 2026; **se vuelve a correr antes de cada cambio de RLS**
 - [ ] Habilitar `pg_cron` y descomentar los `cron.schedule` de `0007`
 - [x] Construir `sync-reviews` (`0024` + `services/api/scripts/sync-reviews.js`)
-- [ ] Programar `sync-reviews` una vez por día en el host del API, y publicar la app OAuth de Google (en modo Testing los refresh tokens vencen a los 7 días)
+- [ ] Programar `sync-reviews` una vez por día en el host del API (`npm run daily`, ver `services/api/DEPLOY.md`), y publicar la app OAuth de Google (en modo Testing los refresh tokens vencen a los 7 días)
 - [ ] Cargar precios reales y `mp_preapproval_plan_id` en `plans` (hoy los precios están hardcodeados en el front — ver "Pricing" en `CLAUDE.md`)
 - [ ] Activar backups diarios (plan Pro de Supabase)
 - [ ] Rotar `private.app_secrets.ip_pepper` **nunca**: si lo cambiás, se rompe la deduplicación histórica

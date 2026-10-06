@@ -1,7 +1,7 @@
 # Desplegar el panel
 
 El panel se publica en `https://app.linkstarapp.com` (Cloudflare Workers, gratis,
-la misma cuenta que el sitio de ventas). **El API todavía no está desplegado**, y
+la misma cuenta que el sitio de ventas). **El API todavía no está desplegado** (su guía es [services/api/DEPLOY.md](../../services/api/DEPLOY.md)), y
 el panel está preparado para convivir con eso (ver la decisión 1).
 
 ## Por qué se despliega antes que el resto de la fase 8

@@ -157,23 +157,21 @@ router.post('/api/orders/manual', paymentLimiter, validateBody(manualOrderSchema
     // genera OTRO número de orden y manda un mail con el asunto "SIN
     // REGISTRAR" — quedaría una orden en la base con un número y un aviso con
     // otro distinto diciendo que hay que cargarla a mano.
-    let emailSent = true;
-    try {
-      await sendEmailNotification({
-        order_number: orderNumber,
-        payment_method: 'manual',
-        customer_name: customer.name,
-        customer_email: customer.email,
-        customer_phone: customer.phone,
-        customer_address: customer.address,
-        customer_city: customer.city,
-        customer_zip: customer.zip,
-        items,
-        total,
-      });
-    } catch (mailErr) {
-      emailSent = false;
-      console.error(`Pedido ${orderNumber} guardado, pero falló el aviso por mail:`, mailErr);
+    // sendEmailNotification no lanza: devuelve si el aviso salió.
+    const emailSent = await sendEmailNotification({
+      order_number: orderNumber,
+      payment_method: 'manual',
+      customer_name: customer.name,
+      customer_email: customer.email,
+      customer_phone: customer.phone,
+      customer_address: customer.address,
+      customer_city: customer.city,
+      customer_zip: customer.zip,
+      items,
+      total,
+    });
+    if (!emailSent) {
+      console.error(`Pedido ${orderNumber} guardado, pero falló el aviso por mail.`);
     }
 
     res.json({

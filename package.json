@@ -22,7 +22,7 @@
     "db:status": "npm run db:status --workspace @linkstar/database"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "allowScripts": {
     "esbuild": true,

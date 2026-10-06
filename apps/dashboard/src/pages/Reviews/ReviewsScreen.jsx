@@ -72,6 +72,7 @@ const ICONS = {
 
 export default function ReviewsScreen({ google, onNavigateSettings }) {
   const { org } = useOrg();
+  const orgId = org?.organization_id;
   // Mismo criterio que google_review_reply_target() (0026). Para un manager la
   // base además restringe a sus sucursales; un viewer no ve el botón.
   const canReply = ['owner', 'admin', 'manager'].includes(org?.role);
@@ -96,10 +97,10 @@ export default function ReviewsScreen({ google, onNavigateSettings }) {
   const [replyError, setReplyError] = useState(null);
 
   const loadSummary = useCallback(async () => {
-    const [locations, reviewCounts] = await Promise.all([fetchGoogleLocations(), fetchReviewCounts()]);
+    const [locations, reviewCounts] = await Promise.all([fetchGoogleLocations(orgId), fetchReviewCounts(orgId)]);
     setFichas(locations);
     setCounts(reviewCounts);
-  }, []);
+  }, [orgId]);
 
   const queryArgs = useMemo(() => ({
     filter,
@@ -108,10 +109,11 @@ export default function ReviewsScreen({ google, onNavigateSettings }) {
   }), [filter, debouncedSearch, locationId]);
 
   useEffect(() => {
+    if (!orgId) return undefined;
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([loadSummary(), fetchReviews({ ...queryArgs, from: 0 })])
+    Promise.all([loadSummary(), fetchReviews(orgId, { ...queryArgs, from: 0 })])
       .then(([, page]) => {
         if (cancelled) return;
         setReviews(page);
@@ -124,12 +126,12 @@ export default function ReviewsScreen({ google, onNavigateSettings }) {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [queryArgs, loadSummary]);
+  }, [queryArgs, loadSummary, orgId]);
 
   async function loadMore() {
     setLoadingMore(true);
     try {
-      const page = await fetchReviews({ ...queryArgs, from: reviews.length });
+      const page = await fetchReviews(orgId, { ...queryArgs, from: reviews.length });
       setReviews((prev) => [...prev, ...page]);
       setHasMore(page.length === REVIEWS_PAGE_SIZE);
     } catch (err) {

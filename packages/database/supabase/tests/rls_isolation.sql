@@ -791,6 +791,93 @@ exception
 end $$;
 reset role;
 
+-- =========================================================================
+-- 11. Selector de organización (0027)
+-- =========================================================================
+-- Ana entra también a Bar Dos, como viewer. Hasta la 0027 nada escribía
+-- last_organization_id, así que caía siempre en Bar Uno (su membresía más
+-- vieja). Lo que se prueba: que pueda elegir, que las tres funciones que leen
+-- la organización activa la sigan, y que no pueda elegir una ajena.
+insert into public.memberships (organization_id, user_id, role) values
+  ('bbbbbbbb-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'viewer');
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+
+select pg_temp.check('list_my_organizations devuelve las dos organizaciones de Ana',
+  (select count(*) from public.list_my_organizations()) = 2);
+select pg_temp.check('Sin elegir, la activa es la más vieja (Bar Uno)',
+  (select organization_id from public.list_my_organizations() where is_active)
+    = 'aaaaaaaa-0000-0000-0000-000000000001'
+  and (select organization_id from public.my_org_context()) = 'aaaaaaaa-0000-0000-0000-000000000001');
+
+select public.set_active_organization('bbbbbbbb-0000-0000-0000-000000000002');
+
+select pg_temp.check('Elegida Bar Dos: my_org_context la devuelve, con el rol de Ana ahí',
+  (select organization_id from public.my_org_context()) = 'bbbbbbbb-0000-0000-0000-000000000002'
+  and (select role from public.my_org_context()) = 'viewer');
+select pg_temp.check('El menú marca la misma organización que el panel',
+  (select organization_id from public.list_my_organizations() where is_active)
+    = 'bbbbbbbb-0000-0000-0000-000000000002');
+select pg_temp.check('list_org_members sigue a la organización activa (el equipo de Bar Dos)',
+  exists (select 1 from public.list_org_members() where user_id = '22222222-2222-2222-2222-222222222222')
+  and not exists (select 1 from public.list_org_members() where user_id = '33333333-3333-3333-3333-333333333333'));
+
+select public.set_active_organization('aaaaaaaa-0000-0000-0000-000000000001');
+select pg_temp.check('Se puede volver a Bar Uno',
+  (select organization_id from public.my_org_context()) = 'aaaaaaaa-0000-0000-0000-000000000001');
+
+-- Beto no es miembro de Bar Uno: elegirla es un error, no un no-op silencioso.
+select pg_temp.login('22222222-2222-2222-2222-222222222222', 'beto@bar-dos.test');
+do $$
+begin
+  perform public.set_active_organization('aaaaaaaa-0000-0000-0000-000000000001');
+  raise exception 'FALLA: Beto pudo elegir una organización ajena';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   No se puede elegir una organización de la que no sos miembro';
+end $$;
+select pg_temp.check('Y su organización activa no cambió',
+  (select organization_id from public.my_org_context()) = 'bbbbbbbb-0000-0000-0000-000000000002');
+reset role;
+
+-- =========================================================================
+-- 12. Preferencias de avisos (0023), como las escribe Automatizaciones
+-- =========================================================================
+-- La pantalla hace upsert directo sobre notification_preferences. Owner y admin
+-- pueden; un manager ni siquiera la lee (su SELECT vuelve vacío, y por eso la
+-- pantalla no le muestra los valores por defecto como si fueran los reales).
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+insert into public.notification_preferences (organization_id, device_idle_hours, weekly_summary_enabled)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 72, false)
+on conflict (organization_id) do update
+  set device_idle_hours = excluded.device_idle_hours,
+      weekly_summary_enabled = excluded.weekly_summary_enabled;
+insert into public.notification_preferences (organization_id, device_idle_hours)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 24)
+on conflict (organization_id) do update set device_idle_hours = excluded.device_idle_hours;
+select pg_temp.check('El owner guarda y vuelve a guardar sus preferencias (upsert)',
+  (select device_idle_hours from public.notification_preferences
+   where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 24);
+
+do $$
+begin
+  insert into public.notification_preferences (organization_id) values ('bbbbbbbb-0000-0000-0000-000000000002')
+  on conflict (organization_id) do nothing;
+  raise exception 'FALLA: Ana (viewer de Bar Dos) pudo escribir sus preferencias';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   Un viewer no escribe preferencias de avisos';
+end $$;
+
+select pg_temp.login('33333333-3333-3333-3333-333333333333', 'caro@bar-uno.test');
+select pg_temp.check('Caro (manager) no ve las preferencias de su organización',
+  (select count(*) from public.notification_preferences) = 0);
+
+select pg_temp.login('22222222-2222-2222-2222-222222222222', 'beto@bar-dos.test');
+select pg_temp.check('Beto no ve las preferencias de Bar Uno',
+  (select count(*) from public.notification_preferences) = 0);
+reset role;
+
 do $$ begin
   raise notice '';
   raise notice '=== Todos los tests de aislamiento pasaron ===';

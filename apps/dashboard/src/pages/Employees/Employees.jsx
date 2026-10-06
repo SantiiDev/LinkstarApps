@@ -521,6 +521,7 @@ const SORT_OPTIONS = [
 // todo lo demás (stats, filtros, grilla/tabla, modal) es igual.
 export default function EmployeesPage({ embedded = false }) {
   const { org } = useOrg();
+  const orgId = org?.organization_id;
   const [employees, setEmployees] = useState([]);
   const [estimatedReviews, setEstimatedReviews] = useState(0); // suma de new_reviews_30d por location (decisión 6)
   const [loading,  setLoading]  = useState(true);
@@ -549,16 +550,19 @@ export default function EmployeesPage({ embedded = false }) {
      dispositivos asignados y última actividad). Si falla, mock completo — un
      resultado vacío (org sin empleados todavía) no es una falla. */
   useEffect(() => {
+    // Sin organización activa no se pide nada (la lectura lanzaría y esto
+    // caería al mock).
+    if (!orgId) return;
     let cancelled = false;
     (async () => {
       try {
         const [employeeRows, locationRows, deviceRows, detailRows] = await Promise.all([
-          fetchEmployeeLeaderboard(),
-          fetchLocationPerformance(),
-          fetchDevicePerformance(),
+          fetchEmployeeLeaderboard(orgId),
+          fetchLocationPerformance(orgId),
+          fetchDevicePerformance(orgId),
           // Las filas crudas de `employees`: puesto, legajo, teléfono y mail,
           // que v_employee_leaderboard no expone y el formulario necesita.
-          fetchEmployeeRows().catch(err => {
+          fetchEmployeeRows(orgId).catch(err => {
             console.error('No se pudieron cargar los datos de ficha de los empleados:', err);
             return [];
           }),
@@ -590,7 +594,7 @@ export default function EmployeesPage({ embedded = false }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [reloadKey]);
+  }, [reloadKey, orgId]);
 
   /* Recarga después de guardar en vez de parchear el array: un empleado nuevo
      no tiene fila en v_employee_leaderboard hasta volver a pedirla, y

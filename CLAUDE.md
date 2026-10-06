@@ -76,7 +76,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0026 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0027 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -94,7 +94,7 @@ first run with "ports are not available"** — Hyper-V reserves the whole 54320�
 Ops scripts live in `services/api/scripts/` and run with `node scripts/<name>.js` from `services/api`
 (`provision-devices.js`, `rebuild-today-rollup.js`, `send-alerts.js` and `sync-reviews.js` also have npm
 aliases — `npm run provision-devices`, `npm run rebuild-today-rollup`, `npm run send-alerts`,
-`npm run sync-reviews`; `seed-test-device.js` doesn't). They use the same `service_role` client as
+`npm run sync-reviews`; `seed-test-device.js` doesn't; `npm run daily` runs `sync-reviews` then `send-alerts` and is what the deployed cron calls). They use the same `service_role` client as
 the server, so `services/api/.env` decides whether you are writing to local or production.
 
 No test runner is configured in any workspace.
@@ -110,8 +110,11 @@ more than one developer, so a new variable is only real once it's in the matchin
 to `.env`, don't rename them away.
 
 - `services/api/.env` — see `services/api/.env.example`. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-  `PORT`, `FRONTEND_URL`, `DASHBOARD_URL`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `WEBHOOK_URL`,
-  `WEB3FORMS_KEY`, `REDIRECT_DOMAIN` (optional, defaults to `l.linkstarapp.com`), and the four Google
+  `PORT`, `FRONTEND_URL`, `DASHBOARD_URL`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `WEBHOOK_URL` (base URL
+  only, no path), `WEB3FORMS_KEY`, `REDIRECT_DOMAIN` (optional, defaults to `l.linkstarapp.com`),
+  `RESEND_API_KEY` / `RESEND_FROM` (optional; without the key every mail is simulated on the console),
+  `SALES_NOTIFY_EMAIL` (our inbox for new-order and contact notices; with it and the Resend key those go
+  through Resend, otherwise through Web3Forms — see `lib/email.js`), and the four Google
   ones — `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_TOKEN_ENC_KEY` — which
   are optional as a group: without all four the Google routes answer 503 and everything else works.
   `GOOGLE_REDIRECT_URI` must match the console entry byte for byte, port included; locally that is
@@ -215,14 +218,19 @@ doesn't need Google (see "Alerts" below) · `0024` Google Business Profile: OAut
 refresh token, `google_locations` / `google_reviews`, and the RPCs `sync-reviews` writes through (see
 "Google Business Profile" below) · `0025` reviews only for fichas linked to a live sucursal, plus the
 prune that enforces it (same section) · `0026` replying to reviews: `google_review_reply_target()` (who may
-reply to what) and `google_record_reply()`.
+reply to what) and `google_record_reply()` · `0027` org switcher: `list_my_organizations()`,
+`set_active_organization()`, and `accept_invitation()` now also makes the accepted org the active one
+(see "Org switcher" under `apps/dashboard`).
 
-**`0025` is applied in production (5 Oct 2026); `0026` is written but NOT applied** — until
-`npm run db:push`, `POST /api/google/reviews/:id/reply` fails at its first RPC. `0026` went through the
-push simulation described below and `rls_isolation.sql` (84 green) locally on 6 Oct 2026.
+**`0027` is written but NOT applied in production** (6 Oct 2026). It went through the push simulation
+described below and `rls_isolation.sql` locally (96 green, sections 11 and 12 new). Until
+`npm run db:push`, the deployed panel simply shows no org selector — `OrgContext` treats a failing
+`list_my_organizations()` as an empty list — and everything else works.
 
-**Everything up to `0024` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
-16 Aug, `0021`–`0024` on 5 Oct 2026; all verified with `npm run db:status`). The 5 Oct push went in two
+**Everything up to `0026` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
+16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` by 6 Oct 2026 — local and remote matched on `npm run db:status`
+that day). `0026` went through the push simulation described below and `rls_isolation.sql` (84 green)
+before shipping. The 5 Oct push went in two
 attempts: the first stopped at `0023` on the `citext` problem described below, after `0021` and `0022`
 had already applied. All of `0021`–`0024` went through `db:reset` + `rls_isolation.sql` green locally
 first — that run is also what found section 6 of the test still asserting the `0015` rule that `0022`
@@ -301,9 +309,13 @@ too, not just the API — `DASHBOARD_URL` has to be that public URL, and `lib/co
 it still points at localhost. `apps/dashboard/vite.config.js` allows `.trycloudflare.com` hosts for the
 same reason.
 
-**`notification_url` is accepted per preapproval**, and `lib/subscriptions.js` sends it from
-`WEBHOOK_URL`. That is on top of whatever the MP panel has configured: in development the tunnel URL
-changes on every restart, and sending it in the request avoids reconfiguring the panel each time.
+**`notification_url` is NOT honored per preapproval.** `POST /preapproval` accepts the field and answers
+200, but doesn't store it (the response doesn't echo it back) — verified against the live API, see the
+comment in `lib/subscriptions.js`. So subscription webhooks go **only** to the URL configured in the MP
+panel (`https://api.linkstarapp.com/api/webhook/mercadopago` in production); in development, every new
+tunnel URL means updating the panel. `WEBHOOK_URL` is still used, but only for hardware-order
+preferences (`routes/orders.js`), and it is the **base** URL — the route appends
+`/api/webhook/mercadopago` itself.
 
 Testing the flow needs **two** Mercado Pago test users. The seller token can be a test user's, but
 `payer_email` must belong to a *different* real or test MP account: any other address answers
@@ -370,9 +382,26 @@ Three things that are load-bearing and easy to undo:
   `simulated: true`; the script deliberately does **not** log those, or the real alert would never go out.
 - **Missing preferences mean defaults, not silence.** The function `left join`s `notification_preferences`;
   an inner join would mean a new account never receives anything until someone opens Settings.
-`lib/mailer.js` (Resend, customer-facing) is not `lib/email.js` (Web3Forms, notifies *us* of a sale) —
-Web3Forms forwards a form to one fixed mailbox and can't do variable recipients, which is why phase 3
-shipped the copyable link in the first place. `send()` is the only function that knows about Resend.
+
+The settings screen is **Automatizaciones** (`pages/Automations/`, real since 6 Oct 2026, over
+`lib/notificationsApi.js`): the two switches, the idle-hours threshold and the recipient upsert
+`notification_preferences` straight through PostgREST, and "Últimos avisos enviados" reads
+`notification_log`. Both alerts are for **every plan** — a product decision, not an oversight; what the
+Business plan adds there are the AI/review automations, which render as "En desarrollo" cards with **no
+switch**, because a switch nothing executes is the exact thing that screen used to be. Owner/admin only:
+for a manager or viewer the RLS returns no row, which is indistinguishable from "never saved", so the
+screen shows a notice instead of the defaults — don't "simplify" that into rendering the form.
+`DEFAULT_PREFERENCES` in `notificationsApi.js` mirrors the `coalesce` defaults of
+`pending_notifications()`; change one, change both.
+`lib/mailer.js` (Resend, customer-facing) is not `lib/email.js` (notifies *us* of an order or a contact
+message) — Web3Forms forwards a form to one fixed mailbox and can't do variable recipients, which is why
+phase 3 shipped the copyable link in the first place. `send()` is the only function that knows about
+Resend. **`lib/email.js` sends through `send()` when `SALES_NOTIFY_EMAIL` and `RESEND_API_KEY` are both
+set, and falls back to Web3Forms otherwise** (Oct 2026): Web3Forms' free plan rejects server-to-server
+submissions — the same reason ventas' browser fallback mails from the browser — so on a deployed API the
+Web3Forms path would fail on every notice. `sendEmailNotification` never throws (the order is already
+saved); it returns whether the notice went out, which is what `/api/orders/manual` reports as
+`email_sent`.
 
 **The activity log is real now.** `audit_log` (`0004`) existed from the start but only `claim_device()`
 ever wrote to it, so the "Registro de actividad" card was a three-row hardcoded array — with a real
@@ -420,7 +449,8 @@ escape the rate limit.
 - `lib/supabase.js` — the single `service_role` client, imported by every route.
 - `lib/mercadopago.js` — MP SDK client, `isValidMpSignature`, `withTimeout`.
 - `lib/orders.js` — `generateOrderNumber`, `createOrder`.
-- `lib/email.js` — `sendEmailNotification`, posts order details to Web3Forms.
+- `lib/email.js` — `sendEmailNotification` / `sendContactMessage`, notices to our inbox: Resend when
+  `SALES_NOTIFY_EMAIL` is set, Web3Forms otherwise (see "Alerts" above).
 - `lib/validation.js` — zod schemas (`cartItemSchema`, `customerSchema`, `createPreferenceSchema`,
   `orderTransferSchema`, `processPaymentSchema`) plus `validateBody(schema)`, the middleware every payment
   route runs before its handler. Shape validation only — *amounts* are `lib/catalog.js`'s job.
@@ -613,15 +643,16 @@ split below before wiring anything — the shell is finished, the data mostly is
 - **No screen fabricates data any more.** The screens that read the database: `company` (via
   `lib/dashboardApi.js`), `devices`, `employees` / `locations` (embedded in `settings`), the whole `/alta`
   onboarding, and the "Facturación" tab of `settings` (plan and status from `OrgContext`, history from
-  `subscription_payments`). `profile` reads the logged-in user from `AuthContext`.
-  The sections with no data source do **not** print numbers: the three that depend on us (`reports-nps`,
-  `monthly-reports`, `automations`) render `components/SectionPlaceholder`, and the seven that depend on
+  `subscription_payments`), and `automations` (`notification_preferences` / `notification_log`, see
+  "Alerts"). `profile` reads the logged-in user from `AuthContext`.
+  The sections with no data source do **not** print numbers: the two that depend on us (`reports-nps`,
+  `monthly-reports`) render `components/SectionPlaceholder`, and the seven that depend on
   the customer's Google profile render their old mock behind `components/GoogleGate` (see below). The rule
   that replaced the hardcoded arrays: a page with no data source says so; it never prints a number that
   can't be distinguished from a measured one. The placeholder has two variants and picking the wrong one
   misleads:
   `google` for what the *customer* can unblock by connecting their Business Profile (it carries the connect
-  button), `soon` for what *we* haven't built — NPS, monthly reports, automations — which gets no button,
+  button), `soon` for what *we* haven't built — NPS, monthly reports — which gets no button,
   because a button that resolves nothing is worse than none. Each converted file keeps a header comment
   saying what it used to fake and which roadmap phase feeds it. Since `GoogleGate` landed, `variant="google"`
   has exactly one caller left — the one on `company` — so changing that variant barely moves anything; the
@@ -671,8 +702,9 @@ split below before wiring anything — the shell is finished, the data mostly is
   Google on every section. Each of the other six follows the same recipe when its data exists.
 - **The mock JSX is a deliverable, not discarded history.** The tag `maquetas-pre-fase-2` points at the last
   commit where those ten screens were still drawing their grids, tables and charts; seven of them now live
-  in the tree as `*Mockup.jsx` and the three "próximamente" ones (`reports-nps`, `monthly-reports`,
-  `automations`) are still only in the tag, with the `git show` line in each file's header. Connecting
+  in the tree as `*Mockup.jsx`, the two "próximamente" ones (`reports-nps`, `monthly-reports`) are still
+  only in the tag, and `automations` was rewritten against `0023` (its old mock stays in the tag too), each
+  with the `git show` line in its header. Connecting
   Google flips no switch either way: the mock is a *drawing*, not a screen wired to data, so a connected
   account does not get a working section — somebody has to rewrite each one against the real data and
   delete the `*Mockup.jsx`. Budget that front-end work into phase 4 alongside the API work. What looks like
@@ -713,6 +745,13 @@ split below before wiring anything — the shell is finished, the data mostly is
   `scan_daily_rollups` (invariant 2). Exports `ESTIMATED_LABEL` — any number derived from `review_deltas`
   must be labeled "estimado" (invariant 6). `v_dashboard_kpis` and `v_recent_activity` are consumed by
   `company` through `fetchDashboardKpis()` / `fetchRecentActivity()`.
+- **Every read takes the active `organizationId` and filters by it** — the fetchers of `dashboardApi.js`,
+  `catalogApi.js` and `googleApi.js`, through `requireOrg()`, which throws without one. RLS is the
+  *security* boundary and lets a user read **all** their orgs; before `0027` a member of two saw the union
+  of both on every screen, duplicated days in `v_scans_daily`, and `fetchDashboardKpis()`' unordered
+  `.limit(1)` picked either org's KPIs. A new fetcher that skips the filter reintroduces exactly that.
+  Pages pass `org.organization_id` and bail out of their load effect while it is undefined — several of
+  them fall back to a mock when a query throws, so calling without it would *render the mock*.
 - **Per-entity daily series** come from the `0016` views (`v_device_scans_daily`,
   `v_location_scans_daily`, `v_employee_scans_daily`) via `fetchDeviceScansSeries` /
   `fetchLocationScansSeries` / `fetchEmployeeScansSeries`, which return a `Map<id, number[]>` already
@@ -824,11 +863,16 @@ split below before wiring anything — the shell is finished, the data mostly is
   guards. It guards its own RPC call with a `useRef` latch: `accept_invitation()` is not usefully
   idempotent (the second call sees the token already `accepted` and reports "inválida o vencida"), and
   StrictMode runs effects twice in development, so without the latch the happy path shows an error.
-- Out of scope so far: an org switcher. `my_org_context()` and `private.active_org_id()` (`0020`) *read*
-  `profiles.last_organization_id` to pick which organization to show (falling back to the oldest
-  membership), but nothing writes it, so a user in several orgs always lands on the same one and has no way
-  to change it from the UI. `0020` made this sharper rather than worse: invites and the member list now go
-  through the same helper as the panel, so whatever org the switcher eventually sets, all three follow it.
+- **Org switcher** (`0027`). `my_org_context()`, `private.active_org_id()` and `active_org_id_for()`
+  pick the org from `profiles.last_organization_id` (else the oldest membership); `set_active_organization()`
+  is now what writes it, after checking membership, and `accept_invitation()` sets it to the org just
+  joined. `OrgContext` loads `list_my_organizations()` next to `my_org_context()` and exposes
+  `organizations` / `switchOrganization(id)`; the selector lives in the Sidebar user menu and only renders
+  with more than one org. Switching calls `refresh()`, whose `loading = true` makes `RequireActivePlan`
+  unmount and remount `/panel` — that remount *is* how every screen refetches for the new org, and how
+  the guard re-evaluates it (an org without access goes to `/alta/plan`). There is still no way to
+  *create* a second org from the UI: `OnboardingStep redirectIfOrg` sends anyone with an org away from
+  `/alta/empresa`.
 
 ### `apps/ventas`
 
@@ -933,9 +977,16 @@ only real contact channel in the repo. Replace it when there's a sales email or 
   config file, so the move into the monorepo needed no path change — but the binary is now hoisted to the
   root `node_modules` and there is no `wrangler.jsonc` at the root, so deploy with `npm run deploy:ventas`
   from the root or `npx wrangler deploy` from inside `apps/ventas`.
-- `services/api` deploys to Railway or Render (plain Node host, not a Worker), root directory
-  `services/api`, planned at `api.linkstarapp.com`. When that goes live, update `apps/ventas/.env.production`'s
-  `VITE_API_URL` and the API's `FRONTEND_URL` together.
+- `services/api` deploys to **Railway** as a container — `services/api/Dockerfile` (Node 22, which
+  `@supabase/supabase-js` 2.112+ requires) plus `services/api/railway.json` — at `api.linkstarapp.com`,
+  and the same service answers `l.linkstarapp.com` (the redirect domain; nothing in the code looks at the
+  host). Step-by-step in **`services/api/DEPLOY.md`**. Things that look optional and aren't: the Railway
+  root directory is the **repo root**, not `services/api` (the only lockfile is at the root, and the
+  Docker build context needs it); the Cloudflare CNAMEs are **DNS-only**, because `trust proxy = 1`
+  counts exactly one proxy and Cloudflare's would make the rate limit see Cloudflare's IP; and a second
+  Railway service runs `npm run daily` (`scripts/daily.js` → `sync-reviews` then `send-alerts`, both
+  always, non-zero exit if either fails) on a cron. Not deployed yet as of 6 Oct 2026. When it goes
+  live, update `apps/ventas/.env.production`'s `VITE_API_URL` and the API's `FRONTEND_URL` together.
 - `apps/dashboard` deploys to `app.linkstarapp.com` with `wrangler.jsonc` (`custom_domain: true`, so the
   deploy itself creates the DNS record and certificate; SPA fallback) and `.env.production`.
   `apps/dashboard/DEPLOY.md` has the steps and the two decisions, both settled on 6 Oct 2026: publish
@@ -958,7 +1009,7 @@ only real contact channel in the repo. Replace it when there's a sales email or 
   two now live in `services/api` (`routes/redirect.js`, `routes/webhooks.js`) and are not planned as
   separate functions. The third, `sync-reviews`, is `services/api/scripts/sync-reviews.js` — not an Edge
   Function and not `pg_cron` either, because it talks to Google and needs `GOOGLE_TOKEN_ENC_KEY`, which
-  lives only in this service. It has to become a daily cron on the API host; until then it runs by hand.
+  lives only in this service. It runs as the `daily` Railway cron service (`npm run daily`, see `services/api/DEPLOY.md`); until the API is deployed, it runs by hand.
 
 ## Language note
 

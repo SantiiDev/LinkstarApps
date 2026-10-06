@@ -607,6 +607,7 @@ const SORT_OPTIONS = [
 // encabezado y el pie propios para no duplicarlos.
 export default function LocationsPage({ embedded = false }) {
   const { org } = useOrg();
+  const orgId = org?.organization_id;
   const [locations, setLocations] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
@@ -632,25 +633,28 @@ export default function LocationsPage({ embedded = false }) {
   const reload = () => setReloadToken(t => t + 1);
 
   useEffect(() => {
+    // Sin organización activa no se pide nada (la lectura lanzaría y esto
+    // caería al mock).
+    if (!orgId) return;
     let cancelled = false;
     (async () => {
       try {
         const [locationRows, detailRows, deviceRows, employeeRows, scansSeries] = await Promise.all([
-          fetchLocationPerformance(),
+          fetchLocationPerformance(orgId),
           // Las filas crudas: dirección, teléfono y los campos de Google, que la
           // vista de métricas no tiene. Catch propio — si esto falla, la
           // pantalla sigue mostrando métricas reales y sólo se queda sin los
           // datos de ficha, en vez de caerse entera al mock.
-          fetchLocationRows().catch(err => {
+          fetchLocationRows(orgId).catch(err => {
             console.error('No se pudieron cargar los datos de ficha de las sucursales:', err);
             return [];
           }),
-          fetchDevicePerformance(),
-          fetchEmployeeLeaderboard(),
+          fetchDevicePerformance(orgId),
+          fetchEmployeeLeaderboard(orgId),
           // Catch propio: si falta la migración 0016 la sparkline queda plana,
           // pero el resto de la pantalla conserva sus datos reales en vez de
           // caerse entera al mock.
-          fetchLocationScansSeries(SPARKLINE_DAYS).catch(err => {
+          fetchLocationScansSeries(orgId, SPARKLINE_DAYS).catch(err => {
             console.error('No se pudo cargar la serie diaria por local, las sparklines quedan en cero:', err);
             return new Map();
           }),
@@ -691,7 +695,7 @@ export default function LocationsPage({ embedded = false }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [reloadToken]);
+  }, [reloadToken, orgId]);
 
   /* Después de guardar se recarga todo en vez de parchear el array en memoria.
      Es una consulta más, pero una sucursal nueva no tiene fila en

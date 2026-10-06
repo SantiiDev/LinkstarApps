@@ -767,6 +767,7 @@ function buildDailyScansFromRows(rows, days) {
 
 export default function DevicesPage({ onNavigate, onNavigateSettings }) {
   const { org } = useOrg();
+  const orgId = org?.organization_id;
   const [devices, setDevices]       = useState([]);
   const [locations, setLocations]   = useState([]);
   /* Las sucursales y los empleados reales de la cuenta, para los desplegables
@@ -795,16 +796,19 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
      se deja la pantalla en blanco. Un resultado vacío (org sin dispositivos
      todavía) NO es una falla: se muestra tal cual, vacío. */
   useEffect(() => {
+    // Sin organización activa no se pide nada: la lectura lanzaría y esta
+    // pantalla lo tomaría como una falla y caería al mock.
+    if (!orgId) return;
     let cancelled = false;
     (async () => {
       try {
         const [deviceRows, locationRows, employeeRows, deviceSeries, destinations] = await Promise.all([
-          fetchDevicePerformance(),
-          fetchLocationPerformance(),
+          fetchDevicePerformance(orgId),
+          fetchLocationPerformance(orgId),
           // Para el desplegable de empleado del formulario. Catch propio: sin
           // esto la pantalla entera se caería al mock por no poder llenar un
           // <select> que ni siquiera está abierto.
-          fetchEmployeeLeaderboard().catch(err => {
+          fetchEmployeeLeaderboard(orgId).catch(err => {
             console.error('No se pudo cargar la lista de empleados:', err);
             return [];
           }),
@@ -813,14 +817,14 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
           // las sparklines quedan planas pero el resto de la pantalla sigue
           // mostrando datos reales. Sin esto, una vista faltante tiraba toda
           // la carga al mock y escondía totales que sí eran verdaderos.
-          fetchDeviceScansSeries(SPARKLINE_DAYS).catch(err => {
+          fetchDeviceScansSeries(orgId, SPARKLINE_DAYS).catch(err => {
             console.error('No se pudo cargar la serie diaria por dispositivo, las sparklines quedan en cero:', err);
             return new Map();
           }),
           // Catch propio por el mismo motivo que la serie: el destino por
           // dispositivo es un extra para editar, y que falle no justifica tirar
           // toda la pantalla al mock y esconder totales que sí son reales.
-          fetchDeviceDestinations().catch(err => {
+          fetchDeviceDestinations(orgId).catch(err => {
             console.error('No se pudieron cargar los destinos por dispositivo:', err);
             return new Map();
           }),
@@ -840,7 +844,7 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [reloadKey]);
+  }, [reloadKey, orgId]);
 
   /* Derived stats */
   const totalActive = devices.filter(d => d.status === 'active').length;
@@ -870,11 +874,12 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
   /* El gráfico de actividad se recarga cada vez que cambia el período
      (7/30 días) — v_scans_daily se filtra client-side a ese rango. */
   useEffect(() => {
+    if (!orgId) return;
     let cancelled = false;
     (async () => {
       const days = Number(activityPeriod);
       try {
-        const rows = await fetchScansDaily(days);
+        const rows = await fetchScansDaily(orgId, days);
         if (cancelled) return;
         setDailyScans(buildDailyScansFromRows(rows, days));
       } catch (err) {
@@ -884,7 +889,7 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [activityPeriod]);
+  }, [activityPeriod, orgId]);
 
   function clearFilters() {
     setSearch('');

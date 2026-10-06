@@ -4,9 +4,20 @@ import { supabase } from './supabaseClient';
 // supabase/migrations/0008_dashboard_views.sql y las series por entidad del
 // 0016_entity_daily_series.sql — nunca scan_events ni
 // scan_daily_rollups directo (decisión 2 de CLAUDE.md). Las vistas tienen
-// security_invoker = on, así que RLS filtra sola: con el cliente logueado
-// (anon key + sesión del usuario) cada query devuelve sólo lo que ese
-// usuario puede ver por sus memberships, sin filtrar organization_id acá.
+// security_invoker = on, así que el RLS se aplica solo: con el cliente logueado
+// (anon key + sesión del usuario) ninguna query devuelve filas de una
+// organización de la que el usuario no es miembro.
+//
+// ---------------------------------------------------------------------------
+// Pero cada lectura filtra igual por organization_id
+// ---------------------------------------------------------------------------
+// El RLS es el límite de SEGURIDAD, no el de presentación: deja ver TODAS las
+// organizaciones del usuario. Para alguien en dos (una agencia, o nosotros
+// dando soporte) eso era la unión de las dos en cada pantalla, días repetidos en
+// la serie de v_scans_daily, y unos KPIs de cualquiera de las dos (era un
+// .limit(1) sin orden). Desde el selector de organización (0027) cada función
+// recibe la organización activa —org.organization_id de useOrg()— y la exige:
+// sin ella lanza, en vez de devolver la unión en silencio.
 //
 // v_dashboard_kpis y v_recent_activity las consume Mi Empresa, que es la
 // pantalla post-login y la única con un panel de KPIs generales.
@@ -39,6 +50,13 @@ import { supabase } from './supabaseClient';
 // Y no es hipotético: este repo ya vivió una migración escrita que tardó en
 // llegar a Postgres mientras el código asumía que estaba (ver 0013/0017 en
 // CLAUDE.md). Si el 0018 todavía no se aplicó, esto tiene que gritar.
+export function requireOrg(organizationId) {
+  if (!organizationId) {
+    throw new Error('Falta la organización activa: cada lectura del panel se filtra por organization_id.');
+  }
+  return organizationId;
+}
+
 function assertColumn(rows, column, migration) {
   if (rows.length > 0 && !(column in rows[0])) {
     throw new Error(
@@ -49,33 +67,43 @@ function assertColumn(rows, column, migration) {
   return rows;
 }
 
-export async function fetchDevicePerformance() {
-  const { data, error } = await supabase.from('v_device_performance').select('*');
+export async function fetchDevicePerformance(organizationId) {
+  const { data, error } = await supabase
+    .from('v_device_performance')
+    .select('*')
+    .eq('organization_id', requireOrg(organizationId));
   if (error) throw error;
   return assertColumn(data ?? [], 'human_scans_30d', '0018');
 }
 
-export async function fetchEmployeeLeaderboard() {
-  const { data, error } = await supabase.from('v_employee_leaderboard').select('*');
+export async function fetchEmployeeLeaderboard(organizationId) {
+  const { data, error } = await supabase
+    .from('v_employee_leaderboard')
+    .select('*')
+    .eq('organization_id', requireOrg(organizationId));
   if (error) throw error;
   return assertColumn(data ?? [], 'human_scans_30d', '0018');
 }
 
-export async function fetchLocationPerformance() {
-  const { data, error } = await supabase.from('v_location_performance').select('*');
+export async function fetchLocationPerformance(organizationId) {
+  const { data, error } = await supabase
+    .from('v_location_performance')
+    .select('*')
+    .eq('organization_id', requireOrg(organizationId));
   if (error) throw error;
   return assertColumn(data ?? [], 'human_scans_30d', '0018');
 }
 
 // Los KPIs generales de Mi Empresa: 30 días contra los 30 anteriores.
-// Devuelve UNA fila —la organización activa— o null si todavía no hay ninguna.
+// Devuelve la fila de la organización activa, o null si todavía no hay ninguna.
 // La vista sale de `organizations` con left joins, así que una organización sin
 // un solo escaneo igual tiene fila, con ceros. Eso es distinto de "no hay
 // datos" y la pantalla lo trata distinto.
-export async function fetchDashboardKpis() {
+export async function fetchDashboardKpis(organizationId) {
   const { data, error } = await supabase
     .from('v_dashboard_kpis')
     .select('*')
+    .eq('organization_id', requireOrg(organizationId))
     .limit(1);
 
   if (error) throw error;
@@ -86,10 +114,11 @@ export async function fetchDashboardKpis() {
 // El feed de actividad. La vista ya filtra `not is_bot` desde el 0008 y se
 // acota sola a 7 días y 200 filas, así que acá sólo se recorta a lo que entra
 // en pantalla. No hace falta assertColumn: no tiene columnas del 0018.
-export async function fetchRecentActivity(limit = 8) {
+export async function fetchRecentActivity(organizationId, limit = 8) {
   const { data, error } = await supabase
     .from('v_recent_activity')
     .select('event_type, device_label, kind, occurred_at')
+    .eq('organization_id', requireOrg(organizationId))
     .order('occurred_at', { ascending: false })
     .limit(limit);
 
@@ -101,7 +130,7 @@ export async function fetchRecentActivity(limit = 8) {
 // día — sin límite de rango incorporado. Filtramos acá a los últimos N días.
 // `scans` se pide igual que `human_scans` para poder mostrar la diferencia
 // cuando haga falta explicarla, pero el gráfico dibuja la humana.
-export async function fetchScansDaily(days = 7) {
+export async function fetchScansDaily(organizationId, days = 7) {
   const since = new Date();
   since.setDate(since.getDate() - (days - 1));
   const sinceStr = since.toISOString().slice(0, 10);
@@ -109,6 +138,7 @@ export async function fetchScansDaily(days = 7) {
   const { data, error } = await supabase
     .from('v_scans_daily')
     .select('day, scans, human_scans, unique_scans, estimated_reviews')
+    .eq('organization_id', requireOrg(organizationId))
     .gte('day', sinceStr)
     .order('day', { ascending: true });
 
@@ -168,7 +198,7 @@ export function lastNDayLabels(days) {
   });
 }
 
-async function fetchEntitySeries(view, idColumn, days) {
+async function fetchEntitySeries(view, idColumn, organizationId, days) {
   const keys = lastNDayKeys(days);
 
   // human_scans, no scans: la sparkline tiene que contar lo mismo que el total
@@ -177,6 +207,7 @@ async function fetchEntitySeries(view, idColumn, days) {
   const { data, error } = await supabase
     .from(view)
     .select(`${idColumn}, day, human_scans`)
+    .eq('organization_id', requireOrg(organizationId))
     .gte('day', keys[0])
     .order('day', { ascending: true });
 
@@ -204,16 +235,16 @@ async function fetchEntitySeries(view, idColumn, days) {
   return series;
 }
 
-export function fetchDeviceScansSeries(days = 7) {
-  return fetchEntitySeries('v_device_scans_daily', 'device_id', days);
+export function fetchDeviceScansSeries(organizationId, days = 7) {
+  return fetchEntitySeries('v_device_scans_daily', 'device_id', organizationId, days);
 }
 
-export function fetchLocationScansSeries(days = 7) {
-  return fetchEntitySeries('v_location_scans_daily', 'location_id', days);
+export function fetchLocationScansSeries(organizationId, days = 7) {
+  return fetchEntitySeries('v_location_scans_daily', 'location_id', organizationId, days);
 }
 
-export function fetchEmployeeScansSeries(days = 7) {
-  return fetchEntitySeries('v_employee_scans_daily', 'employee_id', days);
+export function fetchEmployeeScansSeries(organizationId, days = 7) {
+  return fetchEntitySeries('v_employee_scans_daily', 'employee_id', organizationId, days);
 }
 
 // Decisión 6 de CLAUDE.md: Google no avisa reseñas nuevas, sólo se puede

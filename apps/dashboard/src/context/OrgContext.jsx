@@ -13,24 +13,48 @@ import { useAuth } from './AuthContext';
  *
  * `context` en null con sesión activa significa "este usuario no tiene
  * organización todavía" — es un estado válido, no un error: pasa siempre
- * entre el registro y el alta de la empresa. */
+ * entre el registro y el alta de la empresa.
+ *
+ * ── Varias organizaciones (0027) ──────────────────────────────────────────
+ * `organizations` es la lista para el selector (list_my_organizations) y
+ * `switchOrganization(id)` escribe la elegida con set_active_organization y
+ * vuelve a cargar. Esa recarga pone `loading` en true, y RequireActivePlan
+ * desmonta y vuelve a montar todo /panel: cada pantalla vuelve a pedir sus
+ * datos con la organización nueva y el guard la evalúa de cero (si no tiene
+ * plan vigente, va a /alta/plan, que es lo correcto).
+ *
+ * La lista es un extra: si la RPC falla —por ejemplo, porque la 0027 todavía
+ * no se aplicó en ese entorno— queda vacía, el selector no aparece y el resto
+ * del panel funciona igual. */
 const OrgContext = createContext(null);
 
 export function OrgProvider({ children }) {
   const { user, loading: authLoading } = useAuth();
   const [context, setContext] = useState(null);
+  const [organizations, setOrganizations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
     if (!user) {
       setContext(null);
+      setOrganizations([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    const { data, error: rpcError } = await supabase.rpc('my_org_context');
+    const [{ data, error: rpcError }, list] = await Promise.all([
+      supabase.rpc('my_org_context'),
+      supabase.rpc('list_my_organizations'),
+    ]);
+
+    if (list.error) {
+      console.error('No se pudo leer la lista de organizaciones:', list.error);
+      setOrganizations([]);
+    } else {
+      setOrganizations(list.data ?? []);
+    }
 
     if (rpcError) {
       console.error('No se pudo leer el contexto de la organización:', rpcError);
@@ -50,6 +74,15 @@ export function OrgProvider({ children }) {
     if (authLoading) return;
     load();
   }, [authLoading, load]);
+
+  /* Lanza si la base rechaza el cambio (p. ej. ya no sos miembro): quien llama
+     muestra el error. Si sale bien, recarga todo el contexto. */
+  const switchOrganization = useCallback(async (organizationId) => {
+    if (!organizationId || organizationId === context?.organization_id) return;
+    const { error: rpcError } = await supabase.rpc('set_active_organization', { p_org: organizationId });
+    if (rpcError) throw rpcError;
+    await load();
+  }, [context?.organization_id, load]);
 
   const value = {
     org: context,
@@ -75,6 +108,8 @@ export function OrgProvider({ children }) {
     loading: authLoading || loading,
     error,
     refresh: load,
+    organizations,
+    switchOrganization,
   };
 
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;
