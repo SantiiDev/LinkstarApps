@@ -48,12 +48,22 @@ async function googleGet(accessToken, url) {
       continue;
     }
 
+    // El estado solo (PERMISSION_DENIED) no alcanza para diagnosticar: el mismo
+    // 403 lo devuelve Google por una API no habilitada en el proyecto
+    // (SERVICE_DISABLED), por un permiso que falta o por una ficha a la que la
+    // cuenta no tiene acceso. El `reason` de ErrorInfo y el mensaje son los que
+    // dicen cuál. Este error va al log del job, nunca al panel: las RPC de sync
+    // guardan un texto propio en google_connections.last_error.
     const body = await response.json().catch(() => ({}));
+    const reason = body?.error?.details?.find((d) => d?.reason)?.reason || null;
+    const message = String(body?.error?.message || '').slice(0, 300);
     const err = new Error(
-      `Google API ${response.status} en ${new URL(url).pathname}: ${body?.error?.status || body?.error?.message || 'error'}`
+      `Google API ${response.status} en ${new URL(url).pathname}: ` +
+      [body?.error?.status || 'error', reason, message].filter(Boolean).join(' · ')
     );
     err.httpStatus = response.status;
     err.googleStatus = body?.error?.status || null;
+    err.googleReason = reason;
     throw err;
   }
 }

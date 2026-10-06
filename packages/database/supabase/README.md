@@ -172,8 +172,11 @@ Lo de `0024` que es fácil de romper:
 - **El refresh token no se lee desde el cliente, ni siquiera la owner.** Vive en
   `private.google_oauth_tokens` (fuera de PostgREST, RLS forzado sin políticas) y cifrado con una clave
   que no está en la base. Todo acceso pasa por RPC con `grant` sólo a `service_role`.
-- **Sin vínculo ficha → sucursal no hay snapshot.** El vínculo automático es sólo por `place_id`; el
-  resto se hace con `link_google_location()`.
+- **Sin vínculo ficha → sucursal no hay snapshot, ni reseñas** (`0025`). El vínculo automático es sólo
+  por `place_id`; el resto se hace con `link_google_location()`. Una ficha sin vincular puede ser de un
+  tercero (la cuenta de Google que conectó administra también la de un cliente), así que de ella se
+  guarda nombre, dirección y `place_id` y nada más; `google_prune_unlinked_reviews()` borra sus reseñas
+  apenas deja de estar vinculada. Una sucursal con borrado lógico cuenta como no vinculada.
 - **Desconectar borra fichas y reseñas, no los snapshots.** Los snapshots son la serie de la que salen
   los deltas.
 

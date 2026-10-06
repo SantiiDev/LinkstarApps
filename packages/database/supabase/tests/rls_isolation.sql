@@ -664,6 +664,41 @@ end $$;
 
 reset role;
 
+-- =========================================================================
+-- 9. Reseñas sólo de fichas vinculadas a una sucursal viva (0025)
+-- =========================================================================
+-- Una ficha que deja de estar vinculada pierde sus reseñas en el acto: pueden
+-- ser de un tercero (la cuenta de Google que conectó administra también la
+-- ficha de un cliente), y no tenemos por qué guardarlas.
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+
+select public.link_google_location('9a000000-0000-0000-0000-000000000002', null);
+
+select pg_temp.check('Al desvincular la ficha de Pichincha, su reseña se borra',
+  (select count(*) from public.google_reviews) = 1);
+select pg_temp.check('La ficha de Pichincha queda sin sucursal',
+  (select location_id is null from public.google_locations
+   where id = '9a000000-0000-0000-0000-000000000002'));
+
+reset role;
+
+-- Los borrados de sucursales son lógicos: la FK on delete set null no se
+-- dispara. La sucursal borrada tiene que dejar de recibir snapshots, y la poda
+-- tiene que soltar la ficha y borrar sus reseñas.
+update public.locations set deleted_at = now()
+ where id = 'dddddddd-0000-0000-0000-000000000001';
+
+select pg_temp.check('No se escribe snapshot para una sucursal borrada',
+  not public.record_google_review_snapshot('9a000000-0000-0000-0000-000000000001', 10, 4.5, null));
+
+select private.google_prune_unlinked_reviews('aaaaaaaa-0000-0000-0000-000000000001');
+
+select pg_temp.check('Sucursal borrada: la ficha se suelta y sus reseñas se van',
+  (select location_id is null from public.google_locations
+   where id = '9a000000-0000-0000-0000-000000000001')
+  and (select count(*) from public.google_reviews
+       where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0);
+
 do $$ begin
   raise notice '';
   raise notice '=== Todos los tests de aislamiento pasaron ===';

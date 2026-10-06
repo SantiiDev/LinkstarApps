@@ -18,7 +18,8 @@
     "lint": "npm run lint --workspace @linkstar/dashboard",
     "deploy:ventas": "npm run deploy --workspace @linkstar/ventas",
     "db:push": "npm run db:push --workspace @linkstar/database",
-    "db:reset": "npm run db:reset --workspace @linkstar/database"
+    "db:reset": "npm run db:reset --workspace @linkstar/database",
+    "db:status": "npm run db:status --workspace @linkstar/database"
   },
   "engines": {
     "node": ">=20"

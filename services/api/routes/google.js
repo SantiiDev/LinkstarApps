@@ -249,7 +249,7 @@ async function runFirstSync(organizationId, refreshTokenEnc, keyId) {
     );
     await supabase.rpc('google_record_sync_result', { p_org: organizationId, p_ok: true });
     await supabase.rpc('compute_review_deltas', {});
-    log(`primera sincronización: ${summary.locations} ficha(s), ${summary.reviews} reseña(s)`);
+    log(`primera sincronización: ${summary.locations} ficha(s), ${summary.linked} vinculada(s), ${summary.reviews} reseña(s)`);
   } catch (err) {
     console.error(`Primera sincronización de Google falló para ${organizationId}:`, err.message);
     await supabase.rpc('google_record_sync_result', {

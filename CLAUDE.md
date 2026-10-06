@@ -73,7 +73,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0024 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0025 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -203,17 +203,20 @@ scan never dead-ends was sending people to somebody else's domain · `0022` prod
 `0023` notification preferences + send log, and `pending_notifications()` — the half of phase 7 that
 doesn't need Google (see "Alerts" below) · `0024` Google Business Profile: OAuth connection, encrypted
 refresh token, `google_locations` / `google_reviews`, and the RPCs `sync-reviews` writes through (see
-"Google Business Profile" below).
+"Google Business Profile" below) · `0025` reviews only for fichas linked to a live sucursal, plus the
+prune that enforces it (same section).
 
-**Everything up to `0020` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
-16 Aug after running it locally with `db:reset` and `rls_isolation.sql` green; both verified with
-`supabase migration list`). **`0021` and `0022` reached production on 5 Oct 2026; `0023` and `0024` did NOT** — that push
-stopped at `0023` (see below). Until someone runs `npm run db:push` again, production has no
-notification tables (so `npm run send-alerts` fails) and no Google tables (so `/api/google/*`,
-`npm run sync-reviews` and the panel's Google status fail), while the repo and the frontend say
-otherwise. All of `0021`–`0024` went through `db:reset` + `rls_isolation.sql` green locally on
-5 Oct 2026 — that run is also what found section 6 of the test still asserting the `0015` rule that
-`0022` reverted, now fixed.
+**`0025` is written but NOT applied in production** — until `npm run db:push`, the deployed
+`sync-reviews` code calls `google_prune_unlinked_reviews()`, which doesn't exist there yet, and every
+non-dry run fails at that step. It went through the push simulation described below and
+`rls_isolation.sql` (75 green) locally on 5 Oct 2026.
+
+**Everything up to `0024` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
+16 Aug, `0021`–`0024` on 5 Oct 2026; all verified with `npm run db:status`). The 5 Oct push went in two
+attempts: the first stopped at `0023` on the `citext` problem described below, after `0021` and `0022`
+had already applied. All of `0021`–`0024` went through `db:reset` + `rls_isolation.sql` green locally
+first — that run is also what found section 6 of the test still asserting the `0015` rule that `0022`
+reverted, now fixed.
 
 **A green `db:reset` does not prove `db:push` will pass — schema-qualify extension types.** The
 current Supabase CLI pushes through a temporary login role ("Initialising login role…") whose
@@ -526,9 +529,18 @@ the failure this prevents).
   after each successful connect): Account Management → Business Information (`readMask` is mandatory) →
   `google_locations`; auto-link ficha → sucursal **only by `place_id`**; My Business v4 reviews, newest
   `updateTime` first, paging until it crosses the newest stored one; then
-  `record_google_review_snapshot()` and `compute_review_deltas(today)`. A ficha with no linked sucursal
-  gets its reviews stored but **no snapshot** (`location_review_snapshots.location_id` is not null) —
+  `record_google_review_snapshot()` and `compute_review_deltas(today)`.
   `link_google_location()` is the manual mapping, callable by owner/admin, with no UI yet.
+- **Reviews are read only for fichas linked to a live sucursal** (`0025`). The Google user who connects can
+  manage fichas that aren't this organization's — the first real test hit exactly that, a client's ficha
+  in the same Google account — and storing third parties' reviews (author name, text) because they
+  happened to be visible is not acceptable. An unlinked ficha keeps title, address and `place_id`, enough
+  to offer it when linking, and nothing else; `google_prune_unlinked_reviews()` deletes the reviews of a
+  ficha the moment it stops being linked (called by the sync before reading and by `link_google_location()`
+  after every change). "Live" matters: sucursal deletes are logical, so `0024`'s `on delete set null`
+  never fires — the prune also unlinks fichas whose sucursal has `deleted_at`, and
+  `record_google_review_snapshot()` refuses them. `--dry-run` predicts the links from existing rows and
+  `locations.google_place_id`, so it tells you which fichas *would* be read before anything is written.
 - Disconnecting revokes at Google (best-effort) and deletes the connection; fichas and reviews cascade,
   `location_review_snapshots` stays — it is our aggregate and the delta series depends on it.
 

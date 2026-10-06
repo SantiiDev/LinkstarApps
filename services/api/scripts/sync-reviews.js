@@ -58,6 +58,7 @@ async function main() {
   console.log(`${selected.length} organización(es) para sincronizar.${dryRun ? ' (simulacro)' : ''}\n`);
 
   let ok = 0;
+  let partial = 0;   // la organización se leyó, pero alguna ficha falló
   let failed = 0;
   let reauth = 0;
 
@@ -75,10 +76,14 @@ async function main() {
         });
       }
       console.log(
-        `  → ${summary.locations} ficha(s), ${summary.reviews} reseña(s) nueva(s)/editada(s), ` +
+        `  → ${summary.locations} ficha(s) (${summary.linked} vinculada(s)), ${summary.reviews} reseña(s) nueva(s)/editada(s), ` +
         `${summary.snapshots} snapshot(s)${summary.failures ? `, ${summary.failures} ficha(s) con error` : ''}\n`
       );
-      ok++;
+      // Contarla como OK con todas sus fichas en error escondía justo el caso
+      // que importa ver (p. ej. la API v4 sin habilitar: cuentas y fichas se
+      // leen bien, las reseñas no).
+      if (summary.failures) partial++;
+      else ok++;
     } catch (err) {
       const needsReauth = err.code === 'invalid_grant';
       if (needsReauth) reauth++;
@@ -105,7 +110,12 @@ async function main() {
     else console.log(`review_deltas de hoy: ${deltas} fila(s).`);
   }
 
-  console.log(`\nOK: ${ok}${reauth ? ` · A reconectar: ${reauth}` : ''}${failed ? ` · Fallidas: ${failed}` : ''}`);
+  console.log(
+    `\nOK: ${ok}` +
+    (partial ? ` · Con fichas en error: ${partial}` : '') +
+    (reauth ? ` · A reconectar: ${reauth}` : '') +
+    (failed ? ` · Fallidas: ${failed}` : '')
+  );
   if (failed) process.exitCode = 1;
 }
 
