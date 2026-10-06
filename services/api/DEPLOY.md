@@ -11,8 +11,11 @@ Son **dos servicios** de Railway construidos con la misma imagen:
 | `api` | `node server.js` (el `CMD` del Dockerfile) | Siempre encendido |
 | `daily` | `npm run daily` → `sync-reviews` + `send-alerts` (`scripts/daily.js`) | Cron, una vez por día |
 
-Lo que ya está en el repo: `services/api/Dockerfile`, `.dockerignore` en la raíz,
-`services/api/railway.json` (build y health check del servicio `api`) y `scripts/daily.js`.
+Lo que ya está en el repo: `services/api/Dockerfile`, `.dockerignore` en la raíz y
+`scripts/daily.js`. **No hay `railway.json` a propósito:** Railway deprecó «Config as Code» (los
+archivos existentes dejan de funcionar el 1 de diciembre de 2026, y desde el 28 de agosto un servicio
+nuevo no puede activarlo). Todo se configura en el panel, con la variable `RAILWAY_DOCKERFILE_PATH`
+para que construya con nuestro Dockerfile.
 
 > **Costo.** Plan Hobby de Railway: US$5 por mes, con US$5 de uso incluidos. Un API chico más un
 > cron de un minuto por día entra ahí o apenas lo pasa. Render gratis no sirve: duerme el servicio a
@@ -42,11 +45,21 @@ Después abrí `http://localhost:3001/api/health`: tiene que decir `{"status":"o
 3. En el servicio que se creó, abrí **Settings**:
    - **Root Directory:** vacío (la raíz del repo). **No** pongas `services/api`: el único
      `package-lock.json` está en la raíz y el build lo necesita.
-   - **Config-as-code → Railway Config File:** `services/api/railway.json`.
+   - **Config-as-code → Railway Config File:** **vacío**. Si Railway completó algo solo (por ejemplo
+     `/services/api/package.json`), borralo.
+   - **Build → Custom Build Command:** vacío.
+   - **Deploy → Custom Start Command:** vacío. El `CMD` del Dockerfile ya arranca el servidor.
+   - **Deploy → Healthcheck Path:** `/api/health`.
+   - **Deploy → Restart Policy:** *On Failure*.
    - **Branch:** `main` (o `develop` mientras pruebes).
    - Cambiale el nombre a `api` (arriba de todo, en Settings).
 4. Antes del primer deploy, cargá las variables del paso 2. Si arrancó solo y falló, no pasa nada:
    va a reintentar cuando estén.
+
+> **Si Railway creó varios servicios** al conectar el repo (`@linkstar/ventas`, `@linkstar/dashboard`,
+> `@linkstar/api`): detecta los workspaces de npm y arma uno por paquete. Quedate sólo con el del API
+> y borrá los otros dos (Settings → Delete Service): ventas y el panel viven en Cloudflare, y en
+> Railway sólo consumen crédito.
 
 ## 2. Variables del servicio `api`
 
@@ -54,6 +67,7 @@ En **Variables**, con **Raw Editor** podés pegar todo junto. **`PORT` no se def
 
 | Variable | Valor |
 |---|---|
+| `RAILWAY_DOCKERFILE_PATH` | `services/api/Dockerfile`: sin esto Railway intenta adivinar cómo construir y falla |
 | `SUPABASE_URL` | La del proyecto de producción (Supabase → Project Settings → API) |
 | `SUPABASE_SERVICE_ROLE_KEY` | La `service_role` de producción. Secreta |
 | `FRONTEND_URL` | `https://linkstarapp.com,https://app.linkstarapp.com` (ventas **primero**) |
@@ -109,8 +123,8 @@ El certificado lo emite Railway solo, en unos minutos.
 1. En el proyecto: **New → GitHub Repo →** el mismo repo. Nombralo `daily`.
 2. **Settings:**
    - **Root Directory:** vacío.
-   - **Railway Config File:** vacío. El `railway.json` tiene un health check HTTP que un cron no
-     contesta.
+   - **Railway Config File:** vacío.
+   - **Healthcheck Path:** vacío. Un cron no contesta HTTP.
    - **Custom Start Command:** `npm run daily`.
    - **Cron Schedule:** `0 11 * * *`, todos los días a las 11:00 UTC (08:00 en Argentina).
 3. **Variables:** agregá `RAILWAY_DOCKERFILE_PATH=services/api/Dockerfile` y las que usan los jobs:

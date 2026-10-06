@@ -124,8 +124,10 @@ to `.env`, don't rename them away.
   subscription returns from Mercado Pago — it cannot be `FRONTEND_URL`, which points at the sales site.
   `FRONTEND_URL` is **comma-separated**: this one service serves both frontends, so CORS needs both
   origins. The first entry is the one used for Mercado Pago `back_urls`, so it must be the ventas site
-  (that's where checkout lives). Missing `SUPABASE_SERVICE_ROLE_KEY` only warns at boot — writes then fail
-  later at request time via RLS rejection.
+  (that's where checkout lives). Missing `SUPABASE_SERVICE_ROLE_KEY` prints a warning
+  and then **crashes at boot** — current `@supabase/supabase-js` throws `supabaseKey is required` from
+  `createClient` (seen on the first Railway deploy, 6 Oct 2026); older versions only warned and failed
+  later through RLS.
 - `apps/dashboard/.env` — see `apps/dashboard/.env.example`. `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
   `VITE_API_URL`, `VITE_REDIRECT_DOMAIN` (optional, same default as the API's `REDIRECT_DOMAIN` — the two
   apps deploy separately, so each defines it on its own; they must agree or the QR the dashboard generates
@@ -978,7 +980,9 @@ only real contact channel in the repo. Replace it when there's a sales email or 
   root `node_modules` and there is no `wrangler.jsonc` at the root, so deploy with `npm run deploy:ventas`
   from the root or `npx wrangler deploy` from inside `apps/ventas`.
 - `services/api` deploys to **Railway** as a container — `services/api/Dockerfile` (Node 22, which
-  `@supabase/supabase-js` 2.112+ requires) plus `services/api/railway.json` — at `api.linkstarapp.com`,
+  `@supabase/supabase-js` 2.112+ requires), configured in the Railway dashboard with
+  `RAILWAY_DOCKERFILE_PATH=services/api/Dockerfile` — **not** a `railway.json`: Railway deprecated
+  Config as Code (existing files stop working 1 Dec 2026, new services can't opt in since 28 Aug) — at `api.linkstarapp.com`,
   and the same service answers `l.linkstarapp.com` (the redirect domain; nothing in the code looks at the
   host). Step-by-step in **`services/api/DEPLOY.md`**. Things that look optional and aren't: the Railway
   root directory is the **repo root**, not `services/api` (the only lockfile is at the root, and the
