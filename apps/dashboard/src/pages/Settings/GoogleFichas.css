@@ -1,0 +1,132 @@
+/* Fichas de Google en "Gestión local". Sin blur ni transiciones caras (ver la
+   nota de rendimiento del glass en CLAUDE.md). */
+
+.gfichas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.gfichas__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(26, 38, 57, 0.08);
+  border-radius: 12px;
+  overflow: visible;
+}
+
+.gfichas__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(26, 38, 57, 0.06);
+}
+
+.gfichas__item:last-child {
+  border-bottom: none;
+}
+
+.gfichas__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.gfichas__title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.gfichas__meta {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.gfichas__select {
+  flex: none;
+  min-width: 13rem;
+}
+
+.gfichas__msg {
+  margin: 0;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+  font-size: 0.8rem;
+}
+
+.gfichas__msg--error {
+  background: rgba(239, 68, 68, 0.09);
+  color: #b91c1c;
+}
+
+.gfichas__confirm {
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  font-size: 0.82rem;
+  color: var(--color-navy);
+}
+
+.gfichas__confirm p {
+  margin: 0 0 0.6rem;
+}
+
+.gfichas__confirm-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.gfichas__link {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.gfichas__link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.gfichas__sync {
+  align-self: flex-start;
+  color: var(--color-orange);
+}
+
+.gfichas__danger {
+  padding: 0.4rem 0.9rem;
+  border: none;
+  border-radius: var(--radius-button);
+  background: var(--color-danger);
+  color: white;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .gfichas__item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gfichas__select {
+    min-width: 0;
+  }
+}

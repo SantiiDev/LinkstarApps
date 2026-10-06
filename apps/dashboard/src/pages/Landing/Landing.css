@@ -1452,6 +1452,25 @@
   color: rgba(255, 255, 255, 0.5);
 }
 
+.landing-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.5rem;
+  margin-top: 0.85rem;
+  font-size: 0.78rem;
+}
+
+.landing-footer__links a {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.landing-section--dark .landing-footer__links a {
+  color: rgba(255, 255, 255, 0.75);
+}
+
 /* ---------- Scroll Reveal Utility ---------- */
 .landing-reveal {
   opacity: 0;

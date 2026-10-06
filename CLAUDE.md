@@ -13,10 +13,13 @@ The dashboard has **three plans**, and choosing one is a mandatory step between 
 Mercado Pago direct debit) and `enterprise` (contact sales, not self-serve). No lock-in. See "Pricing"
 below before touching any price or plan wording, and "Subscription gate" for how the step is enforced.
 
-**Status: pre-launch.** Nothing is sold yet and nothing but the schema is deployed. There are no real
+**Status: pre-launch.** Nothing is sold yet. Deployed: the schema, the sales site, and — since 6 Oct
+2026 — the dashboard at `app.linkstarapp.com` (published ahead of the API for Google's OAuth verification,
+see "Deployment"). There are no real
 tenants, so the schema and the API can still change shape without a migration story for production data —
 but the invariants under "Data model" are the part that gets expensive to undo *after* launch, so they
-hold now too. Concretely: `services/api` and `apps/dashboard` have no deploy target, checkout is
+hold now too. Concretely: `services/api` has no deploy target, so the deployed panel shows "el servicio no
+está disponible" for every API-backed action and offers Business as "Contactar con ventas"; checkout is
 disconnected, and large parts of the dashboard are UI ahead of their data (see `apps/dashboard` below).
 This file describes what is actually wired today, not the roadmap — when something lands, update the
 section that claimed it was missing.
@@ -32,7 +35,7 @@ npm workspaces, one `package-lock.json` at the root. Four packages:
 | Path                | Package               | What it is |
 |---------------------|-----------------------|------------|
 | `apps/ventas`       | `@linkstar/ventas`    | Marketing site + shop. React 19 + Vite, deployed to Cloudflare Workers at `linkstarapp.com/*`. |
-| `apps/dashboard`    | `@linkstar/dashboard` | The SaaS dashboard + its own landing page. React 19 + Vite. Not deployed yet. |
+| `apps/dashboard`    | `@linkstar/dashboard` | The SaaS dashboard + its own landing page. React 19 + Vite, deployed to Cloudflare Workers at `app.linkstarapp.com` (API not deployed yet). |
 | `services/api`      | `@linkstar/api`       | The only backend. Express: scan redirect, Mercado Pago orders/webhooks, login tracking. |
 | `packages/database` | `@linkstar/database`  | Postgres schema as ordered migrations, RLS policies, SQL tests. Source of truth for the data model. |
 
@@ -73,7 +76,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0025 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0026 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -123,7 +126,14 @@ to `.env`, don't rename them away.
 - `apps/dashboard/.env` — see `apps/dashboard/.env.example`. `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
   `VITE_API_URL`, `VITE_REDIRECT_DOMAIN` (optional, same default as the API's `REDIRECT_DOMAIN` — the two
   apps deploy separately, so each defines it on its own; they must agree or the QR the dashboard generates
-  points somewhere the API doesn't serve).
+  points somewhere the API doesn't serve), and `VITE_BUSINESS_CHECKOUT` (optional; `off` turns the Business
+  plan's checkout button into "Contactar con ventas" — `effectiveCheckoutMode()` in `lib/config.js`; price
+  and highlight still show).
+- `apps/dashboard/.env.production` — what `npm run build:dashboard` bakes into the deployed panel. Tracked
+  in git like ventas' (public values only: Supabase URL + anon/publishable key, `VITE_API_URL`,
+  `VITE_REDIRECT_DOMAIN`, `VITE_BUSINESS_CHECKOUT=off` until the API is deployed). It overrides **every**
+  key of the developer's `.env`; a variable added to `.env` but not here leaks its dev value into the
+  production bundle.
 - `apps/ventas/.env.production` — `VITE_API_URL`, still the `BACKEND_URL_PENDIENTE` placeholder until the
   API is deployed. Tracked in git on purpose (`.gitignore` whitelists `.env.production`); it holds no
   secrets.
@@ -204,12 +214,12 @@ scan never dead-ends was sending people to somebody else's domain · `0022` prod
 doesn't need Google (see "Alerts" below) · `0024` Google Business Profile: OAuth connection, encrypted
 refresh token, `google_locations` / `google_reviews`, and the RPCs `sync-reviews` writes through (see
 "Google Business Profile" below) · `0025` reviews only for fichas linked to a live sucursal, plus the
-prune that enforces it (same section).
+prune that enforces it (same section) · `0026` replying to reviews: `google_review_reply_target()` (who may
+reply to what) and `google_record_reply()`.
 
-**`0025` is written but NOT applied in production** — until `npm run db:push`, the deployed
-`sync-reviews` code calls `google_prune_unlinked_reviews()`, which doesn't exist there yet, and every
-non-dry run fails at that step. It went through the push simulation described below and
-`rls_isolation.sql` (75 green) locally on 5 Oct 2026.
+**`0025` is applied in production (5 Oct 2026); `0026` is written but NOT applied** — until
+`npm run db:push`, `POST /api/google/reviews/:id/reply` fails at its first RPC. `0026` went through the
+push simulation described below and `rls_isolation.sql` (84 green) locally on 6 Oct 2026.
 
 **Everything up to `0024` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
 16 Aug, `0021`–`0024` on 5 Oct 2026; all verified with `npm run db:status`). The 5 Oct push went in two
@@ -487,7 +497,9 @@ Routes, one router per file, all mounted at the app root:
   `profiles.last_login_at`.
 - `routes/health.js` — `GET /api/health`.
 - `routes/google.js` — `POST /api/google/oauth/start`, `GET /auth/google/callback` (note: no `/api`
-  prefix — it is the URI registered in the Google console), `POST /api/google/disconnect`. See below.
+  prefix — it is the URI registered in the Google console), `POST /api/google/disconnect`,
+  `POST /api/google/sync` ("Actualizar ahora": 202 + background sync, one at a time per org in this
+  process, 5 / 15 min) and `POST /api/google/reviews/:id/reply` (30 / 15 min). See below.
 
 ### Google Business Profile — OAuth connection and `sync-reviews` (`0024`)
 
@@ -530,7 +542,20 @@ the failure this prevents).
   `google_locations`; auto-link ficha → sucursal **only by `place_id`**; My Business v4 reviews, newest
   `updateTime` first, paging until it crosses the newest stored one; then
   `record_google_review_snapshot()` and `compute_review_deltas(today)`.
-  `link_google_location()` is the manual mapping, callable by owner/admin, with no UI yet.
+  `link_google_location()` is the manual mapping, callable by owner/admin, from the "Fichas de Google"
+  card in Configuración → Gestión local (`pages/Settings/GoogleFichas.jsx`), which also hosts
+  connect/disconnect and "Actualizar ahora". Every link change asks the API for a sync so the newly linked
+  ficha's reviews show up without waiting for the daily job; if the API doesn't answer, the link is saved
+  anyway and read on the next run.
+- **Replying publishes on the customer's public Google profile, so authorization lives in SQL** (`0026`):
+  `google_review_reply_target(user, review)` allows owner/admin for the whole org, a manager only for
+  branches in their `membership_locations`, never a viewer, and never a review of an unlinked ficha. The
+  route PUTs to Google first and records with `google_record_reply()` only after Google accepts, storing
+  Google's `updateTime` — the panel shows what is published, not the draft. If the record step fails the
+  reply is still live and the next sync brings it back. `lib/googleBusiness.js`' `googleRequest()` serves
+  both the GETs and this PUT; inside it the error-response body is `errorBody` on purpose — naming it
+  `body` shadows the request-body parameter in the same block and made every request throw
+  "Cannot access 'body' before initialization" (caught in testing on 6 Oct 2026, never shipped).
 - **Reviews are read only for fichas linked to a live sucursal** (`0025`). The Google user who connects can
   manage fichas that aren't this organization's — the first real test hit exactly that, a client's ficha
   in the same Google account — and storing third parties' reviews (author name, text) because they
@@ -632,10 +657,18 @@ split below before wiring anything — the shell is finished, the data mostly is
   ~20 glass cards every frame (rule 2 below). `SubscriptionBanner` is hidden on these sections
   (`GOOGLE_GATED_SECTIONS` in `lib/routes.js`, read by `AppShell`) — behind the modal it is unreachable and
   only steals height. That list stays fixed even though `google_connections` now records the connection:
-  **a connected account still gets the gate**, because the mock is still invented and the real screen
-  still doesn't exist. Connected, the modal swaps its description for "ya leemos tu ficha, la pantalla es
-  lo pendiente" and shows status + "Desconectar" instead of the button; it is never dismissed. This was asked for as the MyTapStar pattern, so match
-  that screen if it's ever redesigned.
+  **a connected account still gets the gate on the six sections whose real screen doesn't exist yet**,
+  because their mock is still invented. Connected, the modal swaps its description for "ya leemos tu
+  ficha, la pantalla es lo pendiente" and shows status + "Desconectar" instead of the button; it is never
+  dismissed. This was asked for as the MyTapStar pattern, so match that screen if it's ever redesigned.
+  **`reviews` is the first section out of the gate (6 Oct 2026):** `pages/Reviews/Reviews.jsx` renders
+  `ReviewsScreen` (real, over `google_reviews` / `google_locations`) when the connection is `active` or
+  `needs_reauth`, and the gate + `ReviewsMockup` otherwise — the mock stays as the invitation for accounts
+  that haven't connected. Its filters are by **stars** (4–5 / 3 / 1–2 / unanswered), not sentiment, which
+  is phase 5; the header counts mix two sources on purpose (Google's per-ficha total and average vs. the
+  answered/unanswered split of the rows actually read). `reviews` stays in `GOOGLE_GATED_SECTIONS`, so
+  the subscription banner is also hidden there when connected — accepted to keep `AppShell` from querying
+  Google on every section. Each of the other six follows the same recipe when its data exists.
 - **The mock JSX is a deliverable, not discarded history.** The tag `maquetas-pre-fase-2` points at the last
   commit where those ten screens were still drawing their grids, tables and charts; seven of them now live
   in the tree as `*Mockup.jsx` and the three "próximamente" ones (`reports-nps`, `monthly-reports`,
@@ -903,11 +936,15 @@ only real contact channel in the repo. Replace it when there's a sales email or 
 - `services/api` deploys to Railway or Render (plain Node host, not a Worker), root directory
   `services/api`, planned at `api.linkstarapp.com`. When that goes live, update `apps/ventas/.env.production`'s
   `VITE_API_URL` and the API's `FRONTEND_URL` together.
-- `apps/dashboard` now has `wrangler.jsonc` (route `app.linkstarapp.com/*`, SPA fallback) but is **not
-  deployed**: the subdomain doesn't exist yet and `apps/dashboard/DEPLOY.md` holds the two decisions to
-  make first. It was written ahead of phase 8 because step **4.2** drags it forward — Google won't approve
-  the Business Profile APIs without a consent screen verified against an owned domain and a privacy policy
-  reachable **without signing in**, so the panel needs a stable URL before any OAuth code can be written.
+- `apps/dashboard` deploys to `app.linkstarapp.com` with `wrangler.jsonc` (`custom_domain: true`, so the
+  deploy itself creates the DNS record and certificate; SPA fallback) and `.env.production`.
+  `apps/dashboard/DEPLOY.md` has the steps and the two decisions, both settled on 6 Oct 2026: publish
+  **before** the API, with Business behind "Contactar con ventas" (`VITE_BUSINESS_CHECKOUT=off`) and every
+  API-backed action showing "el servicio no está disponible" instead of crashing (`apiFetch` in
+  `lib/googleApi.js`). It goes ahead of phase 8 because publishing the Google OAuth app needs it: a home
+  page and a privacy policy reachable **without signing in**, on a verified own domain — the console steps
+  are in `apps/dashboard/GOOGLE_VERIFICATION.md`. The landing's footer links the policy because Google
+  checks the home page for it.
   That is why `PUBLIC_ROUTES.privacy` (`/privacidad`, `pages/Legal/Privacy.jsx`) sits outside every guard;
   if it ever ends up behind `RequireAuth`, the Google review fails. It is a separate document from the
   sales site's policy on purpose — different processing (scans and Business Profile data vs. orders and

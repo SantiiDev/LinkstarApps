@@ -28,18 +28,27 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/* GET con reintento en 429 y 5xx. La cuota por defecto de estas APIs es por
+/* Pedido con reintento en 429 y 5xx. La cuota por defecto de estas APIs es por
  * minuto y por proyecto, compartida entre TODOS los clientes: un 429 no es un
  * error de este cliente sino del job entero yendo demasiado rápido, y esperar
- * es la respuesta correcta. */
-async function googleGet(accessToken, url) {
+ * es la respuesta correcta.
+ *
+ * Un PUT también se reintenta: publicar una respuesta es idempotente (la
+ * reseña tiene una sola respuesta, y volver a mandarla la pisa con el mismo
+ * texto). */
+async function googleRequest(accessToken, url, { method = 'GET', body } = {}) {
   for (let attempt = 1; ; attempt++) {
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(20_000),
     });
 
-    if (response.ok) return response.json();
+    if (response.ok) return response.status === 204 ? {} : response.json().catch(() => ({}));
 
     const retryable = response.status === 429 || response.status >= 500;
     if (retryable && attempt < MAX_ATTEMPTS) {
@@ -54,15 +63,19 @@ async function googleGet(accessToken, url) {
     // cuenta no tiene acceso. El `reason` de ErrorInfo y el mensaje son los que
     // dicen cuál. Este error va al log del job, nunca al panel: las RPC de sync
     // guardan un texto propio en google_connections.last_error.
-    const body = await response.json().catch(() => ({}));
-    const reason = body?.error?.details?.find((d) => d?.reason)?.reason || null;
-    const message = String(body?.error?.message || '').slice(0, 300);
+    // `errorBody` y no `body`: un `const body` acá, en el mismo bloque que el
+    // fetch de arriba, tapa al parámetro `body` y el fetch lo lee antes de que
+    // exista ("Cannot access 'body' before initialization") — rompía TODOS los
+    // pedidos, no sólo los que fallaban.
+    const errorBody = await response.json().catch(() => ({}));
+    const reason = errorBody?.error?.details?.find((d) => d?.reason)?.reason || null;
+    const message = String(errorBody?.error?.message || '').slice(0, 300);
     const err = new Error(
       `Google API ${response.status} en ${new URL(url).pathname}: ` +
-      [body?.error?.status || 'error', reason, message].filter(Boolean).join(' · ')
+      [errorBody?.error?.status || 'error', reason, message].filter(Boolean).join(' · ')
     );
     err.httpStatus = response.status;
-    err.googleStatus = body?.error?.status || null;
+    err.googleStatus = errorBody?.error?.status || null;
     err.googleReason = reason;
     throw err;
   }
@@ -71,7 +84,7 @@ async function googleGet(accessToken, url) {
 async function* paginate(accessToken, buildUrl, itemsKey) {
   let pageToken = null;
   do {
-    const data = await googleGet(accessToken, buildUrl(pageToken));
+    const data = await googleRequest(accessToken, buildUrl(pageToken));
     for (const item of data[itemsKey] ?? []) yield item;
     pageToken = data.nextPageToken || null;
   } while (pageToken);
@@ -124,10 +137,19 @@ export async function listLocations(accessToken, accountName) {
 export async function listReviewsPage(accessToken, accountName, locationName, pageToken = null) {
   const params = new URLSearchParams({ pageSize: '50', orderBy: 'updateTime desc' });
   if (pageToken) params.set('pageToken', pageToken);
-  return googleGet(accessToken, `${V4_BASE}/${accountName}/${locationName}/reviews?${params}`);
+  return googleRequest(accessToken, `${V4_BASE}/${accountName}/${locationName}/reviews?${params}`);
 }
 
 const STAR_RATING = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
+
+/* Publica (o reemplaza) la respuesta del dueño a una reseña. Google devuelve el
+ * ReviewReply guardado, con su `updateTime`: eso es lo que se registra, no la
+ * hora de nuestro servidor. Límite de Google: 4096 caracteres. */
+export async function putReviewReply(accessToken, accountName, locationName, reviewId, comment) {
+  const url = `${V4_BASE}/${accountName}/${locationName}/reviews/${encodeURIComponent(reviewId)}/reply`;
+  const reply = await googleRequest(accessToken, url, { method: 'PUT', body: { comment } });
+  return { comment: reply.comment ?? comment, updateTime: reply.updateTime ?? null };
+}
 
 export function starRatingToNumber(value) {
   return STAR_RATING[value] ?? null;

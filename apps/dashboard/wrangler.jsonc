@@ -1,9 +1,16 @@
 // Config del Worker que sirve el panel (apps/dashboard).
 //
-// Escrita, NO desplegada. Falta crear el subdominio en Cloudflare y decidir dos
-// cosas que están en el README de este directorio. Desplegar con
-// `npx wrangler deploy` parado en apps/dashboard (igual que ventas: el binario
-// está hoisteado en la raíz y no hay wrangler.jsonc ahí).
+// Desplegar con `npm run build:dashboard` y después `npx wrangler deploy` parado
+// en apps/dashboard (igual que ventas: el binario está hoisteado en la raíz y no
+// hay wrangler.jsonc ahí). Los pasos y lo que hay que revisar después están en
+// DEPLOY.md.
+//
+// ── custom_domain ─────────────────────────────────────────────────────────
+// Con `custom_domain: true` el deploy crea el registro DNS de
+// app.linkstarapp.com y su certificado. Con una ruta común (`pattern` +
+// `zone_name`) el Worker sólo atiende tráfico de un hostname que YA resuelve, y
+// el subdominio no existía: había que crearlo a mano antes, con un registro
+// proxied que apuntara a cualquier lado. Lleva el hostname sin `/*`.
 //
 // ── Por qué existe antes de la fase 8 ──────────────────────────────────────
 // El despliegue del panel es fase 8, pero el paso 4.2 del roadmap lo arrastra
@@ -25,10 +32,9 @@
   "compatibility_date": "2026-09-20",
   "account_id": "5991443b4284ab352cac4849e38ddf50",
   "workers_dev": true,
-  "route": {
-    "pattern": "app.linkstarapp.com/*",
-    "zone_name": "linkstarapp.com"
-  },
+  "routes": [
+    { "pattern": "app.linkstarapp.com", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"

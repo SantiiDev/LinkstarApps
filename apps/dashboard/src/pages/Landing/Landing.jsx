@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
-import { SALES_CONTACT_URL } from '../../lib/config';
+import { SALES_CONTACT_URL, effectiveCheckoutMode } from '../../lib/config';
+import { PUBLIC_ROUTES } from '../../lib/routes';
 import { formatArs } from '../../lib/format';
 import './Landing.css';
 
@@ -728,7 +730,10 @@ function PriceCard({ plan, onEnterDashboard }) {
         ))}
       </div>
 
-      {plan.checkout_mode === 'contact' ? (
+      {/* El botón usa el modo EFECTIVO (BUSINESS_CHECKOUT_ENABLED, lib/config.js);
+          el precio y el destacado de arriba, el real: el plan sigue costando lo
+          mismo aunque por ahora se contrate hablando con ventas. */}
+      {effectiveCheckoutMode(plan) === 'contact' ? (
         <a
           className="landing-price-card__btn landing-price-card__btn--outline"
           href={SALES_CONTACT_URL}
@@ -886,6 +891,15 @@ function Footer() {
           linkstar<span className="landing-footer__brand-dot">.</span>
         </div>
         <p className="landing-footer__copy">© {new Date().getFullYear()} linkstar — Panel de gestión de reseñas con NFC inteligente</p>
+        {/* La política tiene que estar enlazada desde la página de inicio: es
+            uno de los requisitos de Google para verificar la app OAuth, que
+            revisa justamente esta página. Los términos son los del sitio de
+            ventas, que cubren el servicio entero. */}
+        <nav className="landing-footer__links" aria-label="Legales">
+          <Link to={PUBLIC_ROUTES.privacy}>Política de privacidad</Link>
+          <a href="https://linkstarapp.com/terminos">Términos y condiciones</a>
+          <a href="mailto:linkstar.app1@gmail.com">Contacto</a>
+        </nav>
       </footer>
     </div>
   );

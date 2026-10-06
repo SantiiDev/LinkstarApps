@@ -699,6 +699,98 @@ select pg_temp.check('Sucursal borrada: la ficha se suelta y sus reseñas se van
   and (select count(*) from public.google_reviews
        where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0);
 
+-- =========================================================================
+-- 10. Quién puede responder qué reseña (0026)
+-- =========================================================================
+-- Responder publica en Google en nombre del negocio, así que la regla tiene que
+-- ser exacta: owner/admin todo lo de su organización, un manager sólo sus
+-- sucursales, un viewer nada, y nadie una reseña de una ficha sin vincular.
+-- Las RPC son de service_role: se llaman como postgres con el usuario de
+-- parámetro, que es como las usa el API.
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('44444444-4444-4444-4444-444444444444', 'dani@bar-uno.test', '{"full_name":"Dani"}')
+on conflict (id) do nothing;
+insert into public.memberships (organization_id, user_id, role) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', '44444444-4444-4444-4444-444444444444', 'viewer');
+
+-- Sucursal nueva de Bar Uno (Centro quedó borrada en la sección 9), asignada a
+-- Caro, con su ficha y una reseña. Pichincha vuelve a tener su ficha, con otra
+-- reseña: Caro no tiene esa sucursal.
+insert into public.locations (id, organization_id, name) values
+  ('dddddddd-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001', 'Echesortu');
+insert into public.membership_locations (membership_id, location_id) values
+  ('cccccccc-0000-0000-0000-000000000003', 'dddddddd-0000-0000-0000-000000000004');
+
+insert into public.google_locations (id, organization_id, google_account, google_location, title, location_id) values
+  ('9a000000-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001',
+   'accounts/1', 'locations/3', 'Bar Uno Echesortu', 'dddddddd-0000-0000-0000-000000000004');
+update public.google_locations set location_id = 'dddddddd-0000-0000-0000-000000000002'
+ where id = '9a000000-0000-0000-0000-000000000002';
+
+insert into public.google_reviews
+  (id, organization_id, google_location_id, review_id, star_rating, created_time, updated_time) values
+  ('9b000000-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001',
+   '9a000000-0000-0000-0000-000000000003', 'r3', 5, now(), now()),
+  ('9b000000-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001',
+   '9a000000-0000-0000-0000-000000000002', 'r4', 2, now(), now()),
+  ('9b000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+   '9a000000-0000-0000-0000-000000000001', 'r1', 4, now(), now());  -- ficha sin vincular
+
+create or replace function pg_temp.reply_denied(p_user uuid, p_review uuid, p_code text)
+returns boolean language plpgsql as $$
+begin
+  perform * from public.google_review_reply_target(p_user, p_review);
+  return false;
+exception
+  when raise_exception then
+    return sqlerrm like '%' || p_code || '%';
+end;
+$$;
+
+select pg_temp.check('Ana (owner) puede responder en cualquier sucursal de Bar Uno',
+  (select google_location from public.google_review_reply_target(
+     '11111111-1111-1111-1111-111111111111', '9b000000-0000-0000-0000-000000000004')) = 'locations/2');
+select pg_temp.check('Caro (manager) puede responder en su sucursal',
+  (select review_id from public.google_review_reply_target(
+     '33333333-3333-3333-3333-333333333333', '9b000000-0000-0000-0000-000000000003')) = 'r3');
+select pg_temp.check('Caro (manager) NO puede responder en una sucursal que no tiene',
+  pg_temp.reply_denied('33333333-3333-3333-3333-333333333333', '9b000000-0000-0000-0000-000000000004', 'rol_insuficiente'));
+select pg_temp.check('Dani (viewer) no puede responder nada',
+  pg_temp.reply_denied('44444444-4444-4444-4444-444444444444', '9b000000-0000-0000-0000-000000000003', 'rol_insuficiente'));
+select pg_temp.check('Beto (otra organización) no puede responder reseñas de Bar Uno',
+  pg_temp.reply_denied('22222222-2222-2222-2222-222222222222', '9b000000-0000-0000-0000-000000000003', 'rol_insuficiente'));
+select pg_temp.check('Nadie responde una reseña de una ficha sin vincular',
+  pg_temp.reply_denied('11111111-1111-1111-1111-111111111111', '9b000000-0000-0000-0000-000000000001', 'resena_inexistente'));
+
+select public.google_record_reply('9b000000-0000-0000-0000-000000000003',
+  '33333333-3333-3333-3333-333333333333', '¡Gracias por venir!', now());
+select pg_temp.check('google_record_reply guarda la respuesta y deja registro',
+  (select reply_comment from public.google_reviews where id = '9b000000-0000-0000-0000-000000000003') = '¡Gracias por venir!'
+  and exists (select 1 from public.audit_log
+              where action = 'google.review_replied'
+                and entity_id = '9b000000-0000-0000-0000-000000000003'));
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+do $$
+begin
+  perform * from public.google_review_reply_target(
+    '11111111-1111-1111-1111-111111111111', '9b000000-0000-0000-0000-000000000003');
+  raise exception 'FALLA: authenticated pudo ejecutar google_review_reply_target';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   authenticated no puede ejecutar google_review_reply_target';
+end $$;
+do $$
+begin
+  perform public.google_record_reply('9b000000-0000-0000-0000-000000000003',
+    '11111111-1111-1111-1111-111111111111', 'x', now());
+  raise exception 'FALLA: authenticated pudo ejecutar google_record_reply';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   authenticated no puede ejecutar google_record_reply';
+end $$;
+reset role;
+
 do $$ begin
   raise notice '';
   raise notice '=== Todos los tests de aislamiento pasaron ===';

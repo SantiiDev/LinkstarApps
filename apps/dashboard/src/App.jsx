@@ -181,6 +181,12 @@ function DevicesRoute() {
   );
 }
 
+/* Reseñas manda a Gestión local cuando no hay ninguna ficha vinculada. */
+function ReviewsRoute() {
+  const navigate = useNavigate();
+  return <ReviewsPage onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
 /* ─── App root ─────────────────────────────────────────────── */
 export default function App() {
   const { loading } = useAuth();
@@ -279,7 +285,7 @@ export default function App() {
 
         <Route path={SECTION_PATHS.company} element={<CompanyRoute />} />
         <Route path={SECTION_PATHS.devices} element={<DevicesRoute />} />
-        <Route path={SECTION_PATHS.reviews} element={<ReviewsPage />} />
+        <Route path={SECTION_PATHS.reviews} element={<ReviewsRoute />} />
 
         <Route path={SECTION_PATHS['gb-metrics']} element={<GoogleMetrics />} />
         <Route path={SECTION_PATHS['gb-profile']} element={<GoogleProfile />} />

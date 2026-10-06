@@ -358,3 +358,88 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Pantalla real (ReviewsScreen) ─────────────────────────────────────────
+   Lo mínimo que la maqueta no tenía: el texto completo al expandir, el enlace a
+   la ficha, los avisos y "Cargar más". Sin transiciones de blur (ver la nota de
+   rendimiento del glass en CLAUDE.md). */
+
+/* El fragmento es un botón para que se pueda expandir con teclado. Se le saca
+   todo lo de botón y conserva el estilo de .review-row__snippet. */
+.review-row__snippet--button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.review-row__snippet--button em {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.review-row__full {
+  margin: 0 0 0.85rem;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+}
+
+.review-row__google-link {
+  display: inline-block;
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-orange);
+}
+
+.reviews-empty__title {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.reviews-empty p {
+  max-width: 34rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.reviews-empty button {
+  margin-top: 1rem;
+}
+
+.reviews-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-card);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  font-size: 0.85rem;
+  color: var(--color-navy);
+}
+
+.reviews-notice p {
+  margin: 0;
+}
+
+.reviews-error {
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+  color: #b91c1c;
+}
+
+.reviews-more {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+}

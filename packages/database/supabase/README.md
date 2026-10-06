@@ -179,6 +179,10 @@ Lo de `0024` que es fácil de romper:
   apenas deja de estar vinculada. Una sucursal con borrado lógico cuenta como no vinculada.
 - **Desconectar borra fichas y reseñas, no los snapshots.** Los snapshots son la serie de la que salen
   los deltas.
+- **Quién responde qué reseña lo decide la base, no el API** (`0026`). Responder publica en la ficha de
+  Google del cliente, a la vista de todos. `google_review_reply_target()` deja a owner/admin en toda la
+  organización, a un manager sólo en sus sucursales (`membership_locations`), a un viewer en nada, y a
+  nadie sobre una ficha sin vincular. Los tests de la sección 10 de `rls_isolation.sql` cubren cada caso.
 
 Las tres reglas del webhook de Mercado Pago **ya están implementadas** en `routes/webhooks.js` — quedan
 acá escritas porque son fáciles de romper en un refactor:

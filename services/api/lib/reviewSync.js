@@ -149,8 +149,9 @@ export async function syncOrganization(
   const empty = { accounts: accounts.length, locations: locationRows.length, linked: 0, reviews: 0, snapshots: 0, failures: 0 };
 
   if (dryRun) {
-    await logDryRunPlan(organizationId, locationRows, log);
-    return empty;
+    // El conteo del resumen sale de la misma predicción que se imprime arriba;
+    // si no, el simulacro decía "se leerían sus reseñas" y "0 vinculada(s)" a la vez.
+    return { ...empty, linked: await logDryRunPlan(organizationId, locationRows, log) };
   }
   if (!locationRows.length) return empty;
 
@@ -244,11 +245,14 @@ async function logDryRunPlan(organizationId, locationRows, log) {
   const byPlaceId = new Map((sucursales ?? []).filter((l) => l.google_place_id).map((l) => [l.google_place_id, l]));
   const linkedTo = new Map((existing ?? []).filter((g) => live.has(g.location_id)).map((g) => [g.google_location, live.get(g.location_id)]));
 
+  let wouldRead = 0;
   for (const row of locationRows) {
     const sucursal = linkedTo.get(row.google_location) ?? (row.place_id ? byPlaceId.get(row.place_id) : null);
+    if (sucursal) wouldRead++;
     log(
       `    · ${row.title ?? row.google_location} (${row.google_location}) place_id=${row.place_id ?? '—'} → ` +
       (sucursal ? `sucursal "${sucursal.name}": se leerían sus reseñas` : 'sin sucursal: no se leerían sus reseñas')
     );
   }
+  return wouldRead;
 }

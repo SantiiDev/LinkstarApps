@@ -4,6 +4,7 @@ import PageHeader from '../../components/PageHeader/PageHeader';
 import Select from '../../components/Select/Select';
 import EmployeesPage from '../Employees/Employees';
 import LocationsPage from '../Locations/Locations';
+import GoogleFichas from './GoogleFichas';
 import TeamMembers from './TeamMembers';
 import ActivityLog from './ActivityLog';
 import { supabase } from '../../lib/supabaseClient';
@@ -87,26 +88,19 @@ function LocalTab() {
         <CardHead
           icon="mapPin"
           iconVariant="navy"
-          title="Cuentas de Google conectadas"
-          badge={<Icon name="info" width={14} height={14} className="settings-info-icon" />}
+          title="Fichas de Google"
           subtitle={
             <p className="settings-card__subtitle settings-card__subtitle--tight">
-              Todavía no hay ninguna cuenta conectada.
+              La cuenta de Google que administra tus fichas, y a qué sucursal corresponde cada una.
             </p>
           }
         />
 
-        {/* Esta tarjeta mostraba una cuenta conectada inventada —con el nombre y
-            el correo de una persona real, en un dominio que ni siquiera es
-            nuestro— más un contador de locales activos que no salía de ningún
-            lado. Es la maqueta que la fase 2 no alcanzó a barrer, porque estaba
-            embebida acá y no en una pantalla propia. Sin botón: conectar la
-            ficha no existe hasta la fase 4, y un botón que no resuelve nada es
-            peor que ninguno. */}
-        <p className="settings-card__hint">
-          Cuando conectes la cuenta de Google que administra tu ficha, el panel va a poder traer
-          las reseñas y las métricas de cada local. Todavía estamos construyendo esa conexión.
-        </p>
+        {/* Esta tarjeta mostró primero una cuenta conectada inventada (con el
+            nombre y el correo de una persona real) y después un texto diciendo
+            que la conexión se estaba construyendo. Desde la fase 4 es real:
+            conectar, y vincular cada ficha con su sucursal. Ver GoogleFichas. */}
+        <GoogleFichas />
       </div>
 
       <div className="settings-card">

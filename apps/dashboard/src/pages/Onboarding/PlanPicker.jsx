@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 import { useOrg } from '../../context/OrgContext';
-import { SALES_CONTACT_URL } from '../../lib/config';
+import { SALES_CONTACT_URL, effectiveCheckoutMode } from '../../lib/config';
 import { formatArs } from '../../lib/format';
 import { ONBOARDING_ROUTES, SECTION_PATHS, DEFAULT_SECTION } from '../../lib/routes';
 import { takeIntendedPlan } from '../../lib/planIntent';
@@ -68,7 +68,7 @@ export default function PlanPicker() {
     if (!code) return;
 
     const intended = plans.find((p) => p.code === code);
-    if (intended?.checkout_mode === 'subscription') {
+    if (effectiveCheckoutMode(intended) === 'subscription') {
       navigate(`${ONBOARDING_ROUTES.payment}?plan=${encodeURIComponent(code)}`, { replace: true });
     }
   }, [loading, plans, canManageBilling, navigate]);
@@ -194,7 +194,9 @@ export default function PlanPicker() {
                   </button>
                 )}
 
-                {plan.checkout_mode === 'subscription' && (
+                {/* Modo efectivo: con BUSINESS_CHECKOUT_ENABLED apagado (panel publicado
+                    antes que el API), Business se ofrece como Enterprise. */}
+                {effectiveCheckoutMode(plan) === 'subscription' && (
                   <button
                     type="button"
                     className="onb-plan__btn onb-plan__btn--solid"
@@ -205,7 +207,7 @@ export default function PlanPicker() {
                   </button>
                 )}
 
-                {plan.checkout_mode === 'contact' && (
+                {effectiveCheckoutMode(plan) === 'contact' && (
                   <a
                     className="onb-plan__btn onb-plan__btn--outline"
                     href={SALES_CONTACT_URL}

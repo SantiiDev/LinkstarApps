@@ -9,12 +9,14 @@ import {
   buildAuthUrl,
   createPkcePair,
   exchangeCode,
+  refreshAccessToken,
   revokeToken,
   isSecureCallback,
   GBP_SCOPE,
 } from '../lib/googleOAuth.js';
 import { encryptToken, decryptToken } from '../lib/tokenCrypto.js';
 import { syncOrganization } from '../lib/reviewSync.js';
+import { putReviewReply } from '../lib/googleBusiness.js';
 
 const router = Router();
 
@@ -25,6 +27,8 @@ const router = Router();
  *                                  guarda el refresh token cifrado, vuelve al
  *                                  panel con ?google=<resultado>
  *   POST /api/google/disconnect    (con sesión) → revoca y borra
+ *   POST /api/google/sync          (con sesión) → vuelve a leer la cuenta (202)
+ *   POST /api/google/reviews/:id/reply (con sesión) → responde una reseña
  *
  * ── Por qué el inicio es un POST que devuelve la URL ─────────────────────────
  * El panel autentica con un JWT en `Authorization: Bearer`, que una navegación
@@ -87,10 +91,15 @@ const RPC_ERRORS = {
   sin_organizacion: [409, 'Primero creá tu organización'],
   rol_insuficiente: [403, 'Sólo un propietario o administrador puede conectar Google'],
   sin_acceso: [402, 'Tu plan no está activo'],
+  resena_inexistente: [404, 'No encontramos esa reseña. Puede que su ficha ya no esté vinculada'],
 };
 
-function rpcError(error) {
-  const known = Object.entries(RPC_ERRORS).find(([code]) => error?.message?.includes(code));
+// `overrides` cambia el texto de un código para una ruta puntual: el mismo
+// 'rol_insuficiente' significa "no podés conectar Google" en una y "no podés
+// responder esta reseña" en otra.
+function rpcError(error, overrides = {}) {
+  const map = { ...RPC_ERRORS, ...overrides };
+  const known = Object.entries(map).find(([code]) => error?.message?.includes(code));
   if (!known) return error;
   const err = new Error(known[1][1]);
   err.status = known[1][0];
@@ -233,31 +242,68 @@ router.get('/auth/google/callback', callbackLimiter, async (req, res) => {
     // Primera lectura en segundo plano, con la respuesta ya enviada: así el
     // panel muestra las fichas y reseñas en un minuto y no mañana. Si falla no
     // pasa nada grave — el job diario lo vuelve a intentar.
-    runFirstSync(pending.organization_id, ciphertext, keyId);
+    runSync({ organization_id: pending.organization_id, refresh_token_enc: ciphertext, key_id: keyId });
   } catch (err) {
     console.error('Error en el callback de Google:', err);
     if (!res.headersSent) backToDashboard(res, 'error');
   }
 });
 
-async function runFirstSync(organizationId, refreshTokenEnc, keyId) {
-  try {
+/* Organizaciones con un sync corriendo en este proceso. Sin esto, tocar
+ * "Actualizar ahora" dos veces —o vincular dos fichas seguidas— lanza dos
+ * lecturas en paralelo de la misma cuenta: no rompen nada (todo es upsert), pero
+ * gastan el doble de cuota de Google para el mismo resultado. Es en memoria a
+ * propósito: el job diario corre en otro proceso y no compite con esto. */
+const syncing = new Set();
+
+/* Lectura en segundo plano, con la respuesta HTTP ya enviada. La usan el
+ * callback (primera lectura al conectar) y POST /api/google/sync. Si falla no
+ * pasa nada grave: queda anotado en google_connections y el job diario lo
+ * vuelve a intentar. Devuelve false si ya había una corriendo. */
+function runSync(target) {
+  const organizationId = target.organization_id;
+  if (syncing.has(organizationId)) return false;
+  syncing.add(organizationId);
+
+  (async () => {
     const log = (line) => console.log(`[google ${organizationId}] ${line.trim()}`);
-    const summary = await syncOrganization(
-      { organization_id: organizationId, refresh_token_enc: refreshTokenEnc, key_id: keyId },
-      { log }
-    );
-    await supabase.rpc('google_record_sync_result', { p_org: organizationId, p_ok: true });
-    await supabase.rpc('compute_review_deltas', {});
-    log(`primera sincronización: ${summary.locations} ficha(s), ${summary.linked} vinculada(s), ${summary.reviews} reseña(s)`);
-  } catch (err) {
-    console.error(`Primera sincronización de Google falló para ${organizationId}:`, err.message);
-    await supabase.rpc('google_record_sync_result', {
-      p_org: organizationId,
-      p_ok: false,
-      p_error: 'No pudimos leer tu ficha todavía. Lo volvemos a intentar automáticamente.',
-    });
-  }
+    try {
+      const summary = await syncOrganization(target, { log });
+      await supabase.rpc('google_record_sync_result', {
+        p_org: organizationId,
+        p_ok: summary.failures === 0,
+        p_error: summary.failures
+          ? `No pudimos leer ${summary.failures} de tus fichas. Suele pasar con fichas sin verificar.`
+          : null,
+      });
+      await supabase.rpc('compute_review_deltas', {});
+      log(`sincronización: ${summary.locations} ficha(s), ${summary.linked} vinculada(s), ${summary.reviews} reseña(s)`);
+    } catch (err) {
+      console.error(`Sincronización de Google falló para ${organizationId}:`, err.message);
+      const needsReauth = err.code === 'invalid_grant';
+      await supabase.rpc('google_record_sync_result', {
+        p_org: organizationId,
+        p_ok: false,
+        p_error: needsReauth
+          ? 'Google revocó el acceso. Volvé a conectar tu ficha.'
+          : 'No pudimos leer tu ficha todavía. Lo volvemos a intentar automáticamente.',
+        p_needs_reauth: needsReauth,
+      });
+    } finally {
+      syncing.delete(organizationId);
+    }
+  })();
+
+  return true;
+}
+
+/* La conexión activa de una organización, con su token cifrado. Sale de la
+ * misma RPC que usa el job diario: una conexión en needs_reauth o sin plan
+ * vigente no aparece, y eso es lo correcto — su token no sirve. */
+async function activeTarget(organizationId) {
+  const { data, error } = await supabase.rpc('google_sync_targets');
+  if (error) throw error;
+  return (data ?? []).find((t) => t.organization_id === organizationId) ?? null;
 }
 
 // ──────────────────────────────────────────────────────────
@@ -299,6 +345,132 @@ router.post('/api/google/disconnect', startLimiter, requireAuth(supabase), async
     }
     console.error('Error desconectando Google:', err);
     res.status(500).json({ error: 'No se pudo desconectar Google' });
+  }
+});
+
+// Los dos que siguen hablan con Google en nombre del cliente: el límite cuida
+// la cuota del proyecto, que es compartida entre todas las organizaciones.
+const syncLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const replyLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ──────────────────────────────────────────────────────────
+// POST /api/google/sync
+// "Actualizar ahora": vuelve a leer la cuenta de Google de la organización en
+// segundo plano y responde 202 de inmediato. Lo llama el panel al tocar el
+// botón y después de cada cambio de vínculo ficha ↔ sucursal, para que las
+// reseñas de una ficha recién vinculada aparezcan sin esperar al job diario.
+// ──────────────────────────────────────────────────────────
+router.post('/api/google/sync', syncLimiter, requireAuth(supabase), async (req, res) => {
+  try {
+    assertGoogleConfigured();
+
+    const { data: rows, error } = await supabase.rpc('google_connection_for_admin', {
+      p_user_id: req.user.id,
+    });
+    if (error) throw rpcError(error, { rol_insuficiente: [403, 'Sólo un propietario o administrador puede actualizar la conexión'] });
+
+    const organizationId = rows?.[0]?.organization_id;
+    const target = organizationId ? await activeTarget(organizationId) : null;
+    if (!target) {
+      const err = new Error('No hay una ficha de Google conectada, o hay que volver a conectarla');
+      err.status = 409;
+      throw err;
+    }
+
+    const started = runSync(target);
+    res.status(202).json({ started, alreadyRunning: !started });
+  } catch (err) {
+    if ((err.status && err.status < 500) || err.status === 503) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    console.error('Error lanzando la sincronización de Google:', err);
+    res.status(500).json({ error: 'No se pudo actualizar la conexión con Google' });
+  }
+});
+
+// ──────────────────────────────────────────────────────────
+// POST /api/google/reviews/:id/reply   { comment }
+// Publica (o reemplaza) la respuesta del dueño en Google y, recién cuando Google
+// la acepta, la registra en la base. Quién puede responder qué lo decide
+// google_review_reply_target() (0026): owner/admin, o un manager en sus
+// sucursales.
+// ──────────────────────────────────────────────────────────
+const MAX_REPLY_LENGTH = 4096; // límite de Google
+
+router.post('/api/google/reviews/:id/reply', replyLimiter, requireAuth(supabase), async (req, res) => {
+  try {
+    assertGoogleConfigured();
+
+    const comment = typeof req.body?.comment === 'string' ? req.body.comment.trim() : '';
+    if (!comment || comment.length > MAX_REPLY_LENGTH) {
+      const err = new Error(`La respuesta tiene que tener entre 1 y ${MAX_REPLY_LENGTH} caracteres`);
+      err.status = 400;
+      throw err;
+    }
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) {
+      const err = new Error('Reseña inválida');
+      err.status = 400;
+      throw err;
+    }
+
+    const { data: rows, error } = await supabase.rpc('google_review_reply_target', {
+      p_user: req.user.id,
+      p_review: req.params.id,
+    });
+    if (error) throw rpcError(error, { rol_insuficiente: [403, 'No tenés permiso para responder reseñas de esta sucursal'] });
+    const review = rows?.[0];
+
+    const target = await activeTarget(review.organization_id);
+    if (!target) {
+      const err = new Error('Hay que volver a conectar tu ficha de Google para poder responder');
+      err.status = 409;
+      throw err;
+    }
+
+    const refreshToken = decryptToken(target.refresh_token_enc, target.key_id, target.organization_id);
+    const { accessToken } = await refreshAccessToken(refreshToken);
+    const reply = await putReviewReply(
+      accessToken,
+      review.google_account,
+      review.google_location,
+      review.review_id,
+      comment
+    );
+
+    const { error: recordError } = await supabase.rpc('google_record_reply', {
+      p_review: req.params.id,
+      p_user: req.user.id,
+      p_comment: reply.comment,
+      p_updated: reply.updateTime,
+    });
+    // La respuesta ya está publicada en Google. Si no se pudo registrar, se
+    // avisa en el log pero no se le dice al usuario que falló: la próxima
+    // lectura de la ficha la trae de Google igual.
+    if (recordError) console.error('Respuesta publicada en Google pero no registrada:', recordError.message);
+
+    res.json({ comment: reply.comment, updatedTime: reply.updateTime });
+  } catch (err) {
+    if ((err.status && err.status < 500) || err.status === 503) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    // invalid_grant al pedir el access token: la conexión ya no sirve.
+    if (err.code === 'invalid_grant') {
+      return res.status(409).json({ error: 'Google revocó el acceso. Volvé a conectar tu ficha.' });
+    }
+    // El detalle de Google (o de la base) sólo al log (CWE-209).
+    console.error('Error respondiendo una reseña:', err);
+    res.status(502).json({ error: 'Google no aceptó la respuesta. Probá de nuevo en unos minutos.' });
   }
 });
 

@@ -14,6 +14,10 @@ import { API_URL } from './config';
  *     navegador que vuelve de Google la traiga. Sin `include` el navegador la
  *     descarta y la conexión falla SIEMPRE en el último paso, con "error_estado".
  *   - Pide al API que desconecte (revoca en Google y borra).
+ *
+ * Desde la fase 4.5 además lee las fichas y las reseñas (tablas con RLS, sin
+ * pasar por el API), vincula fichas con sucursales (RPC link_google_location) y,
+ * vía API, responde reseñas y pide "Actualizar ahora".
  */
 
 async function authHeaders() {
@@ -23,6 +27,22 @@ async function authHeaders() {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${session.access_token}`,
   };
+}
+
+/* fetch al API propio. Un fallo de red se traduce a un texto que se pueda
+ * mostrar: el panel publicado puede estar arriba mientras el API todavía no
+ * (el API se despliega después), y "TypeError: Failed to fetch" en pantalla no
+ * le dice nada a nadie. */
+async function apiFetch(path, options, fallbackMessage) {
+  let response;
+  try {
+    response = await fetch(`${API_URL}${path}`, options);
+  } catch {
+    throw new Error('El servicio no está disponible en este momento. Probá de nuevo más tarde.');
+  }
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || fallbackMessage);
+  return body;
 }
 
 export async function fetchGoogleConnection(organizationId) {
@@ -37,27 +57,126 @@ export async function fetchGoogleConnection(organizationId) {
 
 /* No devuelve: si sale bien, el navegador ya se fue a Google. */
 export async function startGoogleConnect() {
-  const response = await fetch(`${API_URL}/api/google/oauth/start`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: await authHeaders(),
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok || !body.url) {
-    throw new Error(body.error || 'No se pudo iniciar la conexión con Google');
-  }
+  const body = await apiFetch(
+    '/api/google/oauth/start',
+    { method: 'POST', credentials: 'include', headers: await authHeaders() },
+    'No se pudo iniciar la conexión con Google'
+  );
+  if (!body.url) throw new Error('No se pudo iniciar la conexión con Google');
   window.location.assign(body.url);
 }
 
 export async function disconnectGoogle() {
-  const response = await fetch(`${API_URL}/api/google/disconnect`, {
-    method: 'POST',
-    headers: await authHeaders(),
+  await apiFetch(
+    '/api/google/disconnect',
+    { method: 'POST', headers: await authHeaders() },
+    'No se pudo desconectar Google'
+  );
+}
+
+/* "Actualizar ahora": el API relee la cuenta en segundo plano (202). Lo que
+ * cambia se ve recargando la conexión: last_synced_at avanza al terminar. */
+export async function requestGoogleSync() {
+  return apiFetch(
+    '/api/google/sync',
+    { method: 'POST', headers: await authHeaders() },
+    'No se pudo actualizar la conexión con Google'
+  );
+}
+
+/* Publica (o reemplaza) la respuesta a una reseña. Devuelve lo que Google
+ * guardó, que es lo que hay que mostrar. */
+export async function replyToReview(reviewId, comment) {
+  return apiFetch(
+    `/api/google/reviews/${encodeURIComponent(reviewId)}/reply`,
+    { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ comment }) },
+    'No se pudo publicar la respuesta'
+  );
+}
+
+/* ─── Fichas ──────────────────────────────────────────────────────────────── */
+
+/* Las fichas de Google que ve la cuenta conectada (google_locations, RLS:
+ * owner/admin/viewer ven todas; un manager, sólo las vinculadas a sus
+ * sucursales). */
+export async function fetchGoogleLocations() {
+  const { data, error } = await supabase
+    .from('google_locations')
+    .select('id, title, address, place_id, maps_uri, location_id, total_reviews, average_rating, reviews_synced_at, last_seen_at, locations(name)')
+    .order('title', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/* Vincula una ficha con una sucursal, o la desvincula con `null`. Al
+ * desvincular, la base borra en el acto las reseñas guardadas de esa ficha
+ * (0025): la pantalla tiene que avisarlo antes. */
+export async function linkGoogleLocation(googleLocationId, locationId) {
+  const { error } = await supabase.rpc('link_google_location', {
+    p_google_location_id: googleLocationId,
+    p_location_id: locationId,
   });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || 'No se pudo desconectar Google');
-  }
+  if (error) throw new Error(error.message || 'No se pudo vincular la ficha');
+}
+
+/* ─── Reseñas ─────────────────────────────────────────────────────────────── */
+
+export const REVIEWS_PAGE_SIZE = 50;
+
+/* Los filtros son por ESTRELLAS, no por sentimiento: el sentimiento es la
+ * fase 5 y todavía no existe. Decir "positiva" de una reseña de 4★ es leer el
+ * puntaje que puso el cliente, no adivinar. */
+export const REVIEW_FILTERS = [
+  { id: 'all', label: 'Todas' },
+  { id: 'positive', label: 'Positivas (4–5★)' },
+  { id: 'neutral', label: 'Neutras (3★)' },
+  { id: 'negative', label: 'Negativas (1–2★)' },
+  { id: 'pending', label: 'Sin responder' },
+];
+
+/* Una página de reseñas, filtrada del lado de la base: con paginación, filtrar
+ * en el cliente sólo filtraría lo que ya se cargó. */
+export async function fetchReviews({ filter = 'all', locationId = null, search = '', from = 0 } = {}) {
+  // `!inner` sobre google_locations: el filtro por sucursal va sobre la tabla
+  // embebida, y sin inner PostgREST devolvería las reseñas con el embed en null
+  // en vez de excluirlas.
+  let query = supabase
+    .from('google_reviews')
+    .select(
+      'id, reviewer_name, is_anonymous, star_rating, comment, created_time, updated_time, reply_comment, reply_updated_time, ' +
+      'google_locations!inner(id, title, maps_uri, location_id, locations(name))'
+    )
+    .order('created_time', { ascending: false })
+    .range(from, from + REVIEWS_PAGE_SIZE - 1);
+
+  if (filter === 'positive') query = query.gte('star_rating', 4);
+  if (filter === 'neutral') query = query.eq('star_rating', 3);
+  if (filter === 'negative') query = query.lte('star_rating', 2);
+  if (filter === 'pending') query = query.is('reply_comment', null);
+  if (locationId) query = query.eq('google_locations.location_id', locationId);
+
+  const term = search.trim().replace(/[%,()]/g, ' ');
+  if (term) query = query.or(`reviewer_name.ilike.%${term}%,comment.ilike.%${term}%`);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+/* Respondidas y sin responder, sobre todas las reseñas leídas de las fichas
+ * visibles. Va aparte de la página: los números del encabezado no pueden
+ * depender de cuántas se cargaron. */
+export async function fetchReviewCounts() {
+  const [all, unanswered] = await Promise.all([
+    supabase.from('google_reviews').select('id', { count: 'exact', head: true }),
+    supabase.from('google_reviews').select('id', { count: 'exact', head: true }).is('reply_comment', null),
+  ]);
+  if (all.error) throw all.error;
+  if (unanswered.error) throw unanswered.error;
+  return {
+    answered: (all.count ?? 0) - (unanswered.count ?? 0),
+    unanswered: unanswered.count ?? 0,
+  };
 }
 
 /* Lo que vuelve en ?google= después de pasar por Google (backToDashboard en

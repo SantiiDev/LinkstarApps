@@ -1,72 +1,77 @@
 # Desplegar el panel
 
-La configuración está escrita (`wrangler.jsonc`) pero **el panel no está
-desplegado**, y no conviene desplegarlo sin leer esto primero.
+El panel se publica en `https://app.linkstarapp.com` (Cloudflare Workers, gratis,
+la misma cuenta que el sitio de ventas). **El API todavía no está desplegado**, y
+el panel está preparado para convivir con eso (ver la decisión 1).
 
-## Por qué está escrita antes de tiempo
+## Por qué se despliega antes que el resto de la fase 8
 
-El despliegue del panel es la fase 8 del roadmap. Lo que lo adelanta es el paso
-**4.2**: para que Google apruebe el acceso a las Business Profile APIs hay que
-verificar la pantalla de consentimiento contra un dominio propio, con una
-política de privacidad que se pueda abrir **sin iniciar sesión**. O sea que el
-panel necesita una URL estable antes de que se pueda escribir una línea del
-OAuth, y el trámite es lo que más demora de toda la fase 4.
+El despliegue es la fase 8 del roadmap. Lo que lo adelanta es la verificación de
+la app OAuth de Google: mientras la app esté en modo Testing, sólo pueden
+conectar los usuarios de prueba y sus tokens vencen a los 7 días. Para publicarla
+Google pide una página de inicio y una política de privacidad **públicas, sin
+iniciar sesión, en un dominio propio verificado**. Esa página es este panel.
 
-Esto cubre sólo ese pedazo. El resto de la fase 8 —`pg_cron`, Supabase Pro, el
-hosting del API— sigue donde estaba.
+El resto de la fase 8 —el API, `pg_cron`, Supabase Pro— sigue donde estaba. Los
+pasos de la verificación están en [GOOGLE_VERIFICATION.md](GOOGLE_VERIFICATION.md).
 
-## Antes de desplegar: dos decisiones
+## Las dos decisiones (resueltas el 6 de octubre de 2026)
 
-### 1. El checkout del plan Business se rompe
+### 1. El checkout del plan Business, sin API
 
-`services/api` **no está desplegado**. El panel llama al API para
-`POST /api/subscriptions/checkout`, así que con el panel público y el API en
-`localhost`, cualquiera que llegue y elija el plan Business va a ver un error.
+Con el panel público y el API sin desplegar, el checkout de Business no puede
+funcionar. **Se eligió publicar con Business detrás de "Contactar con ventas"**,
+como Enterprise: `VITE_BUSINESS_CHECKOUT=off` en `.env.production`
+(ver `effectiveCheckoutMode()` en `src/lib/config.js`). El precio y el destacado
+del plan se siguen mostrando; sólo cambia el botón. No toca la base: en local, sin
+la variable, el checkout se sigue probando igual.
 
-Las salidas razonables son tres, y hay que elegir una antes de publicar:
+**El día que el API esté desplegado**: borrar `VITE_BUSINESS_CHECKOUT=off` de
+`.env.production` y volver a desplegar.
 
-- **Desplegar el API primero** (Railway o Render, raíz `services/api`). Es lo
-  que resuelve el problema de fondo, pero es el gasto de la fase 8 — unos US$5
-  a US$7 por mes. Ojo con el plan gratis de Render: duerme el servicio a los 15
-  minutos y despierta en 30 a 60 segundos, inaceptable para el redirect de un
-  expositor físico.
-- **Publicar sólo con el plan gratis visible** y dejar Business detrás de
-  "contactanos", como ya está Enterprise. Sin costo y sin nada roto.
-- **Publicar igual**, asumiendo que nadie va a llegar. Es cierto hoy —el panel
-  no se anuncia en ningún lado— pero deja una bomba armada para el día que se
-  anuncie.
+Las demás acciones que necesitan el API (conectar Google, responder reseñas,
+"Actualizar ahora", mandar invitaciones por mail) muestran "el servicio no está
+disponible en este momento" en vez de un error crudo. `VITE_API_URL` ya apunta a
+`https://api.linkstarapp.com`, así que no hace falta recompilar cuando el API exista.
 
 ### 2. El subdominio
 
-`wrangler.jsonc` asume `app.linkstarapp.com`. Hay que crearlo en Cloudflare
-(la zona es propia) antes del primer deploy. Si se prefiere otro nombre, hay que
-cambiarlo en tres lugares a la vez:
+`app.linkstarapp.com`. No hay que crearlo a mano: `wrangler.jsonc` lo declara
+con `custom_domain: true` y el primer deploy crea el registro DNS y el
+certificado. Si algún día se cambia el nombre, cambiarlo a la vez en:
 
-- `route.pattern` en `apps/dashboard/wrangler.jsonc`
+- `routes` en `apps/dashboard/wrangler.jsonc`
 - el enlace a la política del panel en `apps/ventas/src/pages/Info/Privacy.jsx`
-- lo que se cargue después en la consola de Google Cloud
+- la pantalla de consentimiento en Google Cloud (página de inicio y política)
 
 ## Pasos
+
+Desde la raíz del repo:
 
 ```bash
 npm run build:dashboard
 cd apps/dashboard && npx wrangler deploy
 ```
 
-Antes del primer deploy, revisar que `apps/dashboard/.env` tenga los valores de
-**producción** y no los de desarrollo. Los que importan:
+`vite build` usa **`.env.production`** (trackeado en git, sólo valores públicos:
+URL y anon key de Supabase, `VITE_API_URL`, `VITE_REDIRECT_DOMAIN`,
+`VITE_BUSINESS_CHECKOUT`). Pisa todas las variables de tu `.env` de desarrollo;
+si agregás una variable nueva al `.env`, agregala también acá o se va a colar el
+valor de desarrollo en el bundle de producción.
 
 | Variable | Ojo con |
 |---|---|
-| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Del proyecto real. |
-| `VITE_API_URL` | Mientras el API no esté desplegado, esto apunta a localhost y el checkout de Business falla (ver arriba). |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Del proyecto real. La anon key es pública por diseño; **nunca** la `service_role`. |
+| `VITE_API_URL` | `https://api.linkstarapp.com`, aunque todavía no conteste. |
 | `VITE_REDIRECT_DOMAIN` | Tiene que coincidir con el `REDIRECT_DOMAIN` del API, o el QR que genera el panel apunta a donde nadie contesta. Hoy los dos valen `l.linkstarapp.com`, y ese subdominio **todavía no existe**. |
+| `VITE_BUSINESS_CHECKOUT` | `off` mientras no haya API (decisión 1). |
 
 ## Después de desplegar
 
 - Abrir `https://app.linkstarapp.com/privacidad` **en una ventana de incógnito**.
   Si pide iniciar sesión, Google no la va a aceptar.
+- Abrir `https://app.linkstarapp.com/` y confirmar que el pie enlaza la política:
+  Google revisa la página de inicio.
 - Probar un refresh en `/panel/empresa`. Si da 404, falta
   `not_found_handling` en `wrangler.jsonc`.
-- Recién ahí cargar la URL de la política en la pantalla de consentimiento de
-  Google Cloud.
+- Recién ahí seguir con [GOOGLE_VERIFICATION.md](GOOGLE_VERIFICATION.md).
