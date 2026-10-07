@@ -8,8 +8,8 @@
  * inerte y detrás de un modal que no se puede cerrar. NO agregar otro
  * importador: fuera de esa puerta es una pantalla inventando datos.
  *
- * Cuando exista la conexión con Google (fase 4) esto no se "destapa": la
- * pantalla se reescribe contra el dato real y este archivo se borra.
+ * La pantalla real es GoogleSeoLocalScreen (fase 4.8); esto queda como la
+ * invitación para quien todavía no conectó Google.
  */
 
 import PageHeader from '../../components/PageHeader/PageHeader';

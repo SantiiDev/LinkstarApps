@@ -15,7 +15,10 @@ import {
   listLocalPosts,
   createLocalPost,
   deleteLocalPost,
+  getLocationForSeo,
+  listLocationMedia,
 } from '../lib/googleBusiness.js';
+import { auditLocation } from '../lib/seoAudit.js';
 
 const router = Router();
 
@@ -29,6 +32,7 @@ const router = Router();
  *   GET    /api/google/locations/:id/posts             publicaciones (en vivo)
  *   POST   /api/google/locations/:id/posts             publicar (cupo en gratis)
  *   DELETE /api/google/locations/:id/posts?name=…      borrar una publicación
+ *   GET    /api/google/seo?org=…                       Análisis SEO (lib/seoAudit.js)
  *
  * `:id` es el id de google_locations (nuestro), nunca el 'locations/123' de
  * Google: así cada pedido pasa por las RPC de 0030/0031, que deciden quién puede
@@ -412,6 +416,146 @@ router.delete('/api/google/locations/:id/posts', writeLimiter, requireAuth(supab
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err, 'No pudimos borrar la publicación', 'Error borrando una publicación');
+  }
+});
+
+/* ─── SEO Local: Análisis SEO (4.8) ───────────────────────────────────────── */
+
+/* La lectura de Google de una ficha para el análisis, guardada 10 minutos: la
+ * pantalla se abre y se cambia de sucursal seguido, y cada análisis son cuatro
+ * pedidos a Google contra la cuota compartida del proyecto. «Actualizar»
+ * (?fresh=1) la saltea. Es por ficha, no por usuario: quién puede ver qué se
+ * decide en cada pedido con google_location_read_target(). */
+const SEO_CACHE_MS = 10 * 60_000;
+const seoCache = new Map();
+
+const normalize = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+async function auditFicha(accessToken, gl, fresh) {
+  const cached = seoCache.get(gl.id);
+  if (!fresh && cached && Date.now() - cached.at < SEO_CACHE_MS) return cached.value;
+
+  const [location, attributes, media, posts, reviewRows] = await Promise.all([
+    getLocationForSeo(accessToken, gl.google_location),
+    // Lo que falla de acá se marca «no medido» en vez de tirar el análisis entero.
+    getAttributes(accessToken, gl.google_location).catch(() => null),
+    listLocationMedia(accessToken, gl.google_account, gl.google_location).catch((err) => {
+      console.error('Análisis SEO: no se pudieron leer las fotos:', err.message);
+      return null;
+    }),
+    listLocalPosts(accessToken, gl.google_account, gl.google_location).catch(() => null),
+    supabase
+      .from('google_reviews')
+      .select('created_time, reply_comment, reply_updated_time')
+      .eq('google_location_id', gl.id)
+      .order('created_time', { ascending: false })
+      .limit(1000)
+      .then(({ data, error }) => { if (error) throw error; return data ?? []; }),
+  ]);
+
+  const audit = auditLocation({
+    location,
+    attributes,
+    media,
+    posts,
+    reviews: {
+      total: gl.total_reviews ?? reviewRows.length,
+      rating: gl.average_rating != null ? Number(gl.average_rating) : null,
+      stored: reviewRows,
+    },
+  });
+  const value = { audit, description: location.profile?.description ?? '' };
+  seoCache.set(gl.id, { at: Date.now(), value });
+  return value;
+}
+
+/* Business: lo que la gente buscó en Google cuando apareció tu ficha (últimos 3
+ * meses cerrados) y que tu descripción no nombra. Sale de google_search_keywords,
+ * que en gratis ni se lee (0029). */
+async function missingSearchTerms(gl, description) {
+  const now = new Date();
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 1)).toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('google_search_keywords')
+    .select('keyword, impressions, threshold')
+    .eq('google_location_id', gl.id)
+    .gte('month', from);
+  if (error) throw error;
+
+  const byTerm = new Map();
+  for (const row of data ?? []) {
+    byTerm.set(row.keyword, (byTerm.get(row.keyword) ?? 0) + (row.impressions ?? row.threshold ?? 0));
+  }
+  const desc = normalize(description);
+  return [...byTerm.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .filter(([term]) => normalize(term).split(/\s+/).filter((w) => w.length >= 3).some((w) => !desc.includes(w)))
+    .slice(0, 8)
+    .map(([term, impressions]) => ({ term, impressions }));
+}
+
+/* GET /api/google/seo?org=<uuid>[&fresh=1] — el análisis de cada ficha
+ * vinculada que el usuario puede ver. Gratis y Business ven el análisis; la
+ * lista de búsquedas que faltan en la descripción es de Business. */
+router.get('/api/google/seo', readLimiter, requireAuth(supabase), async (req, res) => {
+  try {
+    assertGoogleConfigured();
+    const orgId = String(req.query.org || '');
+    requireUuid(orgId, 'Organización');
+    const fresh = req.query.fresh === '1';
+
+    const { data: fichas, error } = await supabase
+      .from('google_locations')
+      .select('id, google_account, google_location, title, maps_uri, location_id, total_reviews, average_rating, locations!inner(name, deleted_at)')
+      .eq('organization_id', orgId)
+      .not('location_id', 'is', null)
+      .is('locations.deleted_at', null)
+      .order('title');
+    if (error) throw error;
+
+    // Sólo las que este usuario puede ver (un encargado, sus sucursales).
+    const visible = [];
+    for (const gl of fichas ?? []) {
+      try {
+        await readTarget(req.user.id, gl.id);
+        visible.push(gl);
+      } catch (err) {
+        if (err.status !== 403 && err.status !== 404) throw err;
+      }
+    }
+    if (!visible.length) return res.json({ isBusiness: false, locations: [] });
+
+    const accessToken = await accessTokenForOrg(orgId);
+    const { data: isBusiness, error: businessError } = await supabase.rpc('org_has_business', { p_org: orgId });
+    if (businessError) throw businessError;
+
+    const locations = [];
+    for (const gl of visible) {
+      try {
+        const { audit, description } = await auditFicha(accessToken, gl, fresh);
+        locations.push({
+          googleLocationId: gl.id,
+          locationId: gl.location_id,
+          name: gl.locations?.name ?? gl.title ?? 'Sucursal',
+          title: gl.title,
+          mapsUri: gl.maps_uri,
+          audit,
+          missingSearchTerms: isBusiness ? await missingSearchTerms(gl, description) : null,
+        });
+      } catch (err) {
+        // Una ficha que Google no deja leer no tira las demás.
+        console.error(`Análisis SEO de ${gl.google_location}:`, err.message);
+        locations.push({
+          googleLocationId: gl.id, locationId: gl.location_id, name: gl.locations?.name ?? gl.title ?? 'Sucursal',
+          title: gl.title, mapsUri: gl.maps_uri, audit: null, missingSearchTerms: null,
+          error: 'No pudimos leer esta ficha en Google. Probá de nuevo en unos minutos.',
+        });
+      }
+    }
+
+    res.json({ isBusiness: Boolean(isBusiness), locations });
+  } catch (err) {
+    sendError(res, err, 'No pudimos analizar tu ficha', 'Error en el análisis SEO');
   }
 });
 

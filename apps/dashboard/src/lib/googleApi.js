@@ -286,6 +286,23 @@ export async function fetchSearchKeywords(organizationId, month, locationId = nu
   );
 }
 
+/* ─── SEO Local: Análisis SEO (fase 4.8) ──────────────────────────────────── */
+
+/* El análisis de cada ficha vinculada que el usuario puede ver, calculado en el
+ * API sobre la ficha en vivo (services/api/lib/seoAudit.js):
+ * { isBusiness, locations: [{ googleLocationId, locationId, name, mapsUri,
+ *   audit: { score, level, best, worst, categories }, missingSearchTerms }] }.
+ * El API guarda la lectura de Google 10 minutos; `fresh` la vuelve a pedir. */
+export async function fetchSeoAudit(organizationId, { fresh = false } = {}) {
+  const params = new URLSearchParams({ org: requireOrg(organizationId) });
+  if (fresh) params.set('fresh', '1');
+  return apiFetch(
+    `/api/google/seo?${params}`,
+    { headers: await authHeaders() },
+    'No pudimos analizar tu ficha'
+  );
+}
+
 /* ─── Perfil y protección de ficha (fase 4.7, 0030) ───────────────────────── */
 
 /* La ficha en vivo desde Google, vía API: { canEdit, profile, attributes }.

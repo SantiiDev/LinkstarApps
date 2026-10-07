@@ -42,6 +42,11 @@ function Icon({ name, className }) {
         <path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9" /><path d="M10 20v-6h4v6" />
       </svg>
     ),
+    search: (
+      <svg {...props}>
+        <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+    ),
     'bar-chart': (
       <svg {...props}>
         <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
@@ -116,7 +121,16 @@ const GROUPS = [
       { id: 'gb-metrics', label: 'Métricas' },
       { id: 'gb-profile', label: 'Perfil' },
       { id: 'gb-posts', label: 'Publicaciones' },
-      { id: 'gb-seo', label: 'SEO Local' },
+    ],
+  },
+  {
+    // Grupo propio desde que SEO Local tiene dos pantallas, como en Tapstar.
+    id: 'seo-local',
+    label: 'SEO Local',
+    icon: 'search',
+    items: [
+      { id: 'gb-seo', label: 'Análisis SEO' },
+      { id: 'gb-seo-map', label: 'Mapa SEO' },
     ],
   },
   {

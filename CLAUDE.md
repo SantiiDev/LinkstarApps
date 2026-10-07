@@ -686,8 +686,8 @@ the failure this prevents).
 
 Métricas, Perfil and Publicaciones left the gate on 6 Oct 2026, with the same recipe as Reviews: the page
 file renders `GoogleGate` + its `*Mockup.jsx` without a connection, and a `*Screen.jsx` against real data
-with it. Sentimiento and Palabras clave followed in phase 5 (see "Review analysis"). SEO Local is the only
-one still gated: it is being redesigned after Tapstar changed theirs.
+with it. Sentimiento and Palabras clave followed in phase 5 (see "Review analysis"), and SEO Local's
+Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gated section any more.
 
 - **Free vs Business is decided in SQL, like Tapstar's split.** `private.org_has_business(org)` (`0029`)
   = `org_has_access` and plan `business`/`enterprise` (trialing counts). Business-only *data* is cut in the
@@ -733,6 +733,23 @@ one still gated: it is being redesigned after Tapstar changed theirs.
   discontinued `localPosts.reportInsights` in 2023.
 - `googleRequest()` retries 429/5xx for GET/PUT/PATCH/DELETE but **never for POST**: retrying a create
   after a slow answer would publish the post twice.
+- **SEO Local → Análisis SEO** (7 Oct 2026, structure copied from Tapstar's redesign, screenshots in the
+  session that built it). Google publishes **no** local-SEO score, so the score is ours and transparent:
+  `services/api/lib/seoAudit.js` is a pure function that turns the ficha into six categories summing 100
+  (Presencia visual 18, Keywords y servicios 12, Actividad 10, Relevancia de categoría 20, Ficha NAP 20,
+  Reputación 20), each check tied to a concrete field, with its current value, target, tip and the panel
+  section that fixes it ("Mejorar"). `GET /api/google/seo?org=` (`routes/googleProfile.js`) reads each
+  linked ficha the user may see (`google_location_read_target`) **live**: Business Information with a wider
+  read mask (`serviceArea`, `specialHours`, `serviceItems`), attributes, v4 `media` (owner photos only) and
+  `localPosts`, plus stored reviews; cached in memory 10 min per ficha (`?fresh=1` skips it). A source that
+  fails is marked `unknown` and **excluded from the maximum** instead of scored as 0. Free sees the whole
+  analysis; Business adds "Búsquedas que no están en tu descripción" (from `google_search_keywords`), behind
+  `BusinessLock` in free. In a tie, the "A mejorar" category is the one with most points to gain, and the
+  screen opens on it. **Not yet verified against real Google** (on 7 Oct no machine but Railway could
+  decrypt the production token): the first real run is the check that `media` and `serviceItems` come back
+  as expected. **Mapa SEO** (`gb-seo-map`, `pages/GoogleBusiness/GoogleSeoMap.jsx`) is a `soon` placeholder:
+  the geogrid needs the Places API (separate key, billing, every grid point is a paid request, Business
+  only with a monthly quota), and Maps Platform terms allow storing our own rank, not other businesses' data.
 
 ### Review analysis — sentiment, topics and keywords (phase 5, `0033`)
 
@@ -781,7 +798,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   Spanish and ASCII-only (`/panel/resenas`, not `/panel/reseñas`). `/`, `/iniciar-sesion` and `/registro`
   render bare (no `AppShell`); everything under `/panel` renders inside it.
 - Sections wired in `App.jsx` (and in `components/Sidebar/Sidebar.jsx`, which groups them):
-  `company`, `devices`, `reviews`, the `gb-*` group (`gb-metrics`, `gb-profile`, `gb-posts`, `gb-seo`),
+  `company`, `devices`, `reviews`, the `gb-*` sections (`gb-metrics`, `gb-profile`, `gb-posts` under
+  "Google Business"; `gb-seo` "Análisis SEO" and `gb-seo-map` "Mapa SEO" under their own "SEO Local" group),
   the `reports-*` group (`reports-nps`, `reports-sentiment`, `reports-keywords`), `monthly-reports`,
   `automations`, `settings`, `contact`, `profile`. Pages and `Sidebar` still speak in those **section ids**; the
   id → path translation happens in `App.jsx` and `AppShell.jsx`, so no page imports the router. Adding a
@@ -882,7 +900,7 @@ split below before wiring anything — the shell is finished, the data mostly is
   the subscription banner is also hidden there when connected — accepted to keep `AppShell` from querying
   Google on every section. **`gb-metrics`, `gb-profile` and `gb-posts` followed on 6 Oct 2026** (see
   "Google Business Profile — the screens"), and `reports-sentiment` / `reports-keywords` in phase 5 (see
-  "Review analysis"); `gb-seo` is the only one still behind the gate even when connected.
+  "Review analysis"), and `gb-seo` (Análisis SEO) on 7 Oct 2026; none is behind the gate once connected.
 - **The mock JSX is a deliverable, not discarded history.** The tag `maquetas-pre-fase-2` points at the last
   commit where those ten screens were still drawing their grids, tables and charts; seven of them now live
   in the tree as `*Mockup.jsx`, the two "próximamente" ones (`reports-nps`, `monthly-reports`) are still

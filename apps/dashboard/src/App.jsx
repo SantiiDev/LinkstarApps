@@ -8,6 +8,7 @@ import GoogleMetrics from './pages/GoogleBusiness/GoogleMetrics';
 import GoogleProfile from './pages/GoogleBusiness/GoogleProfile';
 import GooglePosts from './pages/GoogleBusiness/GooglePosts';
 import GoogleSeoLocal from './pages/GoogleBusiness/GoogleSeoLocal';
+import GoogleSeoMap from './pages/GoogleBusiness/GoogleSeoMap';
 import ReportsNps from './pages/Reports/ReportsNps';
 import ReportsSentiment from './pages/Reports/ReportsSentiment';
 import ReportsKeywords from './pages/Reports/ReportsKeywords';
@@ -204,6 +205,20 @@ function GooglePostsRoute() {
   return <GooglePosts onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
 }
 
+/* Los «Mejorar» del Análisis SEO llevan a la sección que resuelve cada punto
+   (Perfil, Publicaciones, Reseñas, Dispositivos); 'settings-local' es la pestaña
+   Gestión local, donde se vinculan las fichas. */
+function GoogleSeoLocalRoute() {
+  const navigate = useNavigate();
+  return (
+    <GoogleSeoLocal
+      onNavigateSection={(section) => navigate(
+        section === 'settings-local' ? settingsTabPath('local') : pathForSection(section)
+      )}
+    />
+  );
+}
+
 function ReportsSentimentRoute() {
   const navigate = useNavigate();
   return <ReportsSentiment onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
@@ -317,7 +332,8 @@ export default function App() {
         <Route path={SECTION_PATHS['gb-metrics']} element={<GoogleMetricsRoute />} />
         <Route path={SECTION_PATHS['gb-profile']} element={<GoogleProfileRoute />} />
         <Route path={SECTION_PATHS['gb-posts']} element={<GooglePostsRoute />} />
-        <Route path={SECTION_PATHS['gb-seo']} element={<GoogleSeoLocal />} />
+        <Route path={SECTION_PATHS['gb-seo']} element={<GoogleSeoLocalRoute />} />
+        <Route path={SECTION_PATHS['gb-seo-map']} element={<GoogleSeoMap />} />
 
         <Route path={SECTION_PATHS['reports-nps']} element={<ReportsNps />} />
         <Route path={SECTION_PATHS['reports-sentiment']} element={<ReportsSentimentRoute />} />
