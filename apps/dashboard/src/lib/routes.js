@@ -65,6 +65,7 @@ export const SECTION_PATHS = {
   'gb-profile': `${DASHBOARD_BASE}/google/perfil`,
   'gb-posts': `${DASHBOARD_BASE}/google/publicaciones`,
   'gb-seo': `${DASHBOARD_BASE}/google/seo-local`,
+  'gb-seo-map': `${DASHBOARD_BASE}/google/mapa-seo`,
 
   'reports-nps': `${DASHBOARD_BASE}/reportes/nps`,
   'reports-sentiment': `${DASHBOARD_BASE}/reportes/sentimiento`,

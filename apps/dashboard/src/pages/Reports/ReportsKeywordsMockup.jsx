@@ -4,12 +4,15 @@
  * El JSX que la sección mostraba antes de la fase 2, recuperado del tag
  * `maquetas-pre-fase-2`. Todos los números de acá son inventados.
  *
- * Se renderiza ÚNICAMENTE como `children` de `GoogleGate`, que lo deja borroso,
- * inerte y detrás de un modal que no se puede cerrar. NO agregar otro
- * importador: fuera de esa puerta es una pantalla inventando datos.
+ * Se renderiza ÚNICAMENTE en los dos lugares donde una maqueta es legal:
+ * como `children` de `GoogleGate` (sin Google conectado) y como `preview` de
+ * `BusinessLock` (con Google, en el plan gratis, desde ReportsKeywordsScreen,
+ * con `showHeader={false}` porque la pantalla ya muestra el suyo). Los dos la
+ * dejan borrosa, inerte y detrás de un velo que no se cierra. NO agregar otro
+ * importador: fuera de esas puertas es una pantalla inventando datos.
  *
- * Cuando exista la conexión con Google (fase 4) esto no se "destapa": la
- * pantalla se reescribe contra el dato real y este archivo se borra.
+ * La pantalla real es ReportsKeywordsScreen (fase 5, 0033); esto queda como la
+ * invitación para quien todavía no conectó Google o no tiene Business.
  */
 
 import PageHeader from '../../components/PageHeader/PageHeader';
@@ -50,18 +53,20 @@ function buildKeywordStats() {
     .sort((a, b) => b.count - a.count);
 }
 
-export default function ReportsKeywordsMockup() {
+export default function ReportsKeywordsMockup({ showHeader = true }) {
   const keywords = buildKeywordStats();
   const maxCount = Math.max(...keywords.map((k) => k.count));
   const topTerm = keywords[0];
 
   return (
     <div className="reports-page">
-      <PageHeader
-        eyebrow="Reportes"
-        title="Palabras Clave"
-        subtitle="Los temas y términos que más mencionan tus clientes en sus reseñas"
-      />
+      {showHeader && (
+        <PageHeader
+          eyebrow="Reportes"
+          title="Palabras Clave"
+          subtitle="Los temas y términos que más mencionan tus clientes en sus reseñas"
+        />
+      )}
 
       <div className="reports-stat-grid">
         <StatCard icon={<Icon name="hash" />} value={keywords.length} label="Palabras clave detectadas" color="orange" />

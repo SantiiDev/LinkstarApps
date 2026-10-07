@@ -75,7 +75,8 @@ async function main() {
       }
       console.log(
         `  → ${summary.locations} ficha(s) (${summary.linked} vinculada(s)), ${summary.reviews} reseña(s) nueva(s)/editada(s), ` +
-        `${summary.snapshots} snapshot(s), ${summary.metricDays ?? 0} día(s) de métricas, ${summary.keywords ?? 0} palabra(s)` +
+        `${summary.snapshots} snapshot(s), ${summary.metricDays ?? 0} día(s) de métricas, ${summary.keywords ?? 0} palabra(s), ` +
+        `${summary.analyzedReviews ?? 0} reseña(s) analizada(s)` +
         `${summary.failures ? `, ${summary.failures} error(es) de ficha` : ''}\n`
       );
       // Contarla como OK con todas sus fichas en error escondía justo el caso

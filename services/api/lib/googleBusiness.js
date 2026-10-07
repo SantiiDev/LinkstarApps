@@ -232,6 +232,39 @@ export async function updateAttributes(accessToken, locationName, attributes) {
   });
 }
 
+/* ─── SEO Local (Análisis SEO) ────────────────────────────────────────────── */
+
+/* La ficha con todo lo que mira el Análisis SEO (lib/seoAudit.js): lo de Perfil
+ * más la zona de servicio, los horarios especiales y los servicios cargados. */
+const SEO_READ_MASK =
+  'name,title,phoneNumbers,categories,storefrontAddress,serviceArea,websiteUri,regularHours,specialHours,' +
+  'profile,openInfo,metadata,serviceItems';
+
+export async function getLocationForSeo(accessToken, locationName) {
+  const params = new URLSearchParams({ readMask: SEO_READ_MASK });
+  return googleRequest(accessToken, `${BUSINESS_INFO_BASE}/${locationName}?${params}`);
+}
+
+/* Las fotos y videos que subió el negocio (My Business v4, media). Las de los
+ * clientes van por otro endpoint y no cuentan para «fotos en la ficha»: lo que
+ * se mide es lo que el dueño mantiene. Cada item trae
+ * locationAssociation.category (COVER, PROFILE, LOGO, EXTERIOR, …) y createTime. */
+export async function listLocationMedia(accessToken, accountName, locationName) {
+  const items = [];
+  for await (const item of paginate(
+    accessToken,
+    (pageToken) => {
+      const params = new URLSearchParams({ pageSize: '100' });
+      if (pageToken) params.set('pageToken', pageToken);
+      return `${V4_BASE}/${accountName}/${locationName}/media?${params}`;
+    },
+    'mediaItems'
+  )) {
+    items.push(item);
+  }
+  return items;
+}
+
 /* ─── Publicaciones (Local Posts, My Business v4) ─────────────────────────── */
 
 /* Las publicaciones de una ficha, de la más nueva a la más vieja. Google ya no

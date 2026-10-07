@@ -23,14 +23,17 @@ import './BusinessLock.css';
  * El corte de verdad lo hace la base (private.org_has_business): esto sólo
  * decide qué se dibuja.
  */
-export default function BusinessLock({ children, preview, title, description }) {
+/* `fullPage`: cuando el candado cubre la sección entera (Sentimiento, Palabras
+ * clave) y no una tarjeta. La maqueta es alta, y centrado el llamado quedaba a
+ * mitad de página, fuera de la vista: así va arriba. */
+export default function BusinessLock({ children, preview, title, description, fullPage = false }) {
   const { isBusiness } = useOrg();
   const navigate = useNavigate();
 
   if (isBusiness) return children;
 
   return (
-    <div className="block">
+    <div className={`block${fullPage ? ' block--page' : ''}`}>
       <div className="block__preview" inert>
         {preview}
       </div>

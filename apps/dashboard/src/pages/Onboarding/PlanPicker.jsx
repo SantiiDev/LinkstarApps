@@ -79,6 +79,9 @@ export default function PlanPicker() {
 
     // select_free_plan valida el rol adentro (0013): es SECURITY DEFINER
     // porque `authenticated` tiene revocado el update sobre subscriptions.
+    // Desde la 0032 también deja volver a gratis a quien perdió el acceso (un
+    // Business cancelado), y si no puede cambiar nada lo dice con un hint en
+    // vez de responder OK sin hacer nada.
     const { error: rpcError } = await supabase.rpc('select_free_plan', {
       p_org: org.organization_id,
     });
@@ -88,7 +91,9 @@ export default function PlanPicker() {
       setError(
         rpcError.code === '42501'
           ? 'Sólo el dueño o un administrador puede elegir el plan.'
-          : 'No pudimos activar el plan. Intentá de nuevo en un momento.'
+          : rpcError.hint === 'paid_plan_active'
+            ? 'Tu plan actual sigue vigente. Cancelalo desde Configuración → Facturación antes de pasar a Gratis.'
+            : 'No pudimos activar el plan. Intentá de nuevo en un momento.'
       );
       return;
     }

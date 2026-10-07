@@ -1,17 +1,31 @@
 import GoogleGate from '../../components/GoogleGate/GoogleGate';
+import { useOrg } from '../../context/OrgContext';
+import { useGoogleConnection } from '../../lib/googleApi';
 import ReportsSentimentMockup from './ReportsSentimentMockup';
+import ReportsSentimentScreen from './ReportsSentimentScreen';
 
 /*
- * Depende de dos cosas encadenadas: primero tiene que existir el TEXTO de cada
- * reseña (fase 4.4, que necesita la conexión con Google), y recién después se
- * le puede pasar un modelo por arriba (fase 5). Sin texto no hay nada sobre qué
- * correr un análisis — no es que falte el modelo, falta el insumo.
+ * Sentimiento — sale del modal como salieron Reseñas y Métricas (fase 5).
  *
- * Hasta entonces la pantalla es la maqueta de `ReportsSentimentMockup`, borrosa
- * y bloqueada detrás de `GoogleGate`.
+ *   sin Google conectado → GoogleGate con ReportsSentimentMockup de fondo:
+ *                          sin la conexión no tenemos el texto de las reseñas,
+ *                          y sin texto no hay nada que analizar.
+ *   conectado            → ReportsSentimentScreen, sobre v_review_analysis
+ *                          (0033). También en 'needs_reauth': lo ya analizado
+ *                          se sigue mostrando, con un aviso para reconectar.
+ *
+ * Mientras se averigua el estado se muestra el modal, no la pantalla (mismo
+ * criterio que GoogleMetrics).
  */
+export default function ReportsSentiment({ onNavigateSettings }) {
+  const { org } = useOrg();
+  const google = useGoogleConnection(org?.organization_id);
+  const status = google.connection?.status;
 
-export default function ReportsSentiment() {
+  if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
+    return <ReportsSentimentScreen google={google} onNavigateSettings={onNavigateSettings} />;
+  }
+
   return (
     <GoogleGate
       description="El análisis de sentimiento se corre sobre lo que escriben tus clientes. Sin la conexión con Google no tenemos ese texto, y sin texto no hay nada que analizar."

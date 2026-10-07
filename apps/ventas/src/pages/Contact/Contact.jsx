@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { API_URL, WEB3FORMS_KEY } from '../../lib/config';
+import { API_URL, SUPPORT_EMAIL } from '../../lib/config';
 import './Contact.css';
 
 /* La consulta se manda por services/api (POST /api/contact): ahí la access_key
  * de Web3Forms vive en el .env y la ruta tiene rate limit. Desde el navegador
  * la key es pública y cualquiera puede usarla para llenarnos la casilla.
  *
- * El respaldo directo a Web3Forms existe sólo porque el API todavía no está
- * desplegado. Cuando lo esté, se borra junto con WEB3FORMS_KEY. */
+ * Hasta que el API se desplegó había un respaldo que mandaba directo a
+ * Web3Forms desde el navegador. Se borró: si el API no contesta, la pantalla
+ * ofrece la casilla de soporte, como el formulario del panel. */
 async function sendContactMessage(form) {
   const response = await fetch(`${API_URL}/api/contact`, {
     method: 'POST',
@@ -26,25 +27,6 @@ async function sendContactMessage(form) {
     error.status = response.status;
     throw error;
   }
-}
-
-async function sendContactMessageFallback(form) {
-  const response = await fetch('https://api.web3forms.com/submit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      access_key: WEB3FORMS_KEY,
-      subject: `✉️ Consulta de ${form.name}`,
-      from_name: 'Linkstar Web',
-      name: form.name,
-      email: form.email,
-      phone: form.phone,
-      message: form.message,
-    }),
-  });
-
-  const result = await response.json().catch(() => ({}));
-  if (!result.success) throw new Error(result.message || 'Web3Forms rechazó el envío');
 }
 
 export default function Contact() {
@@ -97,23 +79,13 @@ export default function Contact() {
       await sendContactMessage(form);
       setSubmitted(true);
     } catch (error) {
+      console.error('No se pudo enviar la consulta:', error);
       // 400 (datos inválidos) y 429 (demasiadas consultas) son respuestas del
-      // servidor sobre este envío: reintentar por otro canal las saltearía.
-      if (error.status === 400 || error.status === 429) {
-        console.error('Consulta rechazada por el servidor:', error);
-        setSendError(error.message);
-        setSending(false);
-        return;
-      }
-
-      console.error('No se pudo enviar por el API, uso el respaldo:', error);
-      try {
-        await sendContactMessageFallback(form);
-        setSubmitted(true);
-      } catch (fallbackError) {
-        console.error('Error al enviar el formulario:', fallbackError);
-        setSendError('No pudimos enviar tu consulta. Probá de nuevo en unos minutos.');
-      }
+      // servidor sobre este envío, y su mensaje ya dice qué corregir. Lo demás
+      // es el API caído: la consulta no llegó, así que se ofrece el mail.
+      setSendError(error.status === 400 || error.status === 429
+        ? error.message
+        : `No pudimos enviar tu consulta. Probá de nuevo en unos minutos o escribinos a ${SUPPORT_EMAIL}.`);
     } finally {
       setSending(false);
     }

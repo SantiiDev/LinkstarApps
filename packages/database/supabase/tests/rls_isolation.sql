@@ -1191,6 +1191,143 @@ exception
 end $$;
 reset role;
 
+-- =========================================================================
+-- 17. Análisis de reseñas: sólo Business, y con el alcance de google_reviews (0033)
+-- =========================================================================
+-- 9b..03 es de Echesortu (9a..03, la sucursal de Caro) y 9b..04 de Pichincha
+-- (9a..02). Les damos texto: sin texto no hay nada que analizar.
+update public.google_reviews set comment = 'Muy buena atención, pero tardaron mucho.'
+ where id in ('9b000000-0000-0000-0000-000000000003', '9b000000-0000-0000-0000-000000000004');
+
+select pg_temp.check('Business: las dos reseñas con texto salen pendientes',
+  (select count(*) from public.google_reviews_pending_analysis('aaaaaaaa-0000-0000-0000-000000000001', 50)) = 2);
+
+select pg_temp.check('Se guarda el análisis, con temas fuera de lista descartados',
+  public.google_record_review_analysis('9b000000-0000-0000-0000-000000000003', 'neutral',
+    '[{"topic":"atencion","sentiment":"positive"},{"topic":"espera","sentiment":"negative"},{"topic":"inventado","sentiment":"positive"}]',
+    '[{"term":"Atención","sentiment":"positive"},{"term":"demora","sentiment":"negative"},
+      {"term":"atención","sentiment":"negative"},{"term":"","sentiment":"positive"},{"term":"raro","sentiment":"enojado"}]',
+    'test',
+    (select updated_time from public.google_reviews where id = '9b000000-0000-0000-0000-000000000003'))
+  and public.google_record_review_analysis('9b000000-0000-0000-0000-000000000004', 'positive', '[]',
+    '[{"term":"mozo","sentiment":"positive"}]', 'test',
+    (select updated_time from public.google_reviews where id = '9b000000-0000-0000-0000-000000000004')));
+select pg_temp.check('Los temas quedan sólo de la lista cerrada; las palabras, sin repetir y con tono válido',
+  (select jsonb_array_length(topics) = 2
+          and keywords = '[{"term":"atención","sentiment":"positive"},{"term":"demora","sentiment":"negative"}]'::jsonb
+     from public.google_review_analysis where review_id = '9b000000-0000-0000-0000-000000000003'));
+select pg_temp.check('Analizadas, ya no salen pendientes',
+  (select count(*) from public.google_reviews_pending_analysis('aaaaaaaa-0000-0000-0000-000000000001', 50)) = 0);
+
+update public.google_reviews set updated_time = updated_time + interval '1 minute'
+ where id = '9b000000-0000-0000-0000-000000000004';
+select pg_temp.check('Una reseña editada vuelve a salir pendiente',
+  (select count(*) from public.google_reviews_pending_analysis('aaaaaaaa-0000-0000-0000-000000000001', 50)) = 1);
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+select pg_temp.check('Ana (Business) ve los dos análisis',
+  (select count(*) from public.v_review_analysis) = 2);
+do $$
+begin
+  perform * from public.google_reviews_pending_analysis('aaaaaaaa-0000-0000-0000-000000000001', 50);
+  raise exception 'FALLA: authenticated pudo pedir las reseñas pendientes';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   authenticated no puede pedir las reseñas pendientes';
+end $$;
+do $$
+begin
+  insert into public.google_review_analysis (review_id, organization_id, google_location_id, sentiment, model, review_updated_time)
+  values ('9b000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+          '9a000000-0000-0000-0000-000000000001', 'positive', 'a mano', now());
+  raise exception 'FALLA: authenticated pudo escribir un análisis';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   authenticated no puede escribir análisis';
+end $$;
+
+select pg_temp.login('33333333-3333-3333-3333-333333333333', 'caro@bar-uno.test');
+select pg_temp.check('Caro (manager) ve sólo el análisis de su sucursal',
+  (select count(*) from public.v_review_analysis) = 1
+  and (select review_id from public.v_review_analysis) = '9b000000-0000-0000-0000-000000000003');
+
+select pg_temp.login('22222222-2222-2222-2222-222222222222', 'beto@bar-dos.test');
+select pg_temp.check('Beto no ve análisis de Bar Uno',
+  (select count(*) from public.v_review_analysis) = 0
+  and (select count(*) from public.google_review_analysis) = 0);
+reset role;
+
+update public.subscriptions set plan_code = 'free'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check('En gratis no se le manda nada al modelo',
+  (select count(*) from public.google_reviews_pending_analysis('aaaaaaaa-0000-0000-0000-000000000001', 50)) = 0);
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+select pg_temp.check('En gratis el análisis guardado no se ve',
+  (select count(*) from public.v_review_analysis) = 0);
+reset role;
+update public.subscriptions set plan_code = 'business'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+select set_config('role', 'anon', true);
+select set_config('request.jwt.claims', null, true);
+do $$
+begin
+  perform count(*) from public.v_review_analysis;
+  raise exception 'FALLA: anon pudo leer v_review_analysis';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   anon no lee el análisis de reseñas';
+end $$;
+reset role;
+
+-- =========================================================================
+-- 18. Volver a gratis después de perder el acceso (0032)
+-- =========================================================================
+create or replace function pg_temp.free_plan_hint()
+returns text language plpgsql as $$
+declare
+  v_hint text;
+begin
+  perform public.select_free_plan('aaaaaaaa-0000-0000-0000-000000000001');
+  return 'ok';
+exception
+  when others then
+    get stacked diagnostics v_hint = pg_exception_hint;
+    return coalesce(nullif(v_hint, ''), sqlerrm);
+end;
+$$;
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+select pg_temp.check('Con Business vigente, «Gratis» lo dice en vez de no hacer nada',
+  pg_temp.free_plan_hint() = 'paid_plan_active');
+reset role;
+
+-- Business cancelado: la fila queda con plan_code = 'business' y sin acceso.
+update public.subscriptions set status = 'cancelled'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+select pg_temp.check('Con Business cancelado, «Gratis» funciona',
+  pg_temp.free_plan_hint() = 'ok');
+reset role;
+select pg_temp.check('… y deja la organización en gratis, activa y con acceso',
+  (select plan_code = 'free' and status = 'active' from public.subscriptions
+    where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001')
+  and public.org_has_access('aaaaaaaa-0000-0000-0000-000000000001'));
+
+select pg_temp.login('33333333-3333-3333-3333-333333333333', 'caro@bar-uno.test');
+do $$
+begin
+  perform public.select_free_plan('aaaaaaaa-0000-0000-0000-000000000001');
+  raise exception 'FALLA: un manager pudo elegir el plan';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   un manager no puede elegir el plan';
+end $$;
+reset role;
+
+update public.subscriptions set plan_code = 'business', status = 'active'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
 do $$ begin
   raise notice '';
   raise notice '=== Todos los tests de aislamiento pasaron ===';
