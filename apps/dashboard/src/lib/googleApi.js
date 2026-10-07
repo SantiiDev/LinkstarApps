@@ -103,7 +103,7 @@ export async function replyToReview(reviewId, comment) {
 export async function fetchGoogleLocations(organizationId) {
   const { data, error } = await supabase
     .from('google_locations')
-    .select('id, title, address, place_id, maps_uri, location_id, total_reviews, average_rating, reviews_synced_at, last_seen_at, locations(name)')
+    .select('id, title, address, place_id, maps_uri, location_id, total_reviews, average_rating, reviews_synced_at, metrics_synced_at, last_seen_at, locations(name)')
     .eq('organization_id', requireOrg(organizationId))
     .order('title', { ascending: true });
   if (error) throw error;
@@ -181,6 +181,149 @@ export async function fetchReviewCounts(organizationId) {
     answered: (all.count ?? 0) - (unanswered.count ?? 0),
     unanswered: unanswered.count ?? 0,
   };
+}
+
+/* ─── Métricas (fase 4.6, 0029) ───────────────────────────────────────────── */
+
+/* Una fila por (día, ficha vinculada) entre dos días 'YYYY-MM-DD'. Pasa por la
+ * RPC y no por la tabla: google_daily_metrics no tiene select directo, y la RPC
+ * devuelve el desglose por plataforma en null si la organización no es Business. */
+export async function fetchGoogleMetrics(organizationId, from, to) {
+  const { data, error } = await supabase.rpc('google_metrics_daily', {
+    p_org: requireOrg(organizationId),
+    p_from: from,
+    p_to: to,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/* Palabras de búsqueda de un mes ('YYYY-MM-01'), de mayor a menor. Business: en
+ * gratis el RLS devuelve vacío (0029). Con `locationId`, sólo esa sucursal; sin
+ * él, se suman las de todas las fichas por término. */
+export async function fetchSearchKeywords(organizationId, month, locationId = null) {
+  let query = supabase
+    .from('google_search_keywords')
+    .select('keyword, impressions, threshold, google_locations!inner(location_id)')
+    .eq('organization_id', requireOrg(organizationId))
+    .eq('month', month);
+  if (locationId) query = query.eq('google_locations.location_id', locationId);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  // El mismo término en dos fichas se suma. Si alguna parte es un «menos de N»,
+  // el total también lo es: la suma de las cotas es una cota, no un número.
+  const byKeyword = new Map();
+  for (const row of data ?? []) {
+    const prev = byKeyword.get(row.keyword);
+    if (!prev) {
+      byKeyword.set(row.keyword, { keyword: row.keyword, impressions: row.impressions, threshold: row.threshold });
+    } else if (prev.impressions != null && row.impressions != null) {
+      prev.impressions += row.impressions;
+    } else {
+      prev.threshold = (prev.impressions ?? prev.threshold) + (row.impressions ?? row.threshold);
+      prev.impressions = null;
+    }
+  }
+  return [...byKeyword.values()].sort(
+    (a, b) => (b.impressions ?? b.threshold ?? 0) - (a.impressions ?? a.threshold ?? 0)
+  );
+}
+
+/* ─── Perfil y protección de ficha (fase 4.7, 0030) ───────────────────────── */
+
+/* La ficha en vivo desde Google, vía API: { canEdit, profile, attributes }.
+ * `googleLocationId` es el id de google_locations, no el de Google. */
+export async function fetchGoogleProfile(googleLocationId) {
+  return apiFetch(
+    `/api/google/locations/${encodeURIComponent(googleLocationId)}/profile`,
+    { headers: await authHeaders() },
+    'No pudimos leer tu ficha de Google'
+  );
+}
+
+/* Escribe en Google sólo lo que viene en `changes` (ver googleProfileUpdateSchema
+ * en services/api/lib/validation.js). */
+export async function updateGoogleProfile(googleLocationId, changes) {
+  return apiFetch(
+    `/api/google/locations/${encodeURIComponent(googleLocationId)}/profile`,
+    { method: 'PATCH', headers: await authHeaders(), body: JSON.stringify(changes) },
+    'No pudimos guardar los cambios en Google'
+  );
+}
+
+/* Cambios que Google hizo por su cuenta y siguen pendientes. Business: en
+ * gratis el RLS devuelve vacío. */
+export async function fetchProfileChanges(organizationId, googleLocationId) {
+  const { data, error } = await supabase
+    .from('google_profile_changes')
+    .select('id, google_location_id, detected_at, fields, google_values, owner_values')
+    .eq('organization_id', requireOrg(organizationId))
+    .eq('google_location_id', googleLocationId)
+    .eq('status', 'pending')
+    .order('detected_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function resolveProfileChange(changeId, action) {
+  return apiFetch(
+    `/api/google/profile/changes/${encodeURIComponent(changeId)}/${action === 'revert' ? 'revert' : 'accept'}`,
+    { method: 'POST', headers: await authHeaders() },
+    action === 'revert' ? 'No pudimos deshacer el cambio' : 'No pudimos guardar tu respuesta'
+  );
+}
+
+/* ─── Publicaciones (fase 4.7, 0031) ──────────────────────────────────────── */
+
+export async function fetchGooglePosts(googleLocationId) {
+  return apiFetch(
+    `/api/google/locations/${encodeURIComponent(googleLocationId)}/posts`,
+    { headers: await authHeaders() },
+    'No pudimos leer tus publicaciones'
+  );
+}
+
+export async function createGooglePost(googleLocationId, post) {
+  return apiFetch(
+    `/api/google/locations/${encodeURIComponent(googleLocationId)}/posts`,
+    { method: 'POST', headers: await authHeaders(), body: JSON.stringify(post) },
+    'Google no aceptó la publicación'
+  );
+}
+
+export async function deleteGooglePost(googleLocationId, postName) {
+  const params = new URLSearchParams({ name: postName });
+  return apiFetch(
+    `/api/google/locations/${encodeURIComponent(googleLocationId)}/posts?${params}`,
+    { method: 'DELETE', headers: await authHeaders() },
+    'No pudimos borrar la publicación'
+  );
+}
+
+/* { usadas, limite } del mes. `limite` null = sin límite (Business). */
+export async function fetchPostQuota(organizationId) {
+  const { data, error } = await supabase.rpc('google_post_quota', { p_org: requireOrg(organizationId) });
+  if (error) throw error;
+  return data?.[0] ?? { usadas: 0, limite: 1 };
+}
+
+export const POST_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+export const POST_IMAGE_TYPES = ['image/jpeg', 'image/png'];
+
+/* Sube la foto a Storage (bucket público: Google la baja desde esa URL) y
+ * devuelve la URL pública. Va a la carpeta de la organización, que es lo único
+ * que el RLS del bucket deja escribir (0031). */
+export async function uploadPostImage(organizationId, file) {
+  const org = requireOrg(organizationId);
+  const ext = file.type === 'image/png' ? 'png' : 'jpg';
+  const path = `${org}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage
+    .from('google-post-media')
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw new Error('No pudimos subir la foto. Probá con otra.');
+  return supabase.storage.from('google-post-media').getPublicUrl(path).data.publicUrl;
 }
 
 /* Lo que vuelve en ?google= después de pasar por Google (backToDashboard en

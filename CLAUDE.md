@@ -76,7 +76,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0027 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0031 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -91,11 +91,46 @@ rest of the file would keep going and look like it passed. **On Windows `supabas
 first run with "ports are not available"** — Hyper-V reserves the whole 54320–54329 default range; see
 `packages/database/supabase/README.md` for the temporary port remap.
 
+**Without Docker there is a second Supabase project just for tests** (ref `mbhuzrrjyboyimqvnrpy`, created
+6 Oct 2026 in Santiago's account; region `sa-east-1`, reachable only through the session pooler
+`aws-0-sa-east-1.pooler.supabase.com:5432`, user `postgres.mbhuzrrjyboyimqvnrpy` — the direct host is
+IPv6-only). Phase 4.6/4.7 was built and tested against it. Push to it with an explicit
+`npx supabase db push --db-url <pooler url>` from `packages/database`, never with a bare `db:push`, and
+check `.temp/project-ref` before any push: **on Santiago's machine the CLI link points at this test project,
+not production**, so a bare `db:push` there goes to tests, and pushing to production needs
+`supabase link --project-ref <prod ref>` first. `rls_isolation.sql` runs against it with any client that
+sends the file as one simple-protocol query (`psql`, or `node-pg`'s `client.query(fileText)`);
+`supabase db query -f` does not work — it uses a prepared statement and rejects multi-statement files.
+The file opens with `begin` and ends with `rollback`, so it leaves nothing behind. Because that project
+also holds real test accounts, **every query in the test must filter by its own fixture ids** — an
+unfiltered `limit 1` picked a real org's row on 6 Oct and failed. The same day section 11 turned out to be
+flaky: Ana's two memberships were inserted in one transaction, so `now()` gave them the same
+`created_at` and "the oldest membership" (`active_org_id_for`, `my_org_context`, `list_my_organizations`
+all order by it) was decided by physical row order. The test now gives the second one a later
+`created_at`. The functions themselves still have no tie-breaker; in real use two memberships of one user
+are never created in the same transaction, but adding `, m.organization_id` to the three `order by`s would
+close it. 142 assertions green as of 6 Oct 2026.
+
+Test accounts in that project: `linkstar.app1@gmail.com` (free plan) and `business@linkstar.test` (org
+"Linkstar Business (prueba)", Business `active` for a year, set by hand — no Mercado Pago involved; the
+password is not in the repo). Both connect the same Google account, which also manages **Vineria Martu, a
+real client's ficha**: in the Business org it is linked on purpose to have real reviews to work with.
+Reading it is harmless; editing the profile, publishing or replying from the panel writes to that client's
+public listing, so test writes only on the Linkstar ficha.
+
 Ops scripts live in `services/api/scripts/` and run with `node scripts/<name>.js` from `services/api`
-(`provision-devices.js`, `rebuild-today-rollup.js`, `send-alerts.js` and `sync-reviews.js` also have npm
-aliases — `npm run provision-devices`, `npm run rebuild-today-rollup`, `npm run send-alerts`,
-`npm run sync-reviews`; `seed-test-device.js` doesn't; `npm run daily` runs `sync-reviews` then `send-alerts` and is what the deployed cron calls). They use the same `service_role` client as
-the server, so `services/api/.env` decides whether you are writing to local or production.
+(`provision-devices.js`, `rebuild-today-rollup.js`, `rebuild-rollups.js`, `send-alerts.js` and
+`sync-google.js` also have npm aliases — `npm run provision-devices`, `npm run rebuild-today-rollup`,
+`npm run rebuild-rollups`, `npm run send-alerts`, `npm run sync-google`; `seed-test-device.js` doesn't;
+`npm run daily` runs `rebuild-rollups` → `sync-google` → `send-alerts` and is what the deployed cron calls).
+`sync-google.js` was `sync-reviews.js` until phase 4.6, when it started reading metrics and checking
+profile changes too. `provision-devices.js` takes `--form=<device_form>` (default `nfc_stand`; `nfc_card`
+for personal cards). They use the same `service_role` client as the server, so `services/api/.env`
+decides whether you are writing to local, the test project or production.
+
+`npm run dev:api` (`node --watch`) fell into a silent restart loop on Santiago's Windows machine on
+6 Oct 2026 (repeated "Restarting 'server.js'", never listening). `node server.js` from `services/api`
+works; restart it by hand after API changes.
 
 No test runner is configured in any workspace.
 
@@ -169,18 +204,20 @@ accidentally undo:
    (`location_review_snapshots`); day-over-day deltas (`review_deltas`) are the only real signal.
    Anything finer (per employee, per device) is a prorated estimate and must stay labeled "estimado".
 
-**Nothing schedules the nightly jobs yet.** `private.rebuild_daily_rollups()`,
+**The nightly jobs run from the API's daily cron, not from `pg_cron`.** `private.rebuild_daily_rollups()`,
 `compute_review_deltas()`, `expire_subscriptions()` and `purge_old_scan_events()` all exist in `0007`, but
-the four `cron.schedule(...)` calls at the bottom of that file are **commented out** and `pg_cron` has not
-been enabled. So `scan_daily_rollups` only fills when someone runs
-`services/api/scripts/rebuild-today-rollup.js` by hand — and since the dashboard reads exclusively from the
-rollups (invariant 2), every view in `0008` reports zero until that happens. Before debugging "the
-dashboard shows no data", check this first; it is far more likely than an RLS problem. Enabling `pg_cron`
-and uncommenting those lines is a tracked pending in `packages/database/supabase/README.md`.
-
-A second consequence, easy to miss: the rollup runs for *yesterday*, so a scan is invisible until the next
-run. `0012`'s `public.rebuild_today_rollup()` exists to close that gap, and nothing calls it either —
-whether it runs on dashboard load, on a short interval, or not at all is still undecided.
+the four `cron.schedule(...)` calls at the bottom of that file are still **commented out** and `pg_cron`
+has not been enabled. Until 6 Oct 2026 that meant production showed **zero scans**: the dashboard reads
+only the rollups (invariant 2) and nothing wrote them. Since `0028` + `scripts/rebuild-rollups.js`, the
+Railway `daily` job (`npm run daily`, 8:00 Argentina) rebuilds **yesterday and today** through
+`rebuild_today_rollup(day)` (`0012`) — yesterday too, because once a day would otherwise leave the tail of
+each day out forever — and expires subscriptions through `run_expire_subscriptions()` (`0028`, a thin
+`service_role` wrapper, like `0012`'s). Review deltas come from `sync-google` (`compute_review_deltas`).
+`purge_old_scan_events()` still runs nowhere (decision 3, retention, is open). Day boundaries are UTC
+(decision 10). If the dashboard shows no data, check the last `daily` run before suspecting RLS. Moving
+these to `pg_cron` remains possible and is a tracked pending in `packages/database/supabase/README.md`;
+a scan is still invisible until the next run, and whether to also rebuild "today" on dashboard load is
+undecided.
 
 **One shared trigger function, two tables — don't collapse the nested `if`** (`0019`). `private.check_same_org()`
 backs both `employees_check_same_org` and `devices_check_same_org`. It used to read
@@ -217,12 +254,25 @@ scan never dead-ends was sending people to somebody else's domain · `0022` prod
 `org_is_activated()` stops requiring a linked device on the free plan (see "Subscription gate") ·
 `0023` notification preferences + send log, and `pending_notifications()` — the half of phase 7 that
 doesn't need Google (see "Alerts" below) · `0024` Google Business Profile: OAuth connection, encrypted
-refresh token, `google_locations` / `google_reviews`, and the RPCs `sync-reviews` writes through (see
+refresh token, `google_locations` / `google_reviews`, and the RPCs `sync-google` writes through (see
 "Google Business Profile" below) · `0025` reviews only for fichas linked to a live sucursal, plus the
 prune that enforces it (same section) · `0026` replying to reviews: `google_review_reply_target()` (who may
 reply to what) and `google_record_reply()` · `0027` org switcher: `list_my_organizations()`,
 `set_active_organization()`, and `accept_invitation()` now also makes the accepted org the active one
-(see "Org switcher" under `apps/dashboard`).
+(see "Org switcher" under `apps/dashboard`) · `0028` `run_expire_subscriptions()` for the daily job, and
+the trigger `devices_employee_requires_card` (decision 11, see "Employees are attributed only through a
+personal card") · `0029` `private.org_has_business()` (what Business means in SQL), Google metrics
+(`google_daily_metrics`, read only through `google_metrics_daily()`, and `google_search_keywords`) ·
+`0030` `google_location_write_target()` (who may write to a ficha), the listing protection
+(`google_profile_changes` + its RPCs), `org_alert_recipient()`, and `'profile_changed'` added to
+`notification_kind` · `0031` `google_location_read_target()`, `google_posts` + the free-plan quota RPCs,
+and the public Storage bucket `google-post-media` (see "Google Business Profile — the screens").
+
+**`0028`–`0031` are written and applied only to the test project** (`mbhuzrrjyboyimqvnrpy`, 6 Oct 2026,
+`rls_isolation.sql` green after each one: sections 13–16 are theirs). **They are NOT in production yet.**
+Order matters when they ship: push them **before** deploying the API or the panel built from this code —
+the panel's `fetchGoogleLocations()` selects `google_locations.metrics_synced_at` (`0029`), so a panel
+deployed first breaks Reviews too, and the `daily` job calls `run_expire_subscriptions()` (`0028`).
 
 **Everything up to `0027` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
 16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026 — local and remote matched on
@@ -531,7 +581,7 @@ Routes, one router per file, all mounted at the app root:
   `POST /api/google/sync` ("Actualizar ahora": 202 + background sync, one at a time per org in this
   process, 5 / 15 min) and `POST /api/google/reviews/:id/reply` (30 / 15 min). See below.
 
-### Google Business Profile — OAuth connection and `sync-reviews` (`0024`)
+### Google Business Profile — OAuth connection and `sync-google` (`0024`)
 
 Reading reviews needs OAuth on behalf of someone who manages the ficha; there is no API key path. One
 connection per organization, owner/admin only, resolved with the same active-org rule as the panel
@@ -564,11 +614,14 @@ the failure this prevents).
   with no policies — and only `service_role` RPCs touch it. `public.google_connections` holds the status
   the panel can show, no secrets.
 - **`invalid_grant` → `needs_reauth`, and in Testing mode that happens every 7 days.** Google expires
-  refresh tokens of apps whose consent screen is in "Testing" after a week. `sync-reviews` marks the
+  refresh tokens of apps whose consent screen is in "Testing" after a week. `sync-google` marks the
   connection and stops retrying it until someone reconnects; it is expected, not a bug, until the app is
   published (which for `business.manage` means Google's verification).
-- **`sync-reviews`** (`lib/reviewSync.js`, run by `scripts/sync-reviews.js` and once in the background
-  after each successful connect): Account Management → Business Information (`readMask` is mandatory) →
+- **`sync-google`** (`lib/googleSync.js`, run by `scripts/sync-google.js` and once in the background
+  after each successful connect or "Actualizar ahora"): decrypts and refreshes the token **once** per org,
+  then runs reviews (`lib/reviewSync.js`'s `syncReviews(accessToken, …)`), metrics
+  (`lib/metricsSync.js`) and, for Business orgs, the listing protection (`lib/profileProtection.js`), the
+  last two over the linked fichas the first one returned. Reviews: Account Management → Business Information (`readMask` is mandatory) →
   `google_locations`; auto-link ficha → sucursal **only by `place_id`**; My Business v4 reviews, newest
   `updateTime` first, paging until it crosses the newest stored one; then
   `record_google_review_snapshot()` and `compute_review_deltas(today)`.
@@ -598,6 +651,56 @@ the failure this prevents).
   `locations.google_place_id`, so it tells you which fichas *would* be read before anything is written.
 - Disconnecting revokes at Google (best-effort) and deletes the connection; fichas and reviews cascade,
   `location_review_snapshots` stays — it is our aggregate and the delta series depends on it.
+
+### Google Business Profile — the screens (phase 4.6 / 4.7, `0029`–`0031`)
+
+Métricas, Perfil and Publicaciones left the gate on 6 Oct 2026, with the same recipe as Reviews: the page
+file renders `GoogleGate` + its `*Mockup.jsx` without a connection, and a `*Screen.jsx` against real data
+with it. SEO Local, Sentimiento and Palabras clave are still gated (SEO is being redesigned after Tapstar
+changed theirs; the other two are phase 5).
+
+- **Free vs Business is decided in SQL, like Tapstar's split.** `private.org_has_business(org)` (`0029`)
+  = `org_has_access` and plan `business`/`enterprise` (trialing counts). Business-only *data* is cut in the
+  database: the platform split of impressions (`google_metrics_daily()` returns those four columns as
+  null), search keywords (RLS), listing protection (RLS + `p_require_business` on the write target) and the
+  posts quota (`google_post_reserve()`). Conversion rate and the "Qué dicen tus métricas" suggestions are
+  only cut in the UI, on purpose: both are computed from numbers the free plan already sees.
+- **`components/BusinessLock` is the second place a mock may render** (the first is `GoogleGate`), under
+  the same conditions: blurred, `inert`, behind a veil that can't be closed, and with **invented** numbers
+  (`*BusinessPreview.jsx` files), never the customer's own Business data — which a free account doesn't
+  even receive. It is per card (absolute overlay), and its button goes to Facturación. `useOrg().isBusiness`
+  decides what it draws; the database decides what exists.
+- **Metrics** (`google_daily_metrics`, `google_search_keywords`): stored for every org, read through the
+  RPC. Google publishes with ~4 days of lag and revises recent days, so each run re-reads the last 10 days
+  and upserts; a ficha with no rows gets an 18-month backfill. Keywords are monthly and Google sums
+  whatever range you ask for, so they are fetched one closed month at a time (3 per run, 12 on first).
+  The screen's period ends at the last day Google published, not today, so the tail doesn't read as a
+  drop; the previous period comes from the same query. `TrendChart` gained `compareData` (dashed series).
+- **Profile is read and written live** (`routes/googleProfile.js`), not stored. Who may read
+  (`google_location_read_target`, `0031`: viewer too) and write (`google_location_write_target`, `0030`:
+  same rule as replying — owner/admin, manager only in their branches, never a viewer, only linked fichas)
+  is SQL. The PATCH is a whitelist (`googleProfileUpdateSchema`): description, phones, website, regular
+  hours, boolean attributes and `url_*` social links. **Not** address (changing it triggers a new
+  verification at Google), categories (needs a search against Google's catalog), or split-shift hours (the
+  editor holds one range per day and would flatten a second shift — it says so and sends you to Google).
+- **Listing protection never reverts on its own.** The daily job asks `getGoogleUpdated` per linked ficha
+  of a Business org; a non-empty `diffMask` is stored in `google_profile_changes` with Google's and the
+  owner's values and mailed (kind `profile_changed`, same simulated-send rule as the alerts); the panel
+  offers "Revertir" (PATCH the owner's values back) and "Está bien". An unchanged change is not re-recorded
+  (`fingerprint` unique while pending/accepted); a reverted one that Google re-applies is news again; a
+  pending one Google stops showing becomes `cleared`. The revert route checks permission, calls Google, and
+  only then marks it resolved, so a failed revert stays pending. Still to confirm against a real change:
+  that `locations.get` returns the owner's value while `getGoogleUpdated` returns Google's (the code assumes
+  it; if not, store a snapshot after each edit and use that as `owner_values`).
+- **Posts are published immediately; scheduling is a later evolution** (it needs the job to run hourly).
+  Free = 1 per calendar month (Argentina time), Business unlimited, enforced by `google_post_reserve()`,
+  which locks the org row and reserves *before* calling Google; if Google rejects, `google_post_release()`
+  frees it. Deleting a post does **not** give the quota back. Photos go to the public bucket
+  `google-post-media/<org_id>/…` (Google fetches them from that URL); the API rejects any `mediaUrl` outside
+  that org's folder. The list is read live from Google; there are no per-post views/clicks — Google
+  discontinued `localPosts.reportInsights` in 2023.
+- `googleRequest()` retries 429/5xx for GET/PUT/PATCH/DELETE but **never for POST**: retrying a create
+  after a slow answer would publish the post twice.
 
 ### `apps/dashboard`
 
@@ -645,7 +748,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   reads the query params MP appends (the customer can type those by hand).
 - `context/OrgContext.jsx` owns the active organization and subscription state, all from `my_org_context()`.
   `useOrg()` exposes `hasOrg` / `hasChosenPlan` / `hasAccess` / `canManageBilling`, which is what the guards,
-  the billing tab and `SubscriptionBanner` read.
+  the billing tab and `SubscriptionBanner` read, and `isBusiness` (`BusinessLock` reads it; the real cut is
+  `private.org_has_business()`).
 - Settings tabs live in the URL (`/panel/configuracion/:tab` — `local`, `equipo`, `facturacion`, `legal`),
   which is what makes Devices' "Ver más" able to deep-link into "Gestión local". `SETTINGS_TAB_ALIASES`
   keeps the old ids (`general`, `employees`, `locations`, `team`, `billing`) working.
@@ -708,7 +812,9 @@ split below before wiring anything — the shell is finished, the data mostly is
   is phase 5; the header counts mix two sources on purpose (Google's per-ficha total and average vs. the
   answered/unanswered split of the rows actually read). `reviews` stays in `GOOGLE_GATED_SECTIONS`, so
   the subscription banner is also hidden there when connected — accepted to keep `AppShell` from querying
-  Google on every section. Each of the other six follows the same recipe when its data exists.
+  Google on every section. **`gb-metrics`, `gb-profile` and `gb-posts` followed on 6 Oct 2026** (see
+  "Google Business Profile — the screens"); `gb-seo`, `reports-sentiment` and `reports-keywords` are the
+  three still behind the gate even when connected.
 - **The mock JSX is a deliverable, not discarded history.** The tag `maquetas-pre-fase-2` points at the last
   commit where those ten screens were still drawing their grids, tables and charts; seven of them now live
   in the tree as `*Mockup.jsx`, the two "próximamente" ones (`reports-nps`, `monthly-reports`) are still
@@ -822,20 +928,19 @@ split below before wiring anything — the shell is finished, the data mostly is
   Cards aren't sold yet, so `v_employee_leaderboard` will stay empty — but the screen reads it for real,
   so it keeps its markup and only carries a notice above it (in `Settings.jsx`'s "Equipo" tab, plus the
   badge on the Devices teaser). When cards exist, delete the notice and it works.
-- **OPEN: the card-vs-expositor rule is written down but not enforced, and the UI now contradicts it.**
-  The rule is that an employee is attributable through a **personal card** — an expositor sits on a table
-  and belongs to nobody. The schema already supports it: `device_form` (`0001`) is
-  `nfc_stand | nfc_sticker | nfc_card | qr_stand | qr_sticker`, `devices.form_factor` defaults to
-  `'nfc_stand'`, and `v_device_performance` has exposed the column since `0008` (kept by `0018`).
-  **Nothing in `apps/dashboard` or `services/api` reads it — not one line.** So the device edit modal
-  offers the "Empleado" dropdown for every device, a table stand included, and since `scan_events`
-  snapshots `employee_id` at scan time (invariant 1), assigning a waiter to a stand credits them in
-  `v_employee_leaderboard` with reviews the table earned. Two pieces of copy still state the old rule
-  while the screens do the opposite: `Settings.jsx` ("la atribución por empleado llega con las tarjetas
-  personales") and the day-one empty state of `Employees.jsx` ("todavía no se pueden crear"), which sits
-  two lines from the "Nuevo empleado" button. Deciding this needs both of the people on the project:
-  either gate the dropdown on `form_factor = 'nfc_card'` and fix the copy, or drop the rule and say so
-  here. Do not let it sit as is — it is the kind of contradiction that gets resolved by accident.
+- **Employees are attributed only through a personal card** (decision 11, closed 6 Oct 2026, enforced by
+  `0028`). An expositor sits on a table and belongs to nobody; since `scan_events` snapshots `employee_id`
+  at scan time (invariant 1), a waiter assigned to a stand would be credited forever with what the table
+  earned. `device_form` (`0001`) is `nfc_stand | nfc_sticker | nfc_card | qr_stand | qr_sticker` and only
+  `nfc_card` may carry an `employee_id`: the trigger `devices_employee_requires_card` rejects anything else
+  (hint `employee_requires_card`, mapped in `catalogErrorMessage()`), and `0028` first cleared the
+  employees already sitting on non-card devices — the scans they already earned stay as they were. In the
+  Devices edit modal the "Empleado" selector only appears for `formFactor === 'nfc_card'` (from
+  `v_device_performance.form_factor`); for anything else it explains why, and the save sends
+  `employee_id: null`. Cards are provisioned with `provision-devices.js … --form=nfc_card`. The copy in
+  Settings, the Employees empty state and the Devices teaser already said this and stayed; the "Nuevo
+  empleado" button only exists on the standalone Employees page, which isn't reachable — embedded in
+  Settings there is no create button.
 - **Locations are loaded by hand, and that is no longer provisional.** `LocationForm.jsx` creates *and*
   edits a branch through `locations_insert`/`locations_update` of `0014` and `enforce_plan_limit()` of
   `0007`. It used to be a dev-only modal behind `VITE_ENABLE_MANUAL_LOCATION`, because branches were
@@ -860,8 +965,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   showing invented numbers, so a failure is reported.
   The review KPIs render `'—'`, never `0`, and the page says why. That distinction is the whole point: a
   `0` is indistinguishable from "we measured and there were none", and the truth is nothing measures them
-  yet — `location_review_snapshots` is written only by `sync-reviews` (`0024`), which nothing schedules
-  yet and which needs a connected Google account plus a ficha linked to a sucursal. The gate is
+  yet for an org without Google — `location_review_snapshots` is written only by `sync-google` (`0024`),
+  which needs a connected Google account plus a ficha linked to a sucursal. The gate is
   `hasReviewData`, derived from whether any location has a non-null `total_reviews`, so the numbers appear
   on their own once the first snapshot lands and nobody has to remember to edit this file.
 - `pages/Settings/TeamMembers.jsx` + `lib/teamApi.js` are the members UI (invite by link, change role,
@@ -994,8 +1099,8 @@ only real contact channel in the repo. Replace it when there's a sales email or 
   root directory is the **repo root**, not `services/api` (the only lockfile is at the root, and the
   Docker build context needs it); the Cloudflare CNAMEs are **DNS-only**, because `trust proxy = 1`
   counts exactly one proxy and Cloudflare's would make the rate limit see Cloudflare's IP; and a second
-  Railway service, `daily`, runs `npm run daily` (`scripts/daily.js` → `sync-reviews` then `send-alerts`,
-  both always, non-zero exit if either fails) at `0 11 * * *` (08:00 Argentina); its secrets are Railway
+  Railway service, `daily`, runs `npm run daily` (`scripts/daily.js` → `rebuild-rollups`, `sync-google`,
+  `send-alerts`, all always, non-zero exit if any fails) at `0 11 * * *` (08:00 Argentina); its secrets are Railway
   references to the `api` service's (`${{api.SUPABASE_SERVICE_ROLE_KEY}}`…), so they live in one place.
   **Live since 6 Oct 2026**, and ventas' `VITE_API_URL` points at it. Still missing there: Mercado Pago
   production credentials and webhook.
@@ -1019,9 +1124,10 @@ only real contact channel in the repo. Replace it when there's a sales email or 
   the same `not_found_handling` the ventas Worker already sets.
 - Of the three services `packages/database/supabase/README.md` originally assumed would be Edge Functions,
   two now live in `services/api` (`routes/redirect.js`, `routes/webhooks.js`) and are not planned as
-  separate functions. The third, `sync-reviews`, is `services/api/scripts/sync-reviews.js` — not an Edge
-  Function and not `pg_cron` either, because it talks to Google and needs `GOOGLE_TOKEN_ENC_KEY`, which
-  lives only in this service. It runs as the `daily` Railway cron service (`npm run daily`, see `services/api/DEPLOY.md`); until the API is deployed, it runs by hand.
+  separate functions. The third, `sync-reviews` (now `sync-google`), is `services/api/scripts/sync-google.js`
+  — not an Edge Function and not `pg_cron` either, because it talks to Google and needs
+  `GOOGLE_TOKEN_ENC_KEY`, which lives only in this service. It runs as part of the `daily` Railway cron
+  service (`npm run daily`, see `services/api/DEPLOY.md`).
 
 ## Language note
 

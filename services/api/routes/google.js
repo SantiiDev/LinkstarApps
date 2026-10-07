@@ -15,7 +15,7 @@ import {
   GBP_SCOPE,
 } from '../lib/googleOAuth.js';
 import { encryptToken, decryptToken } from '../lib/tokenCrypto.js';
-import { syncOrganization } from '../lib/reviewSync.js';
+import { syncGoogleOrganization } from '../lib/googleSync.js';
 import { putReviewReply } from '../lib/googleBusiness.js';
 
 const router = Router();
@@ -268,7 +268,7 @@ function runSync(target) {
   (async () => {
     const log = (line) => console.log(`[google ${organizationId}] ${line.trim()}`);
     try {
-      const summary = await syncOrganization(target, { log });
+      const summary = await syncGoogleOrganization(target, { log });
       await supabase.rpc('google_record_sync_result', {
         p_org: organizationId,
         p_ok: summary.failures === 0,
@@ -277,7 +277,7 @@ function runSync(target) {
           : null,
       });
       await supabase.rpc('compute_review_deltas', {});
-      log(`sincronización: ${summary.locations} ficha(s), ${summary.linked} vinculada(s), ${summary.reviews} reseña(s)`);
+      log(`sincronización: ${summary.locations} ficha(s), ${summary.linked} vinculada(s), ${summary.reviews} reseña(s), ${summary.metricDays} día(s) de métricas`);
     } catch (err) {
       console.error(`Sincronización de Google falló para ${organizationId}:`, err.message);
       const needsReauth = err.code === 'invalid_grant';

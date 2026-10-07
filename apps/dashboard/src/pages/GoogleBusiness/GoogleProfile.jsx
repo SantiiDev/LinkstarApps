@@ -1,16 +1,27 @@
 import GoogleGate from '../../components/GoogleGate/GoogleGate';
+import { useOrg } from '../../context/OrgContext';
+import { useGoogleConnection } from '../../lib/googleApi';
 import GoogleProfileMockup from './GoogleProfileMockup';
+import GoogleProfileScreen from './GoogleProfileScreen';
 
 /*
- * Esta pantalla es de lectura Y escritura (fase 4.7): la gracia es poder editar
- * la ficha desde acá sin ir a Google. Por eso el texto habla de editar, no sólo
- * de mirar.
+ * Perfil — sale del modal como salió Reseñas (fase 4.7). Es de lectura Y
+ * escritura: la gracia es corregir la ficha sin ir a Google.
  *
- * Hasta entonces la pantalla es la maqueta de `GoogleProfileMockup`, borrosa y
- * bloqueada detrás de `GoogleGate`.
+ *   sin Google conectado → GoogleGate con GoogleProfileMockup de fondo.
+ *   conectado            → GoogleProfileScreen (la ficha en vivo por el API, y la
+ *                          protección de ficha de 0030). En 'needs_reauth' la
+ *                          pantalla avisa: sin token no se puede leer en vivo.
  */
+export default function GoogleProfile({ onNavigateSettings }) {
+  const { org } = useOrg();
+  const google = useGoogleConnection(org?.organization_id);
+  const status = google.connection?.status;
 
-export default function GoogleProfile() {
+  if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
+    return <GoogleProfileScreen google={google} onNavigateSettings={onNavigateSettings} />;
+  }
+
   return (
     <GoogleGate
       description="Conectá tu cuenta y vas a poder ver y corregir los datos de tu ficha sin salir del panel."

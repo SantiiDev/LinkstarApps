@@ -190,6 +190,12 @@ const AUDIT_ACTION_LABELS = {
   'device.claimed': 'Vinculó un expositor',
   'member.invited': 'Invitó a alguien al equipo',
   'member.role_changed': 'Cambió el rol de un miembro',
+  'google.review_replied': 'Respondió una reseña en Google',
+  'google.profile_updated': 'Editó la ficha de Google',
+  'google.profile_change_reverted': 'Deshizo un cambio que Google hizo en la ficha',
+  'google.profile_change_accepted': 'Aceptó un cambio que Google hizo en la ficha',
+  'google.post_published': 'Publicó en la ficha de Google',
+  'google.post_deleted': 'Borró una publicación de la ficha de Google',
 };
 
 export async function fetchAuditLog(organizationId, limit = 20) {

@@ -41,6 +41,16 @@ Desde la raíz del monorepo son `npm run db:reset`, `npm run db:push` y `npm run
 | `0025_google_reviews_only_linked.sql` | Reseñas sólo de fichas vinculadas a una sucursal viva, y la poda que lo hace cumplir |
 | `0026_google_review_replies.sql` | Responder reseñas: `google_review_reply_target()` (quién responde qué) y `google_record_reply()` |
 | `0027_org_switcher.sql` | Selector de organización: `list_my_organizations()`, `set_active_organization()`, y `accept_invitation()` deja activa la organización aceptada |
+| `0028_daily_jobs_and_card_attribution.sql` | `run_expire_subscriptions()` para el job diario, y el trigger que sólo deja asignar un empleado a una tarjeta personal (`nfc_card`) — decisión 11 |
+| `0029_business_features_and_google_metrics.sql` | `private.org_has_business()`, métricas de la ficha (`google_daily_metrics`, sólo por `google_metrics_daily()`) y palabras de búsqueda (`google_search_keywords`, Business) |
+| `0030_google_profile_protection.sql` | `google_location_write_target()` (quién escribe en una ficha), protección de ficha (`google_profile_changes`, Business) y `org_alert_recipient()` |
+| `0031_google_posts.sql` | `google_location_read_target()`, publicaciones (`google_posts`, cupo de 1 por mes en gratis) y el bucket público `google-post-media` |
+
+> **`0028`–`0031` están aplicadas sólo en el proyecto de PRUEBAS** (`mbhuzrrjyboyimqvnrpy`, 6 oct 2026),
+> no en producción. Al subirlas a producción: en orden, y **antes** de desplegar el API y el panel de este
+> mismo código (el panel lee `google_locations.metrics_synced_at`, que agrega la `0029`). Ojo: en la
+> máquina de Santiago el CLI quedó vinculado al proyecto de pruebas — revisá `.temp/project-ref` y hacé
+> `supabase link` a producción antes del `db:push`.
 
 > **Al aplicar la `0022` hay que actualizar `tests/rls_isolation.sql` en el mismo cambio.** El test
 > assertea la regla de la `0015` —"plan gratis sin expositor: `org_has_access` sí,
@@ -164,13 +174,32 @@ viven ahí:
 |---|---|---|
 | `redirect` | ✅ Hecho | `services/api/routes/redirect.js` — `GET /d/:publicId`, llama `resolve_scan()` con `p_medium`, 302 |
 | `mp-webhook` | ✅ Hecho | `services/api/routes/webhooks.js` — `POST /api/webhook/mercadopago` |
-| `sync-reviews` | 🟡 Escrito, sin programar | `services/api/scripts/sync-reviews.js` (`npm run sync-reviews`) — lee con OAuth, no con API key (la Business Profile API no acepta API key). Tablas y RPC en `0024` |
+| `sync-reviews` → `sync-google` | ✅ Programado | `services/api/scripts/sync-google.js` (`npm run sync-google`), dentro del job diario de Railway (`npm run daily`). Lee con OAuth, no con API key. Desde la fase 4.6 lee también métricas y palabras de búsqueda, y revisa la protección de ficha (Business). Tablas y RPC en `0024`, `0029` y `0030` |
 
-`sync-reviews` no puede ser un `pg_cron`: habla con Google y descifra el refresh token con
-`GOOGLE_TOKEN_ENC_KEY`, que vive sólo en `services/api`. Va a ser un cron diario del host del API.
-Hasta que se programe —y hasta que un cliente conecte su ficha y la vincule a una sucursal—,
-`location_review_snapshots` queda vacía y todo lo que dependa de `review_deltas` (las "reseñas
-estimadas" de las vistas de `0008`) no tiene de dónde salir.
+`sync-google` no puede ser un `pg_cron`: habla con Google y descifra el refresh token con
+`GOOGLE_TOKEN_ENC_KEY`, que vive sólo en `services/api`. Corre en el job diario del API. Hasta que un
+cliente conecte su ficha y la vincule a una sucursal, `location_review_snapshots` queda vacía y todo lo
+que dependa de `review_deltas` (las "reseñas estimadas" de las vistas de `0008`) no tiene de dónde salir.
+
+El mismo job diario corre antes `scripts/rebuild-rollups.js`: reconstruye `scan_daily_rollups` de ayer y
+de hoy (`rebuild_today_rollup`, `0012`) y vence suscripciones (`run_expire_subscriptions`, `0028`). Es lo
+que hacían —en el papel— los `cron.schedule` comentados de la `0007`; sin eso el panel mostraba los
+escaneos en cero.
+
+Lo de `0029`–`0031` que es fácil de romper:
+
+- **Lo Business se corta en la base, no en la pantalla.** `private.org_has_business()` decide. El
+  desglose de impresiones por plataforma llega en `null` para el plan gratis porque
+  `google_daily_metrics` **no tiene select directo**: se lee sólo por `google_metrics_daily()`. Darle una
+  política de select a esa tabla abre el corte.
+- **Quién escribe en una ficha lo decide la base** (`google_location_write_target`, misma regla que
+  responder reseñas). Para leerla en vivo, `google_location_read_target` (un viewer sí).
+- **El cupo de publicaciones se reserva antes de llamar a Google** (`google_post_reserve`, con la
+  organización bloqueada). Borrar una publicación no devuelve el cupo.
+- **El bucket `google-post-media` es público a propósito**: Google baja la foto desde la URL. Cada
+  organización escribe sólo en su carpeta (`<org_id>/…`).
+- **`'profile_changed'` se agregó a `notification_kind` en la `0030` y no se usa en la misma migración**:
+  un valor de enum nuevo no se puede usar en la transacción que lo crea.
 
 Lo de `0024` que es fácil de romper:
 
@@ -207,9 +236,10 @@ Todavía no salimos a la venta: no hay tenants reales, así que el esquema puede
 plan de migración de datos. Esta lista es lo que sí hay que tener antes de vender la primera suscripción.
 
 - [x] Correr `tests/rls_isolation.sql` (verifica que un tenant no vea al otro) — en verde de punta a punta desde agosto de 2026; **se vuelve a correr antes de cada cambio de RLS**
-- [ ] Habilitar `pg_cron` y descomentar los `cron.schedule` de `0007`
-- [x] Construir `sync-reviews` (`0024` + `services/api/scripts/sync-reviews.js`)
-- [ ] Programar `sync-reviews` una vez por día en el host del API (`npm run daily`, ver `services/api/DEPLOY.md`), y publicar la app OAuth de Google (en modo Testing los refresh tokens vencen a los 7 días)
+- [ ] Habilitar `pg_cron` y descomentar los `cron.schedule` de `0007` — opcional desde la `0028`: rollups y vencimientos ya corren en el job diario del API; falta sólo la purga (`purge_old_scan_events`, ligada a la decisión de retención)
+- [x] Construir `sync-reviews` (`0024` + `services/api/scripts/sync-reviews.js`, hoy `sync-google.js`)
+- [x] Programar `sync-google` una vez por día en el host del API (`npm run daily`, ver `services/api/DEPLOY.md`)
+- [ ] Publicar la app OAuth de Google (en modo Testing los refresh tokens vencen a los 7 días)
 - [ ] Cargar precios reales y `mp_preapproval_plan_id` en `plans` (hoy los precios están hardcodeados en el front — ver "Pricing" en `CLAUDE.md`)
 - [ ] Activar backups diarios (plan Pro de Supabase)
 - [ ] Rotar `private.app_secrets.ip_pepper` **nunca**: si lo cambiás, se rompe la deduplicación histórica

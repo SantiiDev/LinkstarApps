@@ -9,7 +9,7 @@ Son **dos servicios** de Railway construidos con la misma imagen:
 | Servicio | Qué corre | Cuándo |
 |---|---|---|
 | `api` | `node server.js` (el `CMD` del Dockerfile) | Siempre encendido |
-| `daily` | `npm run daily` → `sync-reviews` + `send-alerts` (`scripts/daily.js`) | Cron, una vez por día |
+| `daily` | `npm run daily` → `rebuild-rollups` + `sync-google` + `send-alerts` (`scripts/daily.js`) | Cron, una vez por día |
 
 Lo que ya está en el repo: `services/api/Dockerfile`, `.dockerignore` en la raíz y
 `scripts/daily.js`. **No hay `railway.json` a propósito:** Railway deprecó «Config as Code» (los

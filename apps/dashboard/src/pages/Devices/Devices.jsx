@@ -49,6 +49,9 @@ function mapDeviceRow(row, series, destinations) {
     // forma de lista.
     locationId: row.location_id ?? '',
     employeeId: row.employee_id ?? '',
+    // Sólo una tarjeta personal (`nfc_card`) se asigna a un empleado: un
+    // expositor está sobre la mesa y no es de nadie (decisión 11, 0028).
+    formFactor: row.form_factor ?? null,
     // `destination_url` no está en v_device_performance (es una vista de
     // métricas): se trae aparte, con fetchDeviceDestinations().
     destinationUrl: destinations?.get(row.device_id) ?? '',
@@ -269,15 +272,22 @@ function DeviceModal({ device, onClose, onSave, onToggleStatus, locations, emplo
               )}
               <div className="device-edit-form__field">
                 <span>Empleado</span>
-                <Select
-                  value={form.employeeId}
-                  onChange={v => setForm(f => ({ ...f, employeeId: v }))}
-                  options={[
-                    { value: '', label: 'Sin asignar' },
-                    ...employees.map(e => ({ value: e.id, label: e.name })),
-                  ]}
-                  triggerClassName="device-edit-form__select-trigger"
-                />
+                {device.formFactor === 'nfc_card' ? (
+                  <Select
+                    value={form.employeeId}
+                    onChange={v => setForm(f => ({ ...f, employeeId: v }))}
+                    options={[
+                      { value: '', label: 'Sin asignar' },
+                      ...employees.map(e => ({ value: e.id, label: e.name })),
+                    ]}
+                    triggerClassName="device-edit-form__select-trigger"
+                  />
+                ) : (
+                  <span className="device-edit-form__hint">
+                    Los escaneos de un expositor no se atribuyen a un empleado: está sobre la mesa y no es de
+                    nadie. Para eso están las tarjetas personales.
+                  </span>
+                )}
               </div>
               <div className="device-edit-form__field">
                 <span>Tipo</span>
@@ -910,7 +920,8 @@ export default function DevicesPage({ onNavigate, onNavigateSettings }) {
       await updateDevice(device.id, {
         label: form.name,
         location_id: form.locationId || null,
-        employee_id: form.employeeId || null,
+        // La base rechaza un empleado en algo que no sea una tarjeta (0028).
+        employee_id: device.formFactor === 'nfc_card' ? form.employeeId || null : null,
         // El desplegable habla en 'google'/'instagram' porque es lo que rotula
         // la UI; la columna es el enum device_kind, donde Google es
         // 'google_review'. Sin esta traducción el update falla con 22P02.

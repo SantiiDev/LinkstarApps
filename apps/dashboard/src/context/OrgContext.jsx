@@ -105,6 +105,9 @@ export function OrgProvider({ children }) {
     hasDevices: Boolean(context?.has_devices),
     isActivated: Boolean(context?.is_activated),
     canManageBilling: context?.role === 'owner' || context?.role === 'admin',
+    /* Lo que BusinessLock destapa. Es la misma regla que private.org_has_business()
+       (0029), que es la que corta de verdad: esto sólo decide qué se dibuja. */
+    isBusiness: Boolean(context?.has_access) && ['business', 'enterprise'].includes(context?.plan_code),
     loading: authLoading || loading,
     error,
     refresh: load,

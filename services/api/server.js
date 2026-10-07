@@ -12,6 +12,7 @@ import subscriptionRoutes from './routes/subscriptions.js';
 import webhookRoutes from './routes/webhooks.js';
 import teamRoutes from './routes/team.js';
 import googleRoutes from './routes/google.js';
+import googleProfileRoutes from './routes/googleProfile.js';
 
 const app = express();
 
@@ -39,6 +40,7 @@ app.use(contactRoutes);
 app.use(subscriptionRoutes);
 app.use(teamRoutes);
 app.use(googleRoutes);
+app.use(googleProfileRoutes);
 app.use(webhookRoutes);
 
 // Sin host en el mensaje: en Railway "localhost" sólo confunde al leer los logs.
