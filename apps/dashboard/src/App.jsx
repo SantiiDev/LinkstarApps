@@ -182,10 +182,26 @@ function DevicesRoute() {
   );
 }
 
-/* Reseñas manda a Gestión local cuando no hay ninguna ficha vinculada. */
+/* Las pantallas de Google mandan a Gestión local cuando no hay ninguna ficha
+   vinculada. */
 function ReviewsRoute() {
   const navigate = useNavigate();
   return <ReviewsPage onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
+function GoogleMetricsRoute() {
+  const navigate = useNavigate();
+  return <GoogleMetrics onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
+function GoogleProfileRoute() {
+  const navigate = useNavigate();
+  return <GoogleProfile onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
+function GooglePostsRoute() {
+  const navigate = useNavigate();
+  return <GooglePosts onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
 }
 
 /* ─── App root ─────────────────────────────────────────────── */
@@ -288,9 +304,9 @@ export default function App() {
         <Route path={SECTION_PATHS.devices} element={<DevicesRoute />} />
         <Route path={SECTION_PATHS.reviews} element={<ReviewsRoute />} />
 
-        <Route path={SECTION_PATHS['gb-metrics']} element={<GoogleMetrics />} />
-        <Route path={SECTION_PATHS['gb-profile']} element={<GoogleProfile />} />
-        <Route path={SECTION_PATHS['gb-posts']} element={<GooglePosts />} />
+        <Route path={SECTION_PATHS['gb-metrics']} element={<GoogleMetricsRoute />} />
+        <Route path={SECTION_PATHS['gb-profile']} element={<GoogleProfileRoute />} />
+        <Route path={SECTION_PATHS['gb-posts']} element={<GooglePostsRoute />} />
         <Route path={SECTION_PATHS['gb-seo']} element={<GoogleSeoLocal />} />
 
         <Route path={SECTION_PATHS['reports-nps']} element={<ReportsNps />} />

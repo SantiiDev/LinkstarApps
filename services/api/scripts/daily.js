@@ -4,27 +4,33 @@ import path from 'node:path';
 
 /* El job diario del API: lo que corre el cron del host (Railway), una vez por día.
  *
- *   node scripts/daily.js            corre los dos jobs
- *   node scripts/daily.js --dry-run  se lo pasa a los dos: muestran, no escriben ni mandan
+ *   node scripts/daily.js            corre los tres jobs
+ *   node scripts/daily.js --dry-run  se lo pasa a los tres: muestran, no escriben ni mandan
  *
  * En orden:
- *   1. sync-reviews — lee fichas y reseñas de Google y deja el snapshot del día.
- *   2. send-alerts  — expositores inactivos y resumen semanal.
+ *   1. rebuild-rollups — scan_daily_rollups de ayer y hoy, y vence suscripciones.
+ *   2. sync-google     — fichas, reseñas, snapshot del día y métricas de Google.
+ *   3. send-alerts     — expositores inactivos y resumen semanal.
  *
- * Los dos viven acá y no en pg_cron porque necesitan claves que sólo tiene este
- * servicio (GOOGLE_TOKEN_ENC_KEY, RESEND_API_KEY). Los cron.schedule de la 0007
- * son otra cosa — rollups, deltas, vencimientos — y se habilitan en la base.
+ * Los rollups van primero porque el resumen semanal de send-alerts los lee: con
+ * el orden al revés, el mail diría lo de ayer.
  *
- * Cada job corre en su propio proceso, y SIEMPRE corren los dos: si Google falla
+ * rebuild-rollups es lo que iban a hacer los cron.schedule de la 0007, que
+ * siguen comentados (pg_cron no está habilitado). Sin él, el panel mostraba los
+ * escaneos en cero: lee sólo de scan_daily_rollups y nada los escribía. Los otros
+ * dos viven acá y no en pg_cron porque necesitan claves que sólo tiene este
+ * servicio (GOOGLE_TOKEN_ENC_KEY, RESEND_API_KEY).
+ *
+ * Cada job corre en su propio proceso, y SIEMPRE corren todos: si Google falla
  * (una conexión vencida, la API caída), las alertas por escaneos igual tienen que
- * salir. El código de salida es distinto de 0 si cualquiera de los dos falló, así
- * el panel del host marca la corrida en rojo.
+ * salir. El código de salida es distinto de 0 si cualquiera falló, así el panel
+ * del host marca la corrida en rojo.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const passthrough = process.argv.slice(2).filter((arg) => arg === '--dry-run');
 
-const JOBS = ['sync-reviews.js', 'send-alerts.js'];
+const JOBS = ['rebuild-rollups.js', 'sync-google.js', 'send-alerts.js'];
 
 function run(script) {
   return new Promise((resolve) => {

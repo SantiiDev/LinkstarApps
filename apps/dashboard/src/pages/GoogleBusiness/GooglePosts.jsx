@@ -1,14 +1,25 @@
 import GoogleGate from '../../components/GoogleGate/GoogleGate';
+import { useOrg } from '../../context/OrgContext';
+import { useGoogleConnection } from '../../lib/googleApi';
 import GooglePostsMockup from './GooglePostsMockup';
+import GooglePostsScreen from './GooglePostsScreen';
 
 /*
- * Sale de la Local Posts API (fase 4.7), que también permite crear y programar.
+ * Publicaciones — sale del modal como salió Reseñas (fase 4.7).
  *
- * Hasta entonces la pantalla es la maqueta de `GooglePostsMockup`, borrosa y
- * bloqueada detrás de `GoogleGate`.
+ *   sin Google conectado → GoogleGate con GooglePostsMockup de fondo.
+ *   conectado            → GooglePostsScreen (Local Posts en vivo por el API,
+ *                          cupo del plan gratis en 0031).
  */
+export default function GooglePosts({ onNavigateSettings }) {
+  const { org } = useOrg();
+  const google = useGoogleConnection(org?.organization_id);
+  const status = google.connection?.status;
 
-export default function GooglePosts() {
+  if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
+    return <GooglePostsScreen google={google} onNavigateSettings={onNavigateSettings} />;
+  }
+
   return (
     <GoogleGate
       description="Las publicaciones de Google Business aparecen en tu ficha y caducan solas. Para verlas y crearlas desde acá hace falta la conexión."

@@ -319,6 +319,10 @@ export function catalogErrorMessage(error, what = 'el registro') {
   // El trigger de límite de plan ya arma un mensaje pensado para leerse
   // ("Alcanzaste el límite de tu plan (1 de 1)..."), así que se muestra tal cual.
   if (error.hint === 'plan_limit_reached') return error.message;
+  // Trigger de la 0028: el panel ya no ofrece la opción, pero la regla vive en la base.
+  if (error.hint === 'employee_requires_card') {
+    return 'Sólo una tarjeta personal se puede asignar a un empleado. Un expositor está sobre la mesa y no es de nadie.';
+  }
 
   const code = error.code || '';
 

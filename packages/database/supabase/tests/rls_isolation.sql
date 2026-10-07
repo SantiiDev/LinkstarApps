@@ -323,23 +323,25 @@ begin
   insert into public.devices (organization_id, location_id, employee_id, kind, form_factor, status)
   values ('aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000001',
           'ffffffff-0000-0000-0000-000000000002',  -- empleado de Bar Dos
-          'google_review', 'nfc_stand', 'active');
+          'google_review', 'nfc_card', 'active');  -- tarjeta: sólo prueba la regla de organización (0028)
   raise exception 'FALLO: se pudo asignar un empleado de otra organización a un dispositivo';
 exception
   when foreign_key_violation then
     raise notice '   OK   Un dispositivo no acepta un empleado de otra organización';
 end $$;
 
+-- Los que tienen empleado son tarjetas personales: desde la 0028 un expositor
+-- no se puede asignar a un empleado.
 insert into public.devices (id, organization_id, location_id, employee_id, kind, form_factor, status, claimed_at) values
   ('eeeeeeee-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
    'dddddddd-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000001',
-   'google_review', 'nfc_stand', 'active', now()),
+   'google_review', 'nfc_card', 'active', now()),
   ('eeeeeeee-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001',
    'dddddddd-0000-0000-0000-000000000002', null,
    'google_review', 'nfc_stand', 'active', now()),
   ('eeeeeeee-0000-0000-0000-000000000003', 'bbbbbbbb-0000-0000-0000-000000000002',
    'dddddddd-0000-0000-0000-000000000003', 'ffffffff-0000-0000-0000-000000000002',
-   'google_review', 'nfc_stand', 'active', now());
+   'google_review', 'nfc_card', 'active', now());
 
 -- Métricas de un día, con bots incluidos para poder verificar human_scans.
 insert into public.scan_daily_rollups
@@ -798,8 +800,12 @@ reset role;
 -- last_organization_id, así que caía siempre en Bar Uno (su membresía más
 -- vieja). Lo que se prueba: que pueda elegir, que las tres funciones que leen
 -- la organización activa la sigan, y que no pueda elegir una ajena.
-insert into public.memberships (organization_id, user_id, role) values
-  ('bbbbbbbb-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'viewer');
+-- created_at explícito y posterior: dentro de la transacción del test now() no
+-- avanza, y con las dos membresías empatadas «la más vieja» quedaba librada al
+-- orden físico de las filas (el test pasaba o fallaba según qué otros datos
+-- hubiera en la base).
+insert into public.memberships (organization_id, user_id, role, created_at) values
+  ('bbbbbbbb-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'viewer', now() + interval '1 minute');
 
 select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
 
@@ -876,6 +882,313 @@ select pg_temp.check('Caro (manager) no ve las preferencias de su organización'
 select pg_temp.login('22222222-2222-2222-2222-222222222222', 'beto@bar-dos.test');
 select pg_temp.check('Beto no ve las preferencias de Bar Uno',
   (select count(*) from public.notification_preferences) = 0);
+reset role;
+
+-- =========================================================================
+-- 13. Empleado sólo en tarjetas personales, y vencer suscripciones (0028)
+-- =========================================================================
+-- Decisión 11: un expositor está sobre una mesa y no es de nadie. Asignarle un
+-- empleado le acreditaría para siempre los escaneos de la mesa (invariante 1),
+-- así que la base lo rechaza aunque el panel no ofrezca la opción.
+create or replace function pg_temp.employee_rejected(p_sql text)
+returns boolean language plpgsql as $$
+begin
+  execute p_sql;
+  return false;
+exception
+  when check_violation then
+    return sqlerrm like '%tarjeta personal%';
+end;
+$$;
+
+select pg_temp.check('Un expositor (nfc_stand) no acepta un empleado',
+  pg_temp.employee_rejected(
+    'update public.devices set employee_id = ''ffffffff-0000-0000-0000-000000000001''
+      where id = ''eeeeeeee-0000-0000-0000-000000000002'''));
+
+select pg_temp.check('Una tarjeta no puede pasar a ser expositor con el empleado puesto',
+  pg_temp.employee_rejected(
+    'update public.devices set form_factor = ''qr_stand''
+      where id = ''eeeeeeee-0000-0000-0000-000000000001'''));
+
+update public.devices set form_factor = 'nfc_card'
+ where id = 'eeeeeeee-0000-0000-0000-000000000002';
+update public.devices set employee_id = 'ffffffff-0000-0000-0000-000000000001'
+ where id = 'eeeeeeee-0000-0000-0000-000000000002';
+select pg_temp.check('Una tarjeta personal sí acepta un empleado',
+  (select employee_id from public.devices where id = 'eeeeeeee-0000-0000-0000-000000000002')
+    = 'ffffffff-0000-0000-0000-000000000001');
+
+select pg_temp.check('run_expire_subscriptions corre como service_role/postgres',
+  public.run_expire_subscriptions() >= 0);
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+do $$
+begin
+  perform public.run_expire_subscriptions();
+  raise exception 'FALLA: authenticated pudo ejecutar run_expire_subscriptions';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   authenticated no puede ejecutar run_expire_subscriptions';
+end $$;
+reset role;
+
+-- =========================================================================
+-- 14. Métricas de Google y el corte Business (0029)
+-- =========================================================================
+-- A esta altura Bar Uno tiene dos fichas vinculadas: Pichincha (9a..02) y
+-- Echesortu (9a..03, la de Caro). Centro (9a..01) quedó suelta en la sección 9.
+-- Lo que se prueba: que la tabla no se lea directo, que la RPC respete tenant y
+-- manager, y que el desglose por plataforma y las palabras de búsqueda sean sólo
+-- de Business.
+insert into public.google_daily_metrics
+  (google_location_id, day, organization_id, impressions_desktop_maps, impressions_mobile_search,
+   call_clicks, direction_requests, website_clicks) values
+  ('9a000000-0000-0000-0000-000000000002', current_date - 5, 'aaaaaaaa-0000-0000-0000-000000000001', 10, 20, 1, 2, 3),
+  ('9a000000-0000-0000-0000-000000000003', current_date - 5, 'aaaaaaaa-0000-0000-0000-000000000001',  5,  5, 0, 1, 0),
+  ('9a000000-0000-0000-0000-000000000001', current_date - 5, 'aaaaaaaa-0000-0000-0000-000000000001', 99, 99, 9, 9, 9);  -- suelta
+
+insert into public.google_search_keywords
+  (google_location_id, month, keyword, organization_id, impressions, threshold) values
+  ('9a000000-0000-0000-0000-000000000002', date_trunc('month', current_date)::date, 'bar en rosario',
+   'aaaaaaaa-0000-0000-0000-000000000001', 40, null),
+  ('9a000000-0000-0000-0000-000000000002', date_trunc('month', current_date)::date, 'cerveza artesanal',
+   'aaaaaaaa-0000-0000-0000-000000000001', null, 15);
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+
+do $$
+begin
+  perform count(*) from public.google_daily_metrics;
+  raise exception 'FALLA: authenticated pudo leer google_daily_metrics directo';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   google_daily_metrics no se lee directo (sólo por la RPC)';
+end $$;
+
+select pg_temp.check('Ana (Business) ve las dos fichas vinculadas, no la suelta',
+  (select count(*) from public.google_metrics_daily('aaaaaaaa-0000-0000-0000-000000000001', current_date - 30, current_date)) = 2);
+select pg_temp.check('El total de impresiones suma las cuatro plataformas',
+  (select impressions from public.google_metrics_daily('aaaaaaaa-0000-0000-0000-000000000001', current_date - 30, current_date)
+    where google_location_id = '9a000000-0000-0000-0000-000000000002') = 30);
+select pg_temp.check('Con Business viene el desglose por plataforma',
+  (select impressions_desktop_maps from public.google_metrics_daily('aaaaaaaa-0000-0000-0000-000000000001', current_date - 30, current_date)
+    where google_location_id = '9a000000-0000-0000-0000-000000000002') = 10);
+select pg_temp.check('Ana (Business) ve las palabras de búsqueda',
+  (select count(*) from public.google_search_keywords) = 2);
+
+select pg_temp.login('33333333-3333-3333-3333-333333333333', 'caro@bar-uno.test');
+select pg_temp.check('Caro (manager) ve sólo las métricas de su sucursal',
+  (select count(*) from public.google_metrics_daily('aaaaaaaa-0000-0000-0000-000000000001', current_date - 30, current_date)) = 1
+  and (select google_location_id from public.google_metrics_daily('aaaaaaaa-0000-0000-0000-000000000001', current_date - 30, current_date))
+      = '9a000000-0000-0000-0000-000000000003');
+select pg_temp.check('Caro no ve palabras de una sucursal que no tiene',
+  (select count(*) from public.google_search_keywords) = 0);
+
+select pg_temp.login('22222222-2222-2222-2222-222222222222', 'beto@bar-dos.test');
+select pg_temp.check('Beto no ve métricas de Bar Uno',
+  (select count(*) from public.google_metrics_daily('aaaaaaaa-0000-0000-0000-000000000001', current_date - 30, current_date)) = 0);
+select pg_temp.check('Beto no ve palabras de Bar Uno',
+  (select count(*) from public.google_search_keywords) = 0);
+reset role;
+
+-- Bar Uno pasa a gratis: siguen los totales, se van la plataforma y las palabras.
+update public.subscriptions set plan_code = 'free'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+select pg_temp.check('En gratis el total de impresiones sigue',
+  (select impressions from public.google_metrics_daily('aaaaaaaa-0000-0000-0000-000000000001', current_date - 30, current_date)
+    where google_location_id = '9a000000-0000-0000-0000-000000000002') = 30);
+select pg_temp.check('En gratis el desglose por plataforma viene vacío',
+  (select bool_and(impressions_desktop_maps is null and impressions_mobile_search is null)
+     from public.google_metrics_daily('aaaaaaaa-0000-0000-0000-000000000001', current_date - 30, current_date)));
+select pg_temp.check('En gratis las palabras de búsqueda no se ven',
+  (select count(*) from public.google_search_keywords) = 0);
+reset role;
+
+update public.subscriptions set plan_code = 'business'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+select set_config('role', 'anon', true);
+select set_config('request.jwt.claims', null, true);
+do $$
+begin
+  perform * from public.google_metrics_daily('aaaaaaaa-0000-0000-0000-000000000001', current_date - 30, current_date);
+  raise exception 'FALLA: anon pudo ejecutar google_metrics_daily';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   anon no puede ejecutar google_metrics_daily';
+end $$;
+reset role;
+
+-- =========================================================================
+-- 15. Escribir en la ficha y protección de ficha (0030)
+-- =========================================================================
+-- Misma regla que responder reseñas: owner/admin todo, manager sus sucursales,
+-- viewer nada, ficha sin vincular nunca. La protección es Business, y un cambio
+-- que Google mantiene no se registra dos veces.
+create or replace function pg_temp.write_denied(p_user uuid, p_gl uuid, p_code text, p_business boolean default false)
+returns boolean language plpgsql as $$
+begin
+  perform * from public.google_location_write_target(p_user, p_gl, p_business);
+  return false;
+exception
+  when raise_exception then
+    return sqlerrm like '%' || p_code || '%';
+end;
+$$;
+
+select pg_temp.check('Ana (owner) puede escribir en la ficha de Pichincha',
+  (select google_location from public.google_location_write_target(
+     '11111111-1111-1111-1111-111111111111', '9a000000-0000-0000-0000-000000000002')) = 'locations/2');
+select pg_temp.check('Caro (manager) puede escribir en la ficha de su sucursal',
+  (select google_location from public.google_location_write_target(
+     '33333333-3333-3333-3333-333333333333', '9a000000-0000-0000-0000-000000000003')) = 'locations/3');
+select pg_temp.check('Caro (manager) NO puede escribir en una sucursal que no tiene',
+  pg_temp.write_denied('33333333-3333-3333-3333-333333333333', '9a000000-0000-0000-0000-000000000002', 'rol_insuficiente'));
+select pg_temp.check('Dani (viewer) no puede escribir en ninguna ficha',
+  pg_temp.write_denied('44444444-4444-4444-4444-444444444444', '9a000000-0000-0000-0000-000000000002', 'rol_insuficiente'));
+select pg_temp.check('Beto no puede escribir en fichas de Bar Uno',
+  pg_temp.write_denied('22222222-2222-2222-2222-222222222222', '9a000000-0000-0000-0000-000000000002', 'rol_insuficiente'));
+select pg_temp.check('Nadie escribe en una ficha sin vincular',
+  pg_temp.write_denied('11111111-1111-1111-1111-111111111111', '9a000000-0000-0000-0000-000000000001', 'ficha_inexistente'));
+
+select pg_temp.check('Un cambio nuevo de Google se registra',
+  public.google_record_profile_change('9a000000-0000-0000-0000-000000000002',
+    array['phoneNumbers'], '{"phoneNumbers":{"primaryPhone":"0800"}}', '{"phoneNumbers":{"primaryPhone":"0341"}}') is not null);
+select pg_temp.check('El mismo cambio al día siguiente no se registra de nuevo',
+  public.google_record_profile_change('9a000000-0000-0000-0000-000000000002',
+    array['phoneNumbers'], '{"phoneNumbers":{"primaryPhone":"0800"}}', '{"phoneNumbers":{"primaryPhone":"0341"}}') is null);
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+select pg_temp.check('Ana (Business) ve el cambio detectado',
+  (select count(*) from public.google_profile_changes) = 1);
+select pg_temp.login('22222222-2222-2222-2222-222222222222', 'beto@bar-dos.test');
+select pg_temp.check('Beto no ve los cambios de Bar Uno',
+  (select count(*) from public.google_profile_changes) = 0);
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+do $$
+begin
+  perform * from public.google_location_write_target(
+    '11111111-1111-1111-1111-111111111111', '9a000000-0000-0000-0000-000000000002', false);
+  raise exception 'FALLA: authenticated pudo ejecutar google_location_write_target';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   authenticated no puede ejecutar google_location_write_target';
+end $$;
+reset role;
+
+select pg_temp.check('Revertir devuelve los valores del negocio',
+  (select owner_values->'phoneNumbers'->>'primaryPhone' from public.google_resolve_profile_change(
+     (select id from public.google_profile_changes
+       where google_location_id = '9a000000-0000-0000-0000-000000000002' and status = 'pending' limit 1),
+     '11111111-1111-1111-1111-111111111111', 'reverted')) = '0341');
+select pg_temp.check('Si Google vuelve a meter lo mismo después de revertido, se avisa de nuevo',
+  public.google_record_profile_change('9a000000-0000-0000-0000-000000000002',
+    array['phoneNumbers'], '{"phoneNumbers":{"primaryPhone":"0800"}}', '{"phoneNumbers":{"primaryPhone":"0341"}}') is not null);
+select pg_temp.check('Si Google deja de mostrarlo, el pendiente se cierra',
+  public.google_clear_profile_changes('9a000000-0000-0000-0000-000000000002') = 1);
+
+-- En gratis la protección no se ve ni se puede resolver.
+select public.google_record_profile_change('9a000000-0000-0000-0000-000000000002',
+  array['websiteUri'], '{"websiteUri":"http://otra.test"}', '{"websiteUri":"http://bar.test"}');
+update public.subscriptions set plan_code = 'free'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+select pg_temp.check('En gratis los cambios detectados no se ven',
+  (select count(*) from public.google_profile_changes) = 0);
+reset role;
+select pg_temp.check('En gratis no se puede revertir',
+  pg_temp.write_denied('11111111-1111-1111-1111-111111111111', '9a000000-0000-0000-0000-000000000002', 'solo_business', true));
+update public.subscriptions set plan_code = 'business'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+-- =========================================================================
+-- 16. Publicaciones: quién ve la ficha, el cupo del plan gratis y las fotos (0031)
+-- =========================================================================
+create or replace function pg_temp.read_denied(p_user uuid, p_gl uuid)
+returns boolean language plpgsql as $$
+begin
+  perform * from public.google_location_read_target(p_user, p_gl);
+  return false;
+exception
+  when raise_exception then
+    return sqlerrm like '%rol_insuficiente%';
+end;
+$$;
+
+select pg_temp.check('Dani (viewer) puede VER la ficha aunque no la pueda editar',
+  (select google_location from public.google_location_read_target(
+     '44444444-4444-4444-4444-444444444444', '9a000000-0000-0000-0000-000000000002')) = 'locations/2');
+select pg_temp.check('Caro (manager) no ve la ficha de una sucursal que no tiene',
+  pg_temp.read_denied('33333333-3333-3333-3333-333333333333', '9a000000-0000-0000-0000-000000000002'));
+select pg_temp.check('Beto no ve las fichas de Bar Uno',
+  pg_temp.read_denied('22222222-2222-2222-2222-222222222222', '9a000000-0000-0000-0000-000000000002'));
+
+create or replace function pg_temp.reserve_post(p_user uuid)
+returns text language plpgsql as $$
+begin
+  perform public.google_post_reserve(p_user, '9a000000-0000-0000-0000-000000000002', 'STANDARD', 'Hola', null);
+  return 'ok';
+exception
+  when raise_exception then
+    return sqlerrm;
+end;
+$$;
+
+-- Business: sin límite.
+select pg_temp.check('Business publica dos veces en el mes',
+  pg_temp.reserve_post('11111111-1111-1111-1111-111111111111') = 'ok'
+  and pg_temp.reserve_post('11111111-1111-1111-1111-111111111111') = 'ok');
+select pg_temp.check('Un viewer no puede publicar',
+  pg_temp.reserve_post('44444444-4444-4444-4444-444444444444') like '%rol_insuficiente%');
+
+-- Gratis: 1 por mes. Ya hay dos este mes, así que la tercera se rechaza.
+update public.subscriptions set plan_code = 'free'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check('En gratis, con el cupo usado, no se puede publicar',
+  pg_temp.reserve_post('11111111-1111-1111-1111-111111111111') like '%cupo_agotado%');
+
+-- Si Google rechaza, la reserva se suelta y el cupo vuelve.
+delete from public.google_posts where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check('En gratis, la primera del mes entra',
+  pg_temp.reserve_post('11111111-1111-1111-1111-111111111111') = 'ok');
+select public.google_post_release((select id from public.google_posts
+  where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001' limit 1));
+select pg_temp.check('Soltada la reserva, el cupo se puede volver a usar',
+  pg_temp.reserve_post('11111111-1111-1111-1111-111111111111') = 'ok');
+
+-- Confirmada y después borrada en Google: sigue contando.
+select public.google_post_confirm((select id from public.google_posts
+  where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001' limit 1), 'accounts/1/locations/2/localPosts/9');
+select public.google_post_mark_deleted('accounts/1/locations/2/localPosts/9', '11111111-1111-1111-1111-111111111111');
+select pg_temp.check('Borrar una publicación no devuelve el cupo',
+  pg_temp.reserve_post('11111111-1111-1111-1111-111111111111') like '%cupo_agotado%');
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+select pg_temp.check('google_post_quota dice 1 de 1 en gratis',
+  (select usadas = 1 and limite = 1 from public.google_post_quota('aaaaaaaa-0000-0000-0000-000000000001')));
+reset role;
+update public.subscriptions set plan_code = 'business'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+-- Fotos: cada organización escribe sólo en su carpeta del bucket.
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+insert into storage.objects (bucket_id, name)
+values ('google-post-media', 'aaaaaaaa-0000-0000-0000-000000000001/foto.jpg');
+select pg_temp.check('Ana sube una foto a la carpeta de Bar Uno', true);
+
+select pg_temp.login('22222222-2222-2222-2222-222222222222', 'beto@bar-dos.test');
+do $$
+begin
+  insert into storage.objects (bucket_id, name)
+  values ('google-post-media', 'aaaaaaaa-0000-0000-0000-000000000001/intruso.jpg');
+  raise exception 'FALLA: Beto subió una foto a la carpeta de Bar Uno';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   Beto no puede subir fotos a la carpeta de Bar Uno';
+end $$;
 reset role;
 
 do $$ begin

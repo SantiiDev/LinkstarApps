@@ -27,5 +27,8 @@
   "allowScripts": {
     "esbuild": true,
     "workerd": true
+  },
+  "devDependencies": {
+    "supabase": "^2.120.0"
   }
 }

@@ -11,8 +11,9 @@
     "dev": "node --watch server.js",
     "provision-devices": "node scripts/provision-devices.js",
     "rebuild-today-rollup": "node scripts/rebuild-today-rollup.js",
+    "rebuild-rollups": "node scripts/rebuild-rollups.js",
     "send-alerts": "node scripts/send-alerts.js",
-    "sync-reviews": "node scripts/sync-reviews.js",
+    "sync-google": "node scripts/sync-google.js",
     "daily": "node scripts/daily.js"
   },
   "dependencies": {

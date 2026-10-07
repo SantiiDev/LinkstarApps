@@ -1,18 +1,31 @@
 import GoogleGate from '../../components/GoogleGate/GoogleGate';
+import { useOrg } from '../../context/OrgContext';
+import { useGoogleConnection } from '../../lib/googleApi';
 import GoogleMetricsMockup from './GoogleMetricsMockup';
+import GoogleMetricsScreen from './GoogleMetricsScreen';
 
 /*
- * El dato real sale de la Business Profile Performance API, que es parte del
- * trámite de acceso a las APIs de Google Business (fase 4 del roadmap). No hay
- * forma de aproximarlo desde los escaneos: un escaneo es alguien que ya está en
- * el local con el expositor en la mano, y esto mide a los que te encontraron
- * buscando.
+ * Métricas — sale del modal como salió Reseñas (fase 4.6).
  *
- * Hasta entonces la pantalla es la maqueta de `GoogleMetricsMockup`, borrosa y
- * bloqueada detrás de `GoogleGate`.
+ *   sin Google conectado → GoogleGate con GoogleMetricsMockup de fondo.
+ *   conectado            → GoogleMetricsScreen, contra google_metrics_daily()
+ *                          (0029). También en 'needs_reauth': lo guardado se
+ *                          sigue mostrando, con un aviso para reconectar.
+ *
+ * Mientras se averigua el estado se muestra el modal, no la pantalla: una
+ * pantalla vacía reemplazada por el modal medio segundo después se lee como un
+ * error. Los números de Métricas los publica Google sobre la ficha; no se pueden
+ * aproximar desde los escaneos (un escaneo es alguien que ya está en el local).
  */
+export default function GoogleMetrics({ onNavigateSettings }) {
+  const { org } = useOrg();
+  const google = useGoogleConnection(org?.organization_id);
+  const status = google.connection?.status;
 
-export default function GoogleMetrics() {
+  if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
+    return <GoogleMetricsScreen google={google} onNavigateSettings={onNavigateSettings} />;
+  }
+
   return (
     <GoogleGate
       description="Estos números los publica Google sobre tu ficha, no salen de los expositores. Para leerlos necesitamos que conectes tu cuenta."

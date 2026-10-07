@@ -1,6 +1,4 @@
 import { supabase } from './supabase.js';
-import { refreshAccessToken } from './googleOAuth.js';
-import { decryptToken } from './tokenCrypto.js';
 import {
   listAccounts,
   listLocations,
@@ -9,9 +7,10 @@ import {
   formatAddress,
 } from './googleBusiness.js';
 
-/* sync-reviews: lo que hace el job diario por cada organización conectada.
+/* Fichas y reseñas: la parte de la lectura diaria que viene desde la fase 4.3.
+ * El access token lo consigue lib/googleSync.js, que además lee las métricas.
  *
- *   1. refresh token → access token (una hora; no se guarda)
+ *   1. (googleSync) refresh token → access token
  *   2. Account Management: qué cuentas administra quien conectó
  *   3. Business Information: qué fichas tiene cada cuenta → google_locations
  *   4. Poda + vinculación automática ficha → sucursal por place_id
@@ -26,11 +25,11 @@ import {
  * una ficha sin vincular queda nombre, dirección y place_id: lo justo para
  * ofrecerla cuando el cliente elige cuál es suya.
  *
- * Lo usan scripts/sync-reviews.js (todas las organizaciones) y el callback de
- * OAuth (sólo la que acaba de conectar, para que el panel no espere a mañana).
+ * Lo llama lib/googleSync.js, que usan scripts/sync-google.js (todas las
+ * organizaciones) y routes/google.js (la que acaba de conectar, o «Actualizar
+ * ahora», para que el panel no espere a mañana).
  *
- * Una ficha que falla no frena a las demás: se anota y se sigue. Lo que sí
- * corta es no poder conseguir el access token — sin eso no hay nada que leer.
+ * Una ficha que falla no frena a las demás: se anota y se sigue.
  */
 
 const UPSERT_CHUNK = 200;
@@ -112,13 +111,10 @@ async function syncLocationReviews(accessToken, organizationId, gl, watermark) {
   return { newOrUpdated: rows.length, total, rating, snapshot: Boolean(snapshot) };
 }
 
-export async function syncOrganization(
-  { organization_id: organizationId, refresh_token_enc: refreshTokenEnc, key_id: keyId },
-  { dryRun = false, log = console.log } = {}
-) {
-  const refreshToken = decryptToken(refreshTokenEnc, keyId, organizationId);
-  const { accessToken } = await refreshAccessToken(refreshToken);
-
+/* Devuelve el resumen y, en `linkedLocations`, las fichas vinculadas de esta
+ * corrida ({ id, google_account, google_location, title, location_id }): son
+ * las mismas sobre las que googleSync lee las métricas. */
+export async function syncReviews(accessToken, organizationId, { dryRun = false, log = console.log } = {}) {
   // --- Cuentas y fichas -----------------------------------------------------
   const accounts = await listAccounts(accessToken);
 
@@ -146,7 +142,10 @@ export async function syncOrganization(
     last_seen_at: now,
   }));
 
-  const empty = { accounts: accounts.length, locations: locationRows.length, linked: 0, reviews: 0, snapshots: 0, failures: 0 };
+  const empty = {
+    accounts: accounts.length, locations: locationRows.length, linked: 0, reviews: 0, snapshots: 0, failures: 0,
+    linkedLocations: [],
+  };
 
   if (dryRun) {
     // El conteo del resumen sale de la misma predicción que se imprime arriba;
@@ -227,6 +226,7 @@ export async function syncOrganization(
     reviews,
     snapshots,
     failures,
+    linkedLocations: linkedRows,
   };
 }
 

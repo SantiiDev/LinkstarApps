@@ -180,6 +180,45 @@ export function weeklySummaryEmail({ organizationName, payload }) {
   };
 }
 
+/* Protección de ficha (Business, 0030): Google cambió algo de la ficha por su
+ * cuenta. El mail no revierte nada: lleva al panel, donde el cliente decide.
+ * El nombre de la ficha viene de Google, así que se escapa. */
+const FIELD_LABELS = {
+  title: 'el nombre',
+  phoneNumbers: 'el teléfono',
+  categories: 'la categoría',
+  storefrontAddress: 'la dirección',
+  websiteUri: 'el sitio web',
+  regularHours: 'el horario',
+  profile: 'la descripción',
+  openInfo: 'si el local figura abierto o cerrado',
+};
+
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+
+export function profileChangedEmail({ organizationName, payload }) {
+  const fields = (payload.fields ?? []).map((f) => FIELD_LABELS[f] || f);
+  const list = fields.length > 1 ? `${fields.slice(0, -1).join(', ')} y ${fields.at(-1)}` : fields[0] || 'un dato';
+  const place = payload.location_title || 'tu ficha';
+
+  return {
+    subject: `Google cambió ${list} de ${place}`,
+    html: layout({
+      heading: 'Google cambió tu ficha',
+      body: `
+        <p style="margin:0 0 12px;">En la ficha <strong>${escapeHtml(place)}</strong>, Google cambió
+        <strong>${escapeHtml(list)}</strong> sin que lo hicieras desde el panel.</p>
+        <p style="margin:0;">Suele pasar por sugerencias de usuarios. Entrá a Perfil para ver qué cambió:
+        podés deshacerlo con un botón, o dejarlo si está bien.</p>`,
+      cta: payload.panel_url ? { href: payload.panel_url, label: 'Ver el cambio' } : null,
+    }),
+    text: `Google cambió ${list} de ${place} sin que lo hicieras desde el panel. `
+      + `Entrá a Perfil en LinkstarApp para deshacerlo o dejarlo. — ${organizationName}`,
+  };
+}
+
 /* Invitación al equipo.
  *
  * La fase 3 la resolvió con un link que quien invita copia y manda por donde

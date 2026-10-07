@@ -1,29 +1,27 @@
 import 'dotenv/config';
 import { supabase } from '../lib/supabase.js';
 import { assertGoogleConfigured } from '../lib/googleOAuth.js';
-import { syncOrganization } from '../lib/reviewSync.js';
+import { syncGoogleOrganization } from '../lib/googleSync.js';
 
-/* sync-reviews — el job diario de la fase 4.
+/* sync-google — la parte de Google del job diario (scripts/daily.js).
  *
- *   node scripts/sync-reviews.js                  todas las organizaciones conectadas
- *   node scripts/sync-reviews.js --org <uuid>     sólo una
- *   node scripts/sync-reviews.js --dry-run        lista cuentas y fichas, no escribe
+ *   node scripts/sync-google.js                  todas las organizaciones conectadas
+ *   node scripts/sync-google.js --org <uuid>     sólo una
+ *   node scripts/sync-google.js --dry-run        lista cuentas y fichas, no escribe
  *
  * Por cada organización con Google conectado y plan vigente
  * (google_sync_targets, 0024): pide un access token con el refresh token,
- * recorre cuentas → fichas → reseñas y deja el snapshot del día en
- * location_review_snapshots. El detalle está en lib/reviewSync.js.
+ * recorre cuentas → fichas → reseñas, deja el snapshot del día en
+ * location_review_snapshots y lee las métricas y palabras de búsqueda de cada
+ * ficha vinculada. El detalle está en lib/googleSync.js. Hasta la fase 4.6 se
+ * llamaba sync-reviews.js y sólo leía reseñas.
  *
  * Al final recalcula review_deltas del día (compute_review_deltas), así las
- * "reseñas nuevas" aparecen sin esperar al cron de 0007, que todavía no está
- * programado.
+ * "reseñas nuevas" aparecen sin esperar al cron de 0007, que no está programado.
  *
- * Igual que rebuild-today-rollup.js y send-alerts.js, se corre a mano hasta
- * que la fase 8 tenga dónde programarlo. A diferencia de esos dos, esto NO
- * puede vivir en pg_cron: habla con Google y necesita la clave de cifrado de
- * este servicio. Va a ser un cron del host del API (Railway/Render), una vez
- * por día. Correrlo más de una vez por día es inofensivo: el snapshot del día
- * se pisa y las reseñas se upsertean.
+ * No puede vivir en pg_cron: habla con Google y necesita la clave de cifrado de
+ * este servicio. Correrlo más de una vez por día es inofensivo: el snapshot del
+ * día se pisa, y reseñas y métricas se upsertean.
  *
  * ── Errores ───────────────────────────────────────────────────────────────
  * Una organización que falla no frena a las demás. Si Google rechaza el refresh
@@ -65,7 +63,7 @@ async function main() {
   for (const target of selected) {
     console.log(`▸ ${target.organization_id}`);
     try {
-      const summary = await syncOrganization(target, { dryRun });
+      const summary = await syncGoogleOrganization(target, { dryRun });
       if (!dryRun) {
         await supabase.rpc('google_record_sync_result', {
           p_org: target.organization_id,
@@ -77,7 +75,8 @@ async function main() {
       }
       console.log(
         `  → ${summary.locations} ficha(s) (${summary.linked} vinculada(s)), ${summary.reviews} reseña(s) nueva(s)/editada(s), ` +
-        `${summary.snapshots} snapshot(s)${summary.failures ? `, ${summary.failures} ficha(s) con error` : ''}\n`
+        `${summary.snapshots} snapshot(s), ${summary.metricDays ?? 0} día(s) de métricas, ${summary.keywords ?? 0} palabra(s)` +
+        `${summary.failures ? `, ${summary.failures} error(es) de ficha` : ''}\n`
       );
       // Contarla como OK con todas sus fichas en error escondía justo el caso
       // que importa ver (p. ej. la API v4 sin habilitar: cuentas y fichas se
@@ -120,6 +119,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('Error sincronizando reseñas:', err.message || err);
+  console.error('Error sincronizando Google:', err.message || err);
   process.exit(1);
 });
