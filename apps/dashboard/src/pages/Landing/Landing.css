@@ -1415,6 +1415,35 @@
   line-height: 1.7;
 }
 
+/* ---------- Contacto ---------- */
+.landing-contact {
+  padding: 5rem 3rem 4rem;
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.landing-contact .landing-section-title,
+.landing-contact .landing-section-subtitle {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.landing-contact .landing-section-subtitle a {
+  color: var(--color-orange);
+  font-weight: 600;
+}
+
+.landing-contact__form {
+  margin-top: 2rem;
+}
+
+@media (max-width: 768px) {
+  .landing-contact {
+    padding: 3rem 1.25rem;
+  }
+}
+
 /* ---------- Footer ---------- */
 .landing-footer {
   text-align: center;
@@ -1450,6 +1479,25 @@
 
 .landing-section--dark .landing-footer__copy {
   color: rgba(255, 255, 255, 0.5);
+}
+
+.landing-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.5rem;
+  margin-top: 0.85rem;
+  font-size: 0.78rem;
+}
+
+.landing-footer__links a {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.landing-section--dark .landing-footer__links a {
+  color: rgba(255, 255, 255, 0.75);
 }
 
 /* ---------- Scroll Reveal Utility ---------- */

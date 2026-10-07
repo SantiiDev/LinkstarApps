@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useOrg } from '../../context/OrgContext';
+import { initialsFor } from '../../lib/dashboardApi';
 import Select from '../Select/Select';
 import './Sidebar.css';
 
@@ -84,6 +86,11 @@ function Icon({ name, className }) {
         <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
       </svg>
     ),
+    mail: (
+      <svg {...props}>
+        <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 6-10 7L2 6" />
+      </svg>
+    ),
     user: (
       <svg {...props}>
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
@@ -128,21 +135,24 @@ const TAIL_ITEMS = [
   { id: 'monthly-reports', label: 'Informes mensuales', icon: 'file-text' },
   { id: 'automations', label: 'Automatizaciones', icon: 'zap' },
   { id: 'settings', label: 'Configuración', icon: 'settings' },
+  { id: 'contact', label: 'Contacto', icon: 'mail' },
 ];
-
-function initialsFor(name, email) {
-  const source = (name || email || '').trim();
-  if (!source) return '?';
-  const parts = source.split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
-}
 
 export default function Sidebar({ activeSection, onNavigate, onLogout, open = false, onClose }) {
   const { user } = useAuth();
+  const { org, organizations, switchOrganization } = useOrg();
   const fullName = user?.user_metadata?.full_name;
   const displayName = fullName || user?.email || 'Usuario';
-  const secondaryLine = fullName ? user?.email : 'Mi cuenta';
+  /* La organización activa va debajo del nombre: con el selector (0027) es lo
+     que dice sobre qué cuenta estás mirando. */
+  const secondaryLine = org?.organization_name || (fullName ? user?.email : 'Mi cuenta');
+  /* El selector sólo aparece si hay más de una. Una organización sin plan
+     vigente se puede elegir igual —para pagarla—, y se marca. */
+  const orgOptions = organizations.map((o) => ({
+    value: o.organization_id,
+    label: o.has_access ? o.organization_name : `${o.organization_name} · sin plan vigente`,
+  }));
+  const [switchError, setSwitchError] = useState(null);
   const [confirmingLogout, setConfirmingLogout] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [lang, setLang] = useState('es');
@@ -167,6 +177,17 @@ export default function Sidebar({ activeSection, onNavigate, onLogout, open = fa
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [menuOpen]);
+
+  async function handleSwitchOrg(organizationId) {
+    setSwitchError(null);
+    try {
+      await switchOrganization(organizationId);
+      setMenuOpen(false);
+    } catch (err) {
+      console.error('No se pudo cambiar de organización:', err);
+      setSwitchError('No pudimos cambiar de organización. Probá de nuevo.');
+    }
+  }
 
   function goToProfile() {
     setMenuOpen(false);
@@ -253,6 +274,23 @@ export default function Sidebar({ activeSection, onNavigate, onLogout, open = fa
         <div className="sidebar__user-wrap" ref={userMenuRef}>
           {menuOpen && (
             <div className="sidebar__user-menu">
+              {orgOptions.length > 1 && (
+                <>
+                  <div className="sidebar__user-menu-label">Organización</div>
+                  <div className="sidebar__lang-select">
+                    <Icon name="building" className="sidebar__lang-icon" />
+                    <Select
+                      value={org?.organization_id}
+                      onChange={handleSwitchOrg}
+                      options={orgOptions}
+                      triggerClassName="sidebar__lang-trigger"
+                    />
+                  </div>
+                  {switchError && <p className="sidebar__user-menu-error" role="alert">{switchError}</p>}
+                  <div className="sidebar__user-menu-divider" />
+                </>
+              )}
+
               <div className="sidebar__lang-select">
                 <Icon name="globe" className="sidebar__lang-icon" />
                 <Select
@@ -277,7 +315,7 @@ export default function Sidebar({ activeSection, onNavigate, onLogout, open = fa
           )}
 
           <button className="sidebar__user" onClick={() => setMenuOpen((prev) => !prev)}>
-            <div className="sidebar__avatar">{initialsFor(fullName, user?.email)}</div>
+            <div className="sidebar__avatar">{initialsFor(fullName || user?.email)}</div>
             <div className="sidebar__user-info">
               <span className="sidebar__user-name">{displayName}</span>
               <span className="sidebar__user-role">{secondaryLine}</span>

@@ -326,6 +326,23 @@
   background: rgba(26, 38, 57, 0.08);
 }
 
+/* Selector de organización (0027): sólo aparece con más de una. */
+.sidebar__user-menu-label {
+  padding: 0.35rem 0.75rem 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.sidebar__user-menu-error {
+  margin: 0 0.75rem 0.25rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #c0392b;
+}
+
 .sidebar__user-menu-item {
   display: flex;
   align-items: center;
@@ -488,6 +505,13 @@
   .sidebar__user {
     justify-content: center;
     padding: 0.5rem;
+  }
+
+  /* En el riel de 88px el menú no entra: se abre hacia la derecha con ancho
+     propio, igual que los submenús. */
+  .sidebar__user-menu {
+    right: auto;
+    width: 240px;
   }
 
   .sidebar__group {

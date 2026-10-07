@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
-import { SALES_CONTACT_URL } from '../../lib/config';
+import { SALES_CONTACT_URL, effectiveCheckoutMode } from '../../lib/config';
+import { PUBLIC_ROUTES } from '../../lib/routes';
 import { formatArs } from '../../lib/format';
+import ContactForm from '../../components/ContactForm/ContactForm';
 import './Landing.css';
 
 /* ───────────────── FAQ DATA ───────────────── */
@@ -69,6 +72,7 @@ const NAV_LINKS = [
   { id: 'features', label: 'Funciones' },
   { id: 'how', label: 'Cómo funciona' },
   { id: 'pricing', label: 'Planes' },
+  { id: 'contact', label: 'Contacto' },
 ];
 const NAV_SECTION_IDS = NAV_LINKS.map((link) => link.id);
 
@@ -728,7 +732,10 @@ function PriceCard({ plan, onEnterDashboard }) {
         ))}
       </div>
 
-      {plan.checkout_mode === 'contact' ? (
+      {/* El botón usa el modo EFECTIVO (BUSINESS_CHECKOUT_ENABLED, lib/config.js);
+          el precio y el destacado de arriba, el real: el plan sigue costando lo
+          mismo aunque por ahora se contrate hablando con ventas. */}
+      {effectiveCheckoutMode(plan) === 'contact' ? (
         <a
           className="landing-price-card__btn landing-price-card__btn--outline"
           href={SALES_CONTACT_URL}
@@ -744,7 +751,10 @@ function PriceCard({ plan, onEnterDashboard }) {
             'landing-price-card__btn ' +
             (featured ? 'landing-price-card__btn--solid' : 'landing-price-card__btn--outline')
           }
-          onClick={onEnterDashboard}
+          /* El código del plan viaja: antes esta tarjeta llamaba al mismo
+             callback que "Iniciar sesión" del navbar y la elección se perdía,
+             así que el usuario volvía a elegir el mismo plan en el alta. */
+          onClick={() => onEnterDashboard(plan.code)}
         >
           {featured && plan.trial_days > 0 ? `Probar ${plan.trial_days} días gratis` : 'Empezar gratis'}
         </button>
@@ -874,6 +884,27 @@ function FAQ({ openFaq, setOpenFaq }) {
   );
 }
 
+/* ─── Contacto ──────────────────────────── */
+/* El mismo formulario que el sitio de ventas (components/ContactForm), por
+   POST /api/contact. Está en la landing porque es la única página del panel que
+   ve alguien sin cuenta: quien todavía no se registró también tiene que poder
+   preguntar algo. */
+function Contact() {
+  return (
+    <RevealSection className="landing-contact" id="contact" bg="dark">
+      <span className="landing-section-tag">Contacto</span>
+      <h2 className="landing-section-title">¿Tenés alguna consulta?</h2>
+      <p className="landing-section-subtitle">
+        Escribinos y te respondemos en menos de 24 horas. También podés hacerlo a{' '}
+        <a href="mailto:linkstar.app1@gmail.com">linkstar.app1@gmail.com</a>.
+      </p>
+      <div className="landing-contact__form">
+        <ContactForm idPrefix="landing-contact" />
+      </div>
+    </RevealSection>
+  );
+}
+
 /* ─── Footer ────────────────────────────── */
 function Footer() {
   return (
@@ -882,7 +913,21 @@ function Footer() {
         <div className="landing-footer__brand">
           linkstar<span className="landing-footer__brand-dot">.</span>
         </div>
-        <p className="landing-footer__copy">© 2026 linkstar — Panel de gestión de reseñas con NFC inteligente</p>
+        <p className="landing-footer__copy">© {new Date().getFullYear()} linkstar — Panel de gestión de reseñas con NFC inteligente</p>
+        {/* La política tiene que estar enlazada desde la página de inicio: es
+            uno de los requisitos de Google para verificar la app OAuth, que
+            revisa justamente esta página. Los términos son los del sitio de
+            ventas, que cubren el servicio entero. */}
+        <nav className="landing-footer__links" aria-label="Legales">
+          <Link to={PUBLIC_ROUTES.privacy}>Política de privacidad</Link>
+          <a href="https://linkstarapp.com/terminos">Términos y condiciones</a>
+          <a
+            href="#contact"
+            onClick={(e) => { e.preventDefault(); scrollTo('contact'); }}
+          >
+            Contacto
+          </a>
+        </nav>
       </footer>
     </div>
   );
@@ -902,6 +947,7 @@ export default function Landing({ onEnterDashboard }) {
       <HowItWorks />
       <Pricing onEnterDashboard={onEnterDashboard} />
       <FAQ openFaq={openFaq} setOpenFaq={setOpenFaq} />
+      <Contact />
       <Footer />
     </div>
   );

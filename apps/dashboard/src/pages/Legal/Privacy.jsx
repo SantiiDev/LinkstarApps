@@ -26,7 +26,7 @@ import './Legal.css';
  * la fecha de abajo.
  */
 
-const UPDATED = '20 de septiembre de 2026';
+const UPDATED = '6 de octubre de 2026';
 
 /* La casilla real, la misma que usa el topbar del panel. NO usar
  * soporte@linkstar.com.ar: ese dominio nunca se registró (es lo que vino a
@@ -116,12 +116,21 @@ export default function Privacy() {
           </p>
 
           <h3>3.1 Qué pedimos y para qué</h3>
+          <p>
+            Pedimos un único permiso de Google, el de administración de Google Business Profile, y con él
+            hacemos esto:
+          </p>
           <ul>
-            <li><strong>Tus reseñas</strong> — para mostrártelas en el panel, avisarte de las nuevas y permitirte responderlas desde acá.</li>
-            <li><strong>El conteo total de reseñas de tu ficha</strong> — se lee una vez por día para poder estimar cuántas reseñas nuevas generó cada expositor. Google no avisa cuando entra una reseña, así que la diferencia día a día es la única forma de medirlo.</li>
-            <li><strong>Las métricas de tu ficha</strong> (visualizaciones, llamadas, cómo te encuentran) — para mostrártelas junto a tus escaneos.</li>
-            <li><strong>Los datos y las publicaciones de tu ficha</strong> — para que puedas verlos y editarlos sin salir del panel.</li>
+            <li><strong>La lista de fichas que administra tu cuenta</strong> — nombre, dirección e identificador de lugar de cada una, para que elijas cuáles son de tu negocio y a qué sucursal corresponde cada una.</li>
+            <li><strong>Las reseñas de las fichas que vinculaste</strong> — autor tal como lo muestra Google, puntaje, texto, fecha y respuesta, para mostrártelas en el panel. <strong>De una ficha que no vinculaste no leemos ni guardamos reseñas</strong>: tu cuenta de Google puede administrar fichas de otros negocios, y esos datos no son tuyos.</li>
+            <li><strong>El conteo total y el puntaje promedio de esas fichas</strong> — se leen una vez por día para estimar cuántas reseñas nuevas generaron tus expositores. Google no avisa cuando entra una reseña, así que la diferencia día a día es la única forma de medirlo.</li>
+            <li><strong>Responder reseñas en tu nombre</strong> — sólo cuando vos (o alguien de tu equipo con permiso) escribe una respuesta y la publica desde el panel. Nunca publicamos nada por nuestra cuenta.</li>
           </ul>
+          <p>
+            <strong>Próximamente</strong>, con el mismo permiso: las métricas de tu ficha (visualizaciones,
+            llamadas, cómo te encuentran) y la edición de sus datos y publicaciones. Cuando estén
+            disponibles, esta sección lo va a decir y va a cambiar la fecha de arriba.
+          </p>
 
           <h3>3.2 Uso limitado</h3>
           <p>
@@ -142,9 +151,17 @@ export default function Privacy() {
             Podés desconectar tu ficha desde el panel en cualquier momento, y también desde{' '}
             <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">
               la página de permisos de tu cuenta de Google
-            </a>. Al desconectarla borramos el permiso de acceso y dejamos de sincronizar. Los datos que
-            ya habíamos traído se eliminan dentro de los 30 días, salvo los totales históricos que
-            alimentan tus propias estadísticas, que quedan sin vínculo con tu ficha.
+            </a>. Al desconectarla desde el panel revocamos el permiso en Google, dejamos de sincronizar y
+            <strong> borramos en el acto</strong> las fichas y las reseñas que habíamos traído. Lo único que
+            se conserva son los totales diarios de reseñas de tus sucursales, que alimentan tus propias
+            estadísticas y no contienen reseñas, autores ni textos. Lo mismo pasa con una sola ficha: al
+            desvincularla de su sucursal, sus reseñas se borran en ese momento.
+          </p>
+
+          <h3>3.4 Cómo protegemos el acceso</h3>
+          <p>
+            El permiso que nos da Google se guarda cifrado, con una clave que no está en la misma base de
+            datos, y sólo lo usa nuestro servidor. Nunca llega a tu navegador ni al de nadie de tu equipo.
           </p>
 
           <h2>4. Con quién los compartimos</h2>
@@ -156,6 +173,7 @@ export default function Privacy() {
             <li><strong>Supabase</strong> — base de datos, autenticación y almacenamiento.</li>
             <li><strong>Cloudflare</strong> — publicación del sitio y de la aplicación.</li>
             <li><strong>Mercado Pago</strong> — cobro de los planes pagos.</li>
+            <li><strong>Resend</strong> — envío de correos (invitaciones a tu equipo y avisos), cuando el envío está activado.</li>
             <li><strong>Google</strong> — únicamente si conectás tu ficha, y sólo en esa dirección.</li>
           </ul>
           <p>

@@ -884,6 +884,15 @@
   border-color: var(--color-orange);
 }
 
+/* Las aclaraciones bajo un campo son <span>, igual que las etiquetas, así que
+   necesitan ganarle a la regla de arriba (que las pondría en negrita). */
+.device-edit-form__field .device-edit-form__hint {
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
 /* Modal sparkline */
 .device-modal__chart-title {
   font-size: 0.75rem;

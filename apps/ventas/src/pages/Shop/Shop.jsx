@@ -2,12 +2,17 @@ import { useState, useRef, useEffect } from 'react';
 import { useCart } from '../../context/CartContext';
 import './Shop.css';
 
+/* Los productos NO llevan precio: el precio sale siempre del tier elegido
+   (UNIT_PRICE, DOUBLE_TOTAL_PRICE, COMBO_TOTAL_PRICE) y se le pasa explícito al
+   carrito. Había un `price: 41000` por producto que no lo leía nadie — una
+   cuarta copia del precio que alguien podía cambiar creyendo que cambiaba algo.
+   La copia que SÍ hay que mantener sincronizada es services/api/lib/catalog.js,
+   en el mismo commit que los tiers de acá abajo. */
 const products = [
   {
     id: 'google-nfc',
     name: 'Expositor Google Reviews',
     description: 'Cartel expositor NFC para Google. Tus clientes escanean y dejan su reseña al instante. Aumenta tu reputación online con un solo toque y convierte cada visita en una valoración que te posiciona mejor en Google Maps.',
-    price: 41000,
     badge: 'Más vendido',
     badgeColor: 'orange',
     platform: 'Google',
@@ -26,7 +31,6 @@ const products = [
     id: 'instagram-nfc',
     name: 'Expositor Instagram',
     description: 'Cartel expositor NFC/QR para Instagram. Con un solo toque, tus clientes acceden directamente a tu perfil y te siguen al instante. Multiplica tu comunidad orgánicamente sin esfuerzo y sin invertir en publicidad.',
-    price: 41000,
     badge: 'Nuevo',
     badgeColor: 'gradient',
     platform: 'Instagram',
@@ -150,8 +154,20 @@ function ProductCard({ product, siblingProduct, defaultTier = null }) {
     if (tier === 'single') {
       addItem(product, 1, singleColor, UNIT_PRICE);
     } else if (tier === 'double') {
-      addItem(product, 1, doubleColors[0], DOUBLE_UNIT_PRICE);
-      addItem(product, 1, doubleColors[1], DOUBLE_UNIT_PRICE);
+      /* Un bundle y no dos ítems sueltos, igual que el combo. Antes entraban
+         como dos unidades a $32.800 y el botón "−" del carrito dejaba quedarse
+         con una sola a precio de promo: $32.800 en vez de $41.000. Como pack
+         indivisible no hay nada que romper — el carrito ni siquiera dibuja los
+         controles de cantidad para un bundle. */
+      addBundle({
+        key: `double-${product.id}`,
+        name: `2 × ${product.name}`,
+        price: DOUBLE_TOTAL_PRICE,
+        items: [
+          { label: 'Unidad 1', color: doubleColors[0], image: product.images[doubleColors[0]] },
+          { label: 'Unidad 2', color: doubleColors[1], image: product.images[doubleColors[1]] },
+        ],
+      });
     } else if (tier === 'bulk') {
       bulkColors.forEach(c => addItem(product, 1, c, UNIT_PRICE));
     } else if (tier === 'combo') {
@@ -460,12 +476,19 @@ export default function Shop({ onBack }) {
               label: 'Envíos a todo el país', sub: 'Argentina'
             },
             {
+              // Decía "Pago seguro · Múltiples métodos" y contradecía al propio
+              // checkout, que avisa que el pedido no incluye pago online.
               icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg>,
-              label: 'Pago seguro', sub: 'Múltiples métodos'
+              label: 'Coordinamos el pago', sub: 'Te escribimos por email'
             },
             {
+              // Garantía y devolución son dos cosas distintas: 6 meses es el
+              // piso legal del art. 11 de la Ley 24.240 y 10 días es el derecho
+              // de arrepentimiento del art. 34. Acá decía "Garantía · 30 días de
+              // devolución", que mezclaba las dos y además no coincidía con la
+              // página de Garantía.
               icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 2v6h6M21.5 22v-6h-6M22 11.5A10 10 0 003.2 7.2M2 12.5a10 10 0 0018.8 4.2" /></svg>,
-              label: 'Garantía', sub: '30 días de devolución'
+              label: 'Garantía 6 meses', sub: 'y 10 días para arrepentirte'
             },
             {
               icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>,

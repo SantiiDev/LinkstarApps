@@ -28,11 +28,34 @@ Desde la raíz del monorepo son `npm run db:reset`, `npm run db:push` y `npm run
 | `0012_rebuild_today_rollup_rpc.sql` | `public.rebuild_today_rollup()`, wrapper para recalcular un día a demanda |
 | `0013_subscription_onboarding.sql` | Catálogo real de `plans`, `plan_selected_at`, `my_org_context()`, `select_free_plan()`, RPCs de preapproval |
 | `0014_enforce_subscription_access.sql` | `private.orgs_with_access()` y el RLS que exige plan pago para leer y escribir |
-| `0015_free_plan_requires_device.sql` | `org_is_activated()` — el plan gratis además necesita un expositor vinculado |
+| `0015_free_plan_requires_device.sql` | `org_is_activated()` — el plan gratis además necesita un expositor vinculado. **Revertida por la `0022`** |
 | `0016_entity_daily_series.sql` | Serie diaria por dispositivo / local / empleado, con `human_scans` y `bot_scans` |
 | `0017_fix_subscription_rpcs.sql` | Correctiva: reaplica los dos arreglos del `0013` que nunca llegaron a Postgres |
 | `0018_human_scans_in_dashboard_views.sql` | `human_scans` / `bot_scans` en las cinco vistas del `0008` que agregan rollups |
 | `0019_fix_check_same_org_trigger.sql` | Correctiva: `insert into employees` fallaba **siempre** desde el `0003` |
+| `0020_team_invitations.sql` | `invite_member()`, `list_org_members()`, `set_member_role()`, `private.active_org_id()` y el límite de `max_members` |
+| `0021_redirect_fallback_domain.sql` | Correctiva: el fallback de `resolve_scan()` apuntaba a `linkstar.com.ar`, un dominio que nunca se registró |
+| `0022_free_plan_without_device.sql` | Decisión de producto: el plan gratis **ya no** exige expositor vinculado. `org_is_activated()` queda como alias de `org_has_access()` |
+| `0023_notifications.sql` | Preferencias de avisos por organización, registro de envíos y `pending_notifications()` (expositor inactivo, resumen semanal) |
+| `0024_google_business_profile.sql` | Conexión OAuth con Google, refresh token cifrado, `google_locations` / `google_reviews` y las RPC de `sync-reviews` |
+| `0025_google_reviews_only_linked.sql` | Reseñas sólo de fichas vinculadas a una sucursal viva, y la poda que lo hace cumplir |
+| `0026_google_review_replies.sql` | Responder reseñas: `google_review_reply_target()` (quién responde qué) y `google_record_reply()` |
+| `0027_org_switcher.sql` | Selector de organización: `list_my_organizations()`, `set_active_organization()`, y `accept_invitation()` deja activa la organización aceptada |
+| `0028_daily_jobs_and_card_attribution.sql` | `run_expire_subscriptions()` para el job diario, y el trigger que sólo deja asignar un empleado a una tarjeta personal (`nfc_card`) — decisión 11 |
+| `0029_business_features_and_google_metrics.sql` | `private.org_has_business()`, métricas de la ficha (`google_daily_metrics`, sólo por `google_metrics_daily()`) y palabras de búsqueda (`google_search_keywords`, Business) |
+| `0030_google_profile_protection.sql` | `google_location_write_target()` (quién escribe en una ficha), protección de ficha (`google_profile_changes`, Business) y `org_alert_recipient()` |
+| `0031_google_posts.sql` | `google_location_read_target()`, publicaciones (`google_posts`, cupo de 1 por mes en gratis) y el bucket público `google-post-media` |
+
+> **`0028`–`0031` están aplicadas sólo en el proyecto de PRUEBAS** (`mbhuzrrjyboyimqvnrpy`, 6 oct 2026),
+> no en producción. Al subirlas a producción: en orden, y **antes** de desplegar el API y el panel de este
+> mismo código (el panel lee `google_locations.metrics_synced_at`, que agrega la `0029`). Ojo: en la
+> máquina de Santiago el CLI quedó vinculado al proyecto de pruebas — revisá `.temp/project-ref` y hacé
+> `supabase link` a producción antes del `db:push`.
+
+> **Al aplicar la `0022` hay que actualizar `tests/rls_isolation.sql` en el mismo cambio.** El test
+> assertea la regla de la `0015` —"plan gratis sin expositor: `org_has_access` sí,
+> `org_is_activated` no"— y esa condición deja de ser cierta, así que el test falla. No es un
+> problema del test: es la regla que cambió.
 
 Si una migración se aplicó a mano fuera de la CLI (ya pasó con `0010`),
 `supabase migration repair --status applied <version>` arregla el historial sin volver a correr el SQL.
@@ -151,10 +174,49 @@ viven ahí:
 |---|---|---|
 | `redirect` | ✅ Hecho | `services/api/routes/redirect.js` — `GET /d/:publicId`, llama `resolve_scan()` con `p_medium`, 302 |
 | `mp-webhook` | ✅ Hecho | `services/api/routes/webhooks.js` — `POST /api/webhook/mercadopago` |
-| `sync-reviews` | ❌ **Falta** | Job diario: consulta Google por cada `google_place_id` y guarda el snapshot. Necesita `SERVICE_ROLE_KEY` + `GOOGLE_API_KEY` |
+| `sync-reviews` → `sync-google` | ✅ Programado | `services/api/scripts/sync-google.js` (`npm run sync-google`), dentro del job diario de Railway (`npm run daily`). Lee con OAuth, no con API key. Desde la fase 4.6 lee también métricas y palabras de búsqueda, y revisa la protección de ficha (Business). Tablas y RPC en `0024`, `0029` y `0030` |
 
-Mientras `sync-reviews` no exista, `location_review_snapshots` queda vacía y todo lo que dependa de
-`review_deltas` (las "reseñas estimadas" de las vistas de `0008`) no tiene de dónde salir.
+`sync-google` no puede ser un `pg_cron`: habla con Google y descifra el refresh token con
+`GOOGLE_TOKEN_ENC_KEY`, que vive sólo en `services/api`. Corre en el job diario del API. Hasta que un
+cliente conecte su ficha y la vincule a una sucursal, `location_review_snapshots` queda vacía y todo lo
+que dependa de `review_deltas` (las "reseñas estimadas" de las vistas de `0008`) no tiene de dónde salir.
+
+El mismo job diario corre antes `scripts/rebuild-rollups.js`: reconstruye `scan_daily_rollups` de ayer y
+de hoy (`rebuild_today_rollup`, `0012`) y vence suscripciones (`run_expire_subscriptions`, `0028`). Es lo
+que hacían —en el papel— los `cron.schedule` comentados de la `0007`; sin eso el panel mostraba los
+escaneos en cero.
+
+Lo de `0029`–`0031` que es fácil de romper:
+
+- **Lo Business se corta en la base, no en la pantalla.** `private.org_has_business()` decide. El
+  desglose de impresiones por plataforma llega en `null` para el plan gratis porque
+  `google_daily_metrics` **no tiene select directo**: se lee sólo por `google_metrics_daily()`. Darle una
+  política de select a esa tabla abre el corte.
+- **Quién escribe en una ficha lo decide la base** (`google_location_write_target`, misma regla que
+  responder reseñas). Para leerla en vivo, `google_location_read_target` (un viewer sí).
+- **El cupo de publicaciones se reserva antes de llamar a Google** (`google_post_reserve`, con la
+  organización bloqueada). Borrar una publicación no devuelve el cupo.
+- **El bucket `google-post-media` es público a propósito**: Google baja la foto desde la URL. Cada
+  organización escribe sólo en su carpeta (`<org_id>/…`).
+- **`'profile_changed'` se agregó a `notification_kind` en la `0030` y no se usa en la misma migración**:
+  un valor de enum nuevo no se puede usar en la transacción que lo crea.
+
+Lo de `0024` que es fácil de romper:
+
+- **El refresh token no se lee desde el cliente, ni siquiera la owner.** Vive en
+  `private.google_oauth_tokens` (fuera de PostgREST, RLS forzado sin políticas) y cifrado con una clave
+  que no está en la base. Todo acceso pasa por RPC con `grant` sólo a `service_role`.
+- **Sin vínculo ficha → sucursal no hay snapshot, ni reseñas** (`0025`). El vínculo automático es sólo
+  por `place_id`; el resto se hace con `link_google_location()`. Una ficha sin vincular puede ser de un
+  tercero (la cuenta de Google que conectó administra también la de un cliente), así que de ella se
+  guarda nombre, dirección y `place_id` y nada más; `google_prune_unlinked_reviews()` borra sus reseñas
+  apenas deja de estar vinculada. Una sucursal con borrado lógico cuenta como no vinculada.
+- **Desconectar borra fichas y reseñas, no los snapshots.** Los snapshots son la serie de la que salen
+  los deltas.
+- **Quién responde qué reseña lo decide la base, no el API** (`0026`). Responder publica en la ficha de
+  Google del cliente, a la vista de todos. `google_review_reply_target()` deja a owner/admin en toda la
+  organización, a un manager sólo en sus sucursales (`membership_locations`), a un viewer en nada, y a
+  nadie sobre una ficha sin vincular. Los tests de la sección 10 de `rls_isolation.sql` cubren cada caso.
 
 Las tres reglas del webhook de Mercado Pago **ya están implementadas** en `routes/webhooks.js` — quedan
 acá escritas porque son fáciles de romper en un refactor:
@@ -173,9 +235,11 @@ del usuario (nunca `scan_events` ni `scan_daily_rollups` directo — decisión 3
 Todavía no salimos a la venta: no hay tenants reales, así que el esquema puede cambiar de forma sin
 plan de migración de datos. Esta lista es lo que sí hay que tener antes de vender la primera suscripción.
 
-- [ ] Correr `tests/rls_isolation.sql` (verifica que un tenant no vea al otro) — también antes de cada cambio de RLS
-- [ ] Habilitar `pg_cron` y descomentar los `cron.schedule` de `0007`
-- [ ] Construir `sync-reviews`, o el dashboard no tiene reseñas reales que mostrar
+- [x] Correr `tests/rls_isolation.sql` (verifica que un tenant no vea al otro) — en verde de punta a punta desde agosto de 2026; **se vuelve a correr antes de cada cambio de RLS**
+- [ ] Habilitar `pg_cron` y descomentar los `cron.schedule` de `0007` — opcional desde la `0028`: rollups y vencimientos ya corren en el job diario del API; falta sólo la purga (`purge_old_scan_events`, ligada a la decisión de retención)
+- [x] Construir `sync-reviews` (`0024` + `services/api/scripts/sync-reviews.js`, hoy `sync-google.js`)
+- [x] Programar `sync-google` una vez por día en el host del API (`npm run daily`, ver `services/api/DEPLOY.md`)
+- [ ] Publicar la app OAuth de Google (en modo Testing los refresh tokens vencen a los 7 días)
 - [ ] Cargar precios reales y `mp_preapproval_plan_id` en `plans` (hoy los precios están hardcodeados en el front — ver "Pricing" en `CLAUDE.md`)
 - [ ] Activar backups diarios (plan Pro de Supabase)
 - [ ] Rotar `private.app_secrets.ip_pepper` **nunca**: si lo cambiás, se rompe la deduplicación histórica

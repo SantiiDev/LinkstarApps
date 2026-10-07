@@ -35,7 +35,7 @@ que busca el que clona el repo. Los `.env` con valores reales nunca se commitean
 una variable nueva, agregala también al `.env.example` que corresponda en el mismo commit.
 
 `apps/ventas` no necesita `.env` para desarrollo; su `.env.production` sí está en el repo (no tiene
-secretos) y hoy apunta al placeholder `BACKEND_URL_PENDIENTE` hasta que la API tenga deploy.
+secretos) y apunta al API de producción, `https://api.linkstarapp.com` (Railway, ver `services/api/DEPLOY.md`).
 
 ```bash
 npm run dev:api          # http://localhost:3001

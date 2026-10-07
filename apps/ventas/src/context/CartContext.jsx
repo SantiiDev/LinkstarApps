@@ -1,12 +1,63 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 const CartContext = createContext(null);
 
+/* El carrito sobrevive a recargar la página.
+ *
+ * Vivía sólo en memoria: el visitante elegía dos expositores, iba a leer la
+ * política de devoluciones y volvía con el carrito vacío.
+ *
+ * La versión invalida los carritos viejos. Hay que subirla cuando cambien los
+ * precios o la forma de los ítems — si no, un carrito guardado hace semanas
+ * llega al checkout con precios que el catálogo del servidor ya no acepta y el
+ * visitante se come un 400 que no puede entender ni arreglar.
+ *
+ * Se subió a 2 cuando el tier "2 unidades" pasó a ser un pack: antes guardaba
+ * dos unidades sueltas a $32.800, y ese precio ya no es válido para un ítem
+ * suelto (ver services/api/lib/catalog.js).
+ */
+const STORAGE_KEY = 'linkstar_cart';
+const STORAGE_VERSION = 2;
+
+function readStoredCart() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    if (parsed?.v !== STORAGE_VERSION || !Array.isArray(parsed.items)) return [];
+
+    // Forma mínima: una entrada corrupta rompería el render del cajón.
+    return parsed.items.filter((i) =>
+      i &&
+      typeof i.key === 'string' &&
+      typeof i.name === 'string' &&
+      typeof i.price === 'number' && i.price > 0 &&
+      Number.isInteger(i.qty) && i.qty > 0,
+    );
+  } catch {
+    // localStorage puede no existir (modo privado, cookies bloqueadas) o traer
+    // cualquier cosa. El carrito tiene que seguir funcionando en memoria.
+    return [];
+  }
+}
+
 export function CartProvider({ children }) {
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState(readStoredCart);
   const [isOpen, setIsOpen] = useState(false);
 
-  const addItem = useCallback((product, qty, color, unitPrice = product.price) => {
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: STORAGE_VERSION, items }));
+    } catch {
+      // Cuota llena o almacenamiento bloqueado: no es motivo para romper nada.
+    }
+  }, [items]);
+
+  /* `unitPrice` es obligatorio y no tiene default: el precio lo decide el tier
+     que el comprador eligió en la tienda, no el producto. Antes caía por
+     defecto a `product.price`, que era una copia suelta del precio de lista. */
+  const addItem = useCallback((product, qty, color, unitPrice) => {
     setItems(prev => {
       const key = `${product.id}-${color}-${unitPrice}`;
       const existing = prev.find(i => i.key === key);

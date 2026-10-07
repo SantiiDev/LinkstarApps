@@ -1,0 +1,172 @@
+/* ============================================
+   FORMULARIO DE CONTACTO
+   Tarjeta casi opaca a propósito: se usa sobre el fondo navy de la landing y
+   sobre el fondo del panel, y en los dos tiene que leerse como una tarjeta
+   blanca. Sin backdrop-filter: no hace falta y es una superficie más que
+   re-difumina el fondo al scrollear (regla 1 de scroll en CLAUDE.md).
+   ============================================ */
+
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.75rem;
+  border-radius: var(--radius-card);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: var(--glass-shadow);
+  text-align: left;
+}
+
+.contact-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.contact-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.contact-form__field label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.contact-form__req {
+  color: var(--color-orange);
+}
+
+.contact-form__optional {
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.contact-form__field input,
+.contact-form__field textarea {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.7rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  font-family: inherit;
+  font-size: 0.88rem;
+  color: var(--color-navy);
+  transition: border-color var(--transition-base);
+}
+
+.contact-form__field textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.contact-form__field input:focus,
+.contact-form__field textarea:focus {
+  outline: none;
+  border-color: var(--color-orange);
+}
+
+.contact-form__field--error input,
+.contact-form__field--error textarea {
+  border-color: #c0392b;
+}
+
+.contact-form__error,
+.contact-form__send-error {
+  font-size: 0.75rem;
+  color: #c0392b;
+}
+
+.contact-form__send-error {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.contact-form__submit {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.6rem;
+  border-radius: var(--radius-button);
+  background: var(--color-orange);
+  color: white;
+  font-size: 0.88rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-button);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.contact-form__submit:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-button-hover);
+}
+
+.contact-form__submit:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* ── Enviado ── */
+.contact-form--sent {
+  align-items: center;
+  text-align: center;
+  padding: 2.5rem 1.75rem;
+}
+
+.contact-form__success-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(46, 160, 67, 0.12);
+  color: #2e7d32;
+}
+
+.contact-form__success-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-navy);
+}
+
+.contact-form__success-text {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--color-text-secondary);
+}
+
+.contact-form__secondary {
+  margin-top: 0.5rem;
+  padding: 0.6rem 1.3rem;
+  border-radius: var(--radius-button);
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-navy);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.contact-form__secondary:hover {
+  border-color: var(--color-orange);
+}
+
+@media (max-width: 640px) {
+  .contact-form {
+    padding: 1.25rem;
+  }
+
+  .contact-form__row {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-form__submit {
+    align-self: stretch;
+    justify-content: center;
+  }
+}

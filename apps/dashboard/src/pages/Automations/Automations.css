@@ -158,3 +158,222 @@
     margin-left: auto;
   }
 }
+
+/* ── Pantalla real (0023) ──
+   Nada de esto anima un backdrop-filter: las tarjetas heredan el vidrio de
+   .automation-card y el resto son superficies planas (regla 2 de scroll en
+   CLAUDE.md). */
+.automations-section {
+  margin-bottom: 2rem;
+}
+
+.automations-section__title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  margin: 0 0 0.3rem;
+}
+
+.automations-section__lede {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin: 0 0 1rem;
+  max-width: 70ch;
+  line-height: 1.5;
+}
+
+.automations-muted {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.automations-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--color-navy);
+}
+
+.automations-notice svg {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.automations-notice p {
+  margin: 0;
+}
+
+.automations-notice--error {
+  border-color: rgba(192, 57, 43, 0.3);
+  justify-content: space-between;
+  align-items: center;
+}
+
+.automations-link {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-orange);
+}
+
+.automations-link:hover {
+  text-decoration: underline;
+}
+
+.automations-inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.automations-inline-field select,
+.automations-field input {
+  border-radius: 0.6rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  font-family: inherit;
+  color: var(--color-navy);
+}
+
+.automations-inline-field select {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+.automations-inline-field select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.automations-recipient {
+  padding: 0.25rem 0.25rem 0;
+}
+
+.automations-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: 420px;
+}
+
+.automations-field span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.automations-field input {
+  padding: 0.65rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.automations-field input:focus,
+.automations-inline-field select:focus {
+  outline: none;
+  border-color: var(--color-orange);
+}
+
+.automations-field input[aria-invalid="true"] {
+  border-color: #c0392b;
+}
+
+.automations-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.74rem;
+  color: var(--color-text-secondary);
+}
+
+.automations-hint--error,
+.automations-status--error {
+  color: #c0392b;
+}
+
+.automations-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+}
+
+.automations-status {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+
+.automations-save {
+  padding: 0.65rem 1.6rem;
+  border-radius: var(--radius-button);
+  background: var(--color-orange);
+  color: white;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-button);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.automations-save:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-button-hover);
+}
+
+.automations-save:disabled {
+  background: var(--color-light);
+  color: var(--color-text-secondary);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.automations-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.6);
+  overflow: hidden;
+}
+
+.automations-log__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1.1rem;
+  font-size: 0.8rem;
+  border-bottom: 1px solid rgba(26, 38, 57, 0.06);
+}
+
+.automations-log__row:last-child {
+  border-bottom: none;
+}
+
+.automations-log__what {
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.automations-log__meta {
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 480px) {
+  .automations-actions {
+    justify-content: stretch;
+  }
+
+  .automations-save {
+    width: 100%;
+  }
+}

@@ -71,6 +71,10 @@ const COMPACT_FORMAT = new Intl.NumberFormat('es-AR', { notation: 'compact', max
  *        `zero` para conteos: la escala arranca en 0 y se rellena el área.
  *        `auto` para puntajes y porcentajes, donde el 0 no es el piso natural
  *        (un NPS va de −100 a 100) y el relleno mentiría sugiriendo acumulación.
+ * @param {number[]} [compareData] Serie de comparación (el período anterior),
+ *        punto a punto con `data`. Se dibuja punteada, sin relleno, y entra en
+ *        la escala: si no, un período anterior más alto se saldría del gráfico.
+ * @param {string}   [compareName] Nombre de esa serie en el tooltip.
  */
 export default function TrendChart({
   data,
@@ -81,6 +85,8 @@ export default function TrendChart({
   yLabel,
   baseline = 'zero',
   formatValue,
+  compareData,
+  compareName = 'Período anterior',
 }) {
   const plotRef = useRef(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -110,9 +116,14 @@ export default function TrendChart({
       left: 10,
     };
 
-    const isInteger = values.every((v) => Number.isInteger(v));
-    const dataMin = Math.min(...values);
-    const dataMax = Math.max(...values);
+    const compare = compareData?.length
+      ? values.map((_, i) => (Number.isFinite(Number(compareData[i])) ? Number(compareData[i]) : 0))
+      : null;
+    const all = compare ? [...values, ...compare] : values;
+
+    const isInteger = all.every((v) => Number.isInteger(v));
+    const dataMin = Math.min(...all);
+    const dataMax = Math.max(...all);
     const scale = baseline === 'zero'
       ? niceScale(Math.min(0, dataMin), dataMax, 4, isInteger)
       : niceScale(dataMin, dataMax, 4, isInteger);
@@ -126,9 +137,11 @@ export default function TrendChart({
     const yAt = (v) => pad.top + innerH - ((v - scale.min) / span) * innerH;
 
     const points = values.map((v, i) => [xAt(i), yAt(v)]);
-    const linePath = points
+    const toPath = (pts) => pts
       .map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(2)},${p[1].toFixed(2)}`)
       .join(' ');
+    const linePath = toPath(points);
+    const comparePath = compare ? toPath(compare.map((v, i) => [xAt(i), yAt(v)])) : null;
 
     // El área sólo cierra contra el 0. Rellenar hasta una base que no es cero
     // exagera la variación: la altura pintada deja de ser proporcional al valor.
@@ -155,8 +168,8 @@ export default function TrendChart({
     const tickFormat = scale.max >= 100000 ? COMPACT_FORMAT : DEFAULT_FORMAT;
 
     return {
-      values, pad, scale, innerW, innerH, stepX, xAt, yAt,
-      points, linePath, areaPath, labelIdx, tickFormat,
+      values, compare, pad, scale, innerW, innerH, stepX, xAt, yAt,
+      points, linePath, comparePath, areaPath, labelIdx, tickFormat,
       showDots: values.length <= 12,
       indexAt(clientX) {
         const rel = clientX - pad.left;
@@ -164,7 +177,7 @@ export default function TrendChart({
         return Math.max(0, Math.min(values.length - 1, Math.round(rel / stepX)));
       },
     };
-  }, [data, size, baseline, xLabel, yLabel]);
+  }, [data, compareData, size, baseline, xLabel, yLabel]);
 
   const isEmpty = !data || data.length === 0;
   const fmt = formatValue || ((v) => DEFAULT_FORMAT.format(v));
@@ -247,6 +260,17 @@ export default function TrendChart({
             )}
 
             {chart.areaPath && <path d={chart.areaPath} fill={`url(#${gradientId})`} />}
+            {chart.comparePath && (
+              <path
+                d={chart.comparePath}
+                fill="none"
+                stroke={strokeColor}
+                strokeOpacity="0.45"
+                strokeWidth="1.5"
+                strokeDasharray="4 4"
+                strokeLinecap="round"
+              />
+            )}
             <path
               d={chart.linePath}
               fill="none"
@@ -320,6 +344,13 @@ export default function TrendChart({
               <span className="trend-chart__tooltip-name">{seriesName}</span>
               <strong className="trend-chart__tooltip-value">{fmt(chart.values[hovered])}</strong>
             </div>
+            {chart.compare && (
+              <div className="trend-chart__tooltip-row">
+                <span className="trend-chart__tooltip-dot" style={{ background: strokeColor, opacity: 0.45 }} />
+                <span className="trend-chart__tooltip-name">{compareName}</span>
+                <strong className="trend-chart__tooltip-value">{fmt(chart.compare[hovered])}</strong>
+              </div>
+            )}
           </div>
         )}
       </div>

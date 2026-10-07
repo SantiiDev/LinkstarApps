@@ -37,11 +37,11 @@ if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(DASHBOARD_URL))
   );
 }
 
-// URL pública a la que Mercado Pago manda las notificaciones. Se adjunta a
-// cada preapproval como notification_url, además de lo que esté configurado en
-// el panel de MP. Vale la redundancia: en desarrollo la URL es un túnel que
-// cambia en cada reinicio, y mandarla en el request evita tener que reconfigurar
-// el panel cada vez. Si no está definida, MP usa sólo la del panel.
+// URL pública BASE del servicio (sin ruta). routes/orders.js le agrega
+// /api/webhook/mercadopago para las preferencias de compra de expositores. Las
+// suscripciones NO la usan: /preapproval acepta notification_url pero no la
+// guarda (ver lib/subscriptions.js), así que sus notificaciones salen sólo a la
+// URL configurada en el panel de Mercado Pago.
 export const WEBHOOK_URL = process.env.WEBHOOK_URL || null;
 
 // Dominio corto grabado en el NFC / impreso en el QR: https://<REDIRECT_DOMAIN>/d/<public_id>

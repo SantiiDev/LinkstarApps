@@ -116,6 +116,16 @@
   box-shadow: var(--glass-shadow-hover);
 }
 
+/* El margen pasa del botón al contenedor: arriba del botón ahora puede haber
+   un mensaje (resultado de la vuelta desde Google) o el estado de conexión. */
+.sph__action {
+  margin-top: 1.85rem;
+}
+
+.sph__action .sph__btn {
+  margin-top: 0;
+}
+
 .sph__note {
   margin: 1.3rem 0 0;
   max-width: 34rem;

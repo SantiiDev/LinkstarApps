@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../Sidebar/Sidebar';
 import SubscriptionBanner from './SubscriptionBanner';
 import { useAuth } from '../../context/AuthContext';
-import { PUBLIC_ROUTES, pathForSection, sectionFromPath } from '../../lib/routes';
+import { GOOGLE_GATED_SECTIONS, PUBLIC_ROUTES, pathForSection, sectionFromPath } from '../../lib/routes';
 import './AppShell.css';
 
 export default function AppShell() {
@@ -84,17 +84,17 @@ export default function AppShell() {
             </svg>
           </button>
 
-          {/* Casilla institucional real. Era soporte@linkstar.com.ar, un dominio
-              que nunca se registró, y el rótulo llevaba además un teléfono
-              inventado. Cambiar por soporte@linkstarapp.com cuando esa casilla
-              exista — el dominio sí es propio. */}
-          <a className="app-shell__contact" href="mailto:linkstar.app1@gmail.com">
+          {/* Lleva a la sección Contacto (pages/Contact), que manda la consulta
+              por el API con la organización incluida. Antes era un mailto; y
+              antes de eso, soporte@linkstar.com.ar, un dominio que nunca se
+              registró, con un teléfono inventado al lado. */}
+          <Link className="app-shell__contact" to={pathForSection('contact')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
             </svg>
             <span className="app-shell__contact-full">¿Necesitás ayuda? Escribinos</span>
             <span className="app-shell__contact-short">Ayuda</span>
-          </a>
+          </Link>
 
           <div className="app-shell__topbar-right">
             <button className="app-shell__icon-btn" aria-label="Notificaciones">
@@ -108,8 +108,10 @@ export default function AppShell() {
         </div>
 
         {/* Va arriba del contenido y dentro del scroll de la página: es un
-            aviso, no una barra fija que le coma alto a todas las secciones. */}
-        <SubscriptionBanner />
+            aviso, no una barra fija que le coma alto a todas las secciones.
+            En las que están bloqueadas por el modal de Google no se muestra:
+            ahí quedaría detrás del modal, desenfocado y sin poder tocarse. */}
+        {!GOOGLE_GATED_SECTIONS.has(activeSection) && <SubscriptionBanner />}
 
         {/* Cada sección de /panel se renderiza acá dentro. */}
         <main className="app-shell__content"><Outlet /></main>

@@ -15,6 +15,7 @@ import MonthlyReports from './pages/MonthlyReports/MonthlyReports';
 import Automations from './pages/Automations/Automations';
 import SettingsPage from './pages/Settings/Settings';
 import ProfilePage from './pages/Profile/Profile';
+import ContactPage from './pages/Contact/Contact';
 import DevicesPage from './pages/Devices/Devices';
 import Landing from './pages/Landing/Landing';
 import Login from './pages/Login/Login';
@@ -27,6 +28,7 @@ import PlanResult from './pages/Onboarding/PlanResult';
 import ClaimDevice from './pages/Onboarding/ClaimDevice';
 import { useAuth } from './context/AuthContext';
 import { useOrg } from './context/OrgContext';
+import { rememberIntendedPlan } from './lib/planIntent';
 import {
   PUBLIC_ROUTES,
   ONBOARDING_ROUTES,
@@ -108,9 +110,17 @@ function OnboardingStep({ children, requiresOrg = true, redirectIfOrg = false })
 function LandingRoute() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  return (
-    <Landing onEnterDashboard={() => navigate(user ? HOME_SECTION_PATH : PUBLIC_ROUTES.login)} />
-  );
+
+  /* Las tarjetas de precio pasan el código del plan; el navbar y el hero
+     llaman a esto sin argumentos (el `onClick` les pasa el evento del click,
+     por eso `rememberIntendedPlan` ignora todo lo que no sea un string). La
+     intención se guarda y la consume PlanPicker: no activa ni cobra nada. */
+  const enterDashboard = (planCode) => {
+    rememberIntendedPlan(planCode);
+    navigate(user ? HOME_SECTION_PATH : PUBLIC_ROUTES.login);
+  };
+
+  return <Landing onEnterDashboard={enterDashboard} />;
 }
 
 /* Con sesión activa, /iniciar-sesion y /registro no tienen nada que ofrecer:
@@ -170,6 +180,28 @@ function DevicesRoute() {
       onNavigateSettings={(tab) => navigate(settingsTabPath(tab))}
     />
   );
+}
+
+/* Las pantallas de Google mandan a Gestión local cuando no hay ninguna ficha
+   vinculada. */
+function ReviewsRoute() {
+  const navigate = useNavigate();
+  return <ReviewsPage onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
+function GoogleMetricsRoute() {
+  const navigate = useNavigate();
+  return <GoogleMetrics onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
+function GoogleProfileRoute() {
+  const navigate = useNavigate();
+  return <GoogleProfile onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
+function GooglePostsRoute() {
+  const navigate = useNavigate();
+  return <GooglePosts onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
 }
 
 /* ─── App root ─────────────────────────────────────────────── */
@@ -270,11 +302,11 @@ export default function App() {
 
         <Route path={SECTION_PATHS.company} element={<CompanyRoute />} />
         <Route path={SECTION_PATHS.devices} element={<DevicesRoute />} />
-        <Route path={SECTION_PATHS.reviews} element={<ReviewsPage />} />
+        <Route path={SECTION_PATHS.reviews} element={<ReviewsRoute />} />
 
-        <Route path={SECTION_PATHS['gb-metrics']} element={<GoogleMetrics />} />
-        <Route path={SECTION_PATHS['gb-profile']} element={<GoogleProfile />} />
-        <Route path={SECTION_PATHS['gb-posts']} element={<GooglePosts />} />
+        <Route path={SECTION_PATHS['gb-metrics']} element={<GoogleMetricsRoute />} />
+        <Route path={SECTION_PATHS['gb-profile']} element={<GoogleProfileRoute />} />
+        <Route path={SECTION_PATHS['gb-posts']} element={<GooglePostsRoute />} />
         <Route path={SECTION_PATHS['gb-seo']} element={<GoogleSeoLocal />} />
 
         <Route path={SECTION_PATHS['reports-nps']} element={<ReportsNps />} />
@@ -290,6 +322,7 @@ export default function App() {
         <Route path={SECTION_PATHS.settings} element={<SettingsPage />} />
         <Route path={`${SECTION_PATHS.settings}/:tab`} element={<SettingsPage />} />
 
+        <Route path={SECTION_PATHS.contact} element={<ContactPage />} />
         <Route path={SECTION_PATHS.profile} element={<ProfilePage />} />
 
         {/* /panel/lo-que-sea -> la sección de inicio del panel. */}

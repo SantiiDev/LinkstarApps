@@ -1,50 +1,43 @@
-import PageHeader from '../../components/PageHeader/PageHeader';
-import SectionPlaceholder from '../../components/SectionPlaceholder/SectionPlaceholder';
-import './GoogleBusiness.css';
+import GoogleGate from '../../components/GoogleGate/GoogleGate';
+import { useOrg } from '../../context/OrgContext';
+import { useGoogleConnection } from '../../lib/googleApi';
+import GoogleMetricsMockup from './GoogleMetricsMockup';
+import GoogleMetricsScreen from './GoogleMetricsScreen';
 
 /*
- * Reemplaza la maqueta: acá había visitas, llamadas, clics al sitio y pedidos
- * de cómo llegar, todo con series y variaciones escritas a mano.
+ * Métricas — sale del modal como salió Reseñas (fase 4.6).
  *
- * El dato real sale de la Business Profile Performance API, que es parte del
- * trámite de acceso a las APIs de Google Business (fase 4 del roadmap). No hay
- * forma de aproximarlo desde los escaneos: un escaneo es alguien que ya está en
- * el local con el expositor en la mano, y esto mide a los que te encontraron
- * buscando.
+ *   sin Google conectado → GoogleGate con GoogleMetricsMockup de fondo.
+ *   conectado            → GoogleMetricsScreen, contra google_metrics_daily()
+ *                          (0029). También en 'needs_reauth': lo guardado se
+ *                          sigue mostrando, con un aviso para reconectar.
+ *
+ * Mientras se averigua el estado se muestra el modal, no la pantalla: una
+ * pantalla vacía reemplazada por el modal medio segundo después se lee como un
+ * error. Los números de Métricas los publica Google sobre la ficha; no se pueden
+ * aproximar desde los escaneos (un escaneo es alguien que ya está en el local).
  */
+export default function GoogleMetrics({ onNavigateSettings }) {
+  const { org } = useOrg();
+  const google = useGoogleConnection(org?.organization_id);
+  const status = google.connection?.status;
 
-/* Recuperar la maqueta ─────────────────────────────────────────
- * El JSX que había acá no se perdió: está completo —grillas, tablas y
- * gráficos— en el tag `maquetas-pre-fase-2`, y el CSS de esta pantalla sigue
- * en el repo sin tocar. Los dos juntos son el punto de partida para rehacerla.
- *
- *   git show maquetas-pre-fase-2:apps/dashboard/src/pages/GoogleBusiness/GoogleMetrics.jsx
- *
- * Que la fuente de datos se conecte NO devuelve esta pantalla sola: hay que
- * volver a escribir el JSX contra el dato real. El tag es de dónde copiarlo.
- */
+  if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
+    return <GoogleMetricsScreen google={google} onNavigateSettings={onNavigateSettings} />;
+  }
 
-export default function GoogleMetrics() {
   return (
-    <div className="gb-page">
-      <PageHeader
-        eyebrow="Google Business"
-        title="Métricas de Google"
-        subtitle="Cuánta gente encuentra tu negocio en Google y qué hace después"
-      />
-
-      <SectionPlaceholder
-        variant="google"
-        title="Todavía no podemos ver tus métricas de Google"
-        description="Estos números los publica Google sobre tu ficha, no salen de los expositores. Para leerlos necesitamos que conectes tu cuenta."
-        preview={[
-          'Cuántas veces apareciste en búsquedas y en el mapa.',
-          'Cuántos te llamaron, pidieron cómo llegar o entraron a tu web.',
-          'Con qué términos te encontraron los que no te estaban buscando por nombre.',
-          'Cómo se mueve todo eso mes a mes, y por sucursal.',
-        ]}
-        note="Es información distinta de la de Dispositivos: los escaneos miden a quien ya está en tu local, esto mide a quien todavía te está buscando."
-      />
-    </div>
+    <GoogleGate
+      description="Estos números los publica Google sobre tu ficha, no salen de los expositores. Para leerlos necesitamos que conectes tu cuenta."
+      benefits={[
+        'Cuántas veces apareciste en búsquedas y en el mapa.',
+        'Cuántos te llamaron, pidieron cómo llegar o entraron a tu web.',
+        'Con qué términos te encontraron los que no te estaban buscando por nombre.',
+        'Cómo se mueve todo eso mes a mes, y por sucursal.',
+      ]}
+      note="Es información distinta de la de Dispositivos: los escaneos miden a quien ya está en tu local, esto mide a quien todavía te está buscando."
+    >
+      <GoogleMetricsMockup />
+    </GoogleGate>
   );
 }

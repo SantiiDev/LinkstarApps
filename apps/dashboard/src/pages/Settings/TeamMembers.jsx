@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Select from '../../components/Select/Select';
 import { useOrg } from '../../context/OrgContext';
+import { initialsFor } from '../../lib/dashboardApi';
 import {
   ASSIGNABLE_ROLES,
   ROLE_LABELS,
@@ -51,12 +52,6 @@ function Icon({ name, size = 16 }) {
     mail: <svg {...props}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 6-10 7L2 6" /></svg>,
   };
   return icons[name] || null;
-}
-
-function initialsOf(name, email) {
-  const source = (name || email || '?').trim();
-  const parts = source.split(/\s+/);
-  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
 }
 
 /* Un botón que confirma en el lugar en vez de abrir un `confirm()` del browser.
@@ -307,7 +302,7 @@ export default function TeamMembers() {
       <ul className="team-list">
         {members.map((m) => (
           <li key={m.membership_id} className="team-row">
-            <span className="team-row__avatar">{initialsOf(m.full_name, m.email)}</span>
+            <span className="team-row__avatar">{initialsFor(m.full_name || m.email)}</span>
             <span className="team-row__identity">
               <span className="team-row__name">
                 {m.full_name || m.email}

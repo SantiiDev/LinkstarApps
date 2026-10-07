@@ -1,48 +1,39 @@
-import PageHeader from '../../components/PageHeader/PageHeader';
-import SectionPlaceholder from '../../components/SectionPlaceholder/SectionPlaceholder';
-import './GoogleBusiness.css';
+import GoogleGate from '../../components/GoogleGate/GoogleGate';
+import { useOrg } from '../../context/OrgContext';
+import { useGoogleConnection } from '../../lib/googleApi';
+import GoogleProfileMockup from './GoogleProfileMockup';
+import GoogleProfileScreen from './GoogleProfileScreen';
 
 /*
- * Reemplaza la maqueta: había nombre, categoría, dirección, teléfono, horarios
- * y estado de verificación de un negocio que no existe.
+ * Perfil — sale del modal como salió Reseñas (fase 4.7). Es de lectura Y
+ * escritura: la gracia es corregir la ficha sin ir a Google.
  *
- * Esta pantalla es de lectura Y escritura (fase 4.7): la gracia es poder editar
- * la ficha desde acá sin ir a Google. Por eso el texto habla de editar, no sólo
- * de mirar.
+ *   sin Google conectado → GoogleGate con GoogleProfileMockup de fondo.
+ *   conectado            → GoogleProfileScreen (la ficha en vivo por el API, y la
+ *                          protección de ficha de 0030). En 'needs_reauth' la
+ *                          pantalla avisa: sin token no se puede leer en vivo.
  */
+export default function GoogleProfile({ onNavigateSettings }) {
+  const { org } = useOrg();
+  const google = useGoogleConnection(org?.organization_id);
+  const status = google.connection?.status;
 
-/* Recuperar la maqueta ─────────────────────────────────────────
- * El JSX que había acá no se perdió: está completo —grillas, tablas y
- * gráficos— en el tag `maquetas-pre-fase-2`, y el CSS de esta pantalla sigue
- * en el repo sin tocar. Los dos juntos son el punto de partida para rehacerla.
- *
- *   git show maquetas-pre-fase-2:apps/dashboard/src/pages/GoogleBusiness/GoogleProfile.jsx
- *
- * Que la fuente de datos se conecte NO devuelve esta pantalla sola: hay que
- * volver a escribir el JSX contra el dato real. El tag es de dónde copiarlo.
- */
+  if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
+    return <GoogleProfileScreen google={google} onNavigateSettings={onNavigateSettings} />;
+  }
 
-export default function GoogleProfile() {
   return (
-    <div className="gb-page">
-      <PageHeader
-        eyebrow="Google Business"
-        title="Ficha de Google"
-        subtitle="Los datos que ven tus clientes cuando te encuentran en Google"
-      />
-
-      <SectionPlaceholder
-        variant="google"
-        title="Tu ficha, editable desde acá"
-        description="Conectá tu cuenta y vas a poder ver y corregir los datos de tu ficha sin salir del panel."
-        preview={[
-          'Nombre, categoría, dirección y teléfono, con el estado de verificación.',
-          'Horarios normales y los especiales de feriados.',
-          'Fotos y descripción del negocio.',
-          'Editar cualquiera de esos campos y que se publique en Google.',
-        ]}
-        note="Los cambios que hagas acá se escriben en tu ficha real. Es la misma información que ve alguien buscándote en Maps."
-      />
-    </div>
+    <GoogleGate
+      description="Conectá tu cuenta y vas a poder ver y corregir los datos de tu ficha sin salir del panel."
+      benefits={[
+        'Nombre, categoría, dirección y teléfono, con el estado de verificación.',
+        'Horarios normales y los especiales de feriados.',
+        'Fotos y descripción del negocio.',
+        'Editar cualquiera de esos campos y que se publique en Google.',
+      ]}
+      note="Los cambios que hagas acá se escriben en tu ficha real. Es la misma información que ve alguien buscándote en Maps."
+    >
+      <GoogleProfileMockup />
+    </GoogleGate>
   );
 }
