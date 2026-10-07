@@ -76,7 +76,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0031 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0033 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -107,9 +107,11 @@ unfiltered `limit 1` picked a real org's row on 6 Oct and failed. The same day s
 flaky: Ana's two memberships were inserted in one transaction, so `now()` gave them the same
 `created_at` and "the oldest membership" (`active_org_id_for`, `my_org_context`, `list_my_organizations`
 all order by it) was decided by physical row order. The test now gives the second one a later
-`created_at`. The functions themselves still have no tie-breaker; in real use two memberships of one user
-are never created in the same transaction, but adding `, m.organization_id` to the three `order by`s would
-close it. 142 assertions green as of 6 Oct 2026.
+`created_at`. `0032` also adds `m.organization_id` as a tie-breaker to `active_org_id_for()` and
+`my_org_context()` (`list_my_organizations()` already ordered by `lower(name), id`), so the functions no
+longer depend on physical row order either. 142 assertions green on the test project as of 6 Oct 2026;
+159 green on a local stack (`db reset` through `0033`) on 7 Oct 2026 — sections 17 (review analysis) and
+18 (`0032`'s free-plan fallback) are new and have not run against the test project yet.
 
 Test accounts in that project: `linkstar.app1@gmail.com` (free plan) and `business@linkstar.test` (org
 "Linkstar Business (prueba)", Business `active` for a year, set by hand — no Mercado Pago involved; the
@@ -119,9 +121,10 @@ Reading it is harmless; editing the profile, publishing or replying from the pan
 public listing, so test writes only on the Linkstar ficha.
 
 Ops scripts live in `services/api/scripts/` and run with `node scripts/<name>.js` from `services/api`
-(`provision-devices.js`, `rebuild-today-rollup.js`, `rebuild-rollups.js`, `send-alerts.js` and
-`sync-google.js` also have npm aliases — `npm run provision-devices`, `npm run rebuild-today-rollup`,
-`npm run rebuild-rollups`, `npm run send-alerts`, `npm run sync-google`; `seed-test-device.js` doesn't;
+(`provision-devices.js`, `rebuild-today-rollup.js`, `rebuild-rollups.js`, `send-alerts.js`,
+`sync-google.js` and `analyze-reviews.js` also have npm aliases — `npm run provision-devices`,
+`npm run rebuild-today-rollup`, `npm run rebuild-rollups`, `npm run send-alerts`, `npm run sync-google`,
+`npm run analyze-reviews`; `seed-test-device.js` doesn't;
 `npm run daily` runs `rebuild-rollups` → `sync-google` → `send-alerts` and is what the deployed cron calls).
 `sync-google.js` was `sync-reviews.js` until phase 4.6, when it started reading metrics and checking
 profile changes too. `provision-devices.js` takes `--form=<device_form>` (default `nfc_stand`; `nfc_card`
@@ -154,7 +157,11 @@ to `.env`, don't rename them away.
   are optional as a group: without all four the Google routes answer 503 and everything else works.
   `GOOGLE_REDIRECT_URI` must match the console entry byte for byte, port included; locally that is
   `PORT` (3001), and `lib/googleOAuth.js` warns at boot if they differ. Losing `GOOGLE_TOKEN_ENC_KEY`
-  makes every stored refresh token unreadable — every customer has to reconnect.
+  makes every stored refresh token unreadable — every customer has to reconnect. `GEMINI_API_KEY` /
+  `GEMINI_MODEL` (optional, default `gemini-3.5-flash-lite`) power the review analysis of phase 5;
+  without the key the Google sync works the same and reviews simply stay pending. The key must belong to
+  a Gemini project **with billing enabled**: on the free tier Google may use what it receives to improve
+  its products, which the Limited Use policy of the Business Profile data (the review text) doesn't allow.
   `DASHBOARD_URL` is optional too (defaults to the *second* entry of `FRONTEND_URL`) and is where the
   subscription returns from Mercado Pago — it cannot be `FRONTEND_URL`, which points at the sales site.
   `FRONTEND_URL` is **comma-separated**: this one service serves both frontends, so CORS needs both
@@ -266,17 +273,39 @@ personal card") · `0029` `private.org_has_business()` (what Business means in S
 `0030` `google_location_write_target()` (who may write to a ficha), the listing protection
 (`google_profile_changes` + its RPCs), `org_alert_recipient()`, and `'profile_changed'` added to
 `notification_kind` · `0031` `google_location_read_target()`, `google_posts` + the free-plan quota RPCs,
-and the public Storage bucket `google-post-media` (see "Google Business Profile — the screens").
+and the public Storage bucket `google-post-media` (see "Google Business Profile — the screens") ·
+`0032` `select_free_plan()` lets an org that lost access (cancelled/expired Business, legacy `trial`)
+fall back to free and raises `paid_plan_active` instead of silently doing nothing; tie-breaker for the
+active-org functions · `0033` review analysis (phase 5): `google_review_analysis`, `v_review_analysis`,
+and the two `service_role` RPCs the analyzer uses (see "Review analysis" below).
 
-**`0028`–`0031` are written and applied only to the test project** (`mbhuzrrjyboyimqvnrpy`, 6 Oct 2026,
-`rls_isolation.sql` green after each one: sections 13–16 are theirs). **They are NOT in production yet.**
-Order matters when they ship: push them **before** deploying the API or the panel built from this code —
-the panel's `fetchGoogleLocations()` selects `google_locations.metrics_synced_at` (`0029`), so a panel
-deployed first breaks Reviews too, and the `daily` job calls `run_expire_subscriptions()` (`0028`).
+**`0032` and `0033` are tested locally but NOT applied to the test project or production** (7 Oct 2026:
+`supabase start` + `db reset --local` through `0033` and `rls_isolation.sql` green, 159, on a local
+Docker stack; on that machine the default ports were free, no remap needed). Push both before deploying
+the API or panel built from this code. Neither breaks if it's missing — `lib/googleSync.js` catches the
+analysis step and the Reportes screens show their load error — but the screens would be empty.
 
-**Everything up to `0027` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
-16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026 — local and remote matched on
-`npm run db:status` that day). `0027` went through the push simulation described below and
+**Everything up to `0031` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
+16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026, `0028`–`0031` on 7 Oct 2026 —
+local and remote matched on `npm run db:status` that day). `0028`–`0031` were built and tested on the
+test project first (`mbhuzrrjyboyimqvnrpy`, 6 Oct, `rls_isolation.sql` green after each one: sections
+13–16 are theirs).
+
+**They shipped in the wrong order, and that is the lesson.** Merging `develop` deployed the new API on
+Railway before the migrations existed in production, so the `daily` run of 7 Oct ran new code against
+the old schema and failed (`run_expire_subscriptions()` and the Google metrics/protection RPCs didn't
+exist). Order matters on every release that carries migrations: **push them before the API or the panel
+built from that code** — the panel's `fetchGoogleLocations()` selects `google_locations.metrics_synced_at`
+(`0029`), so a panel deployed first breaks Reviews too. Both Railway services now deploy from `main`
+(see "Deployment"), so the safe sequence is: `db push` → merge `develop` into `main` → panel deploy.
+
+**The first run of `run_expire_subscriptions()` expired a legacy row, and the plan picker couldn't undo
+it.** Production had an org from August on `plan_code = 'trial'`, a code from before `0013`, with
+`plan_selected_at` already set. `select_free_plan()` only updates rows where
+`plan_selected_at is null or plan_code = 'free'`, so choosing "Gratis" there **silently updated zero
+rows** and left the user stuck on `/alta/plan`. It was fixed by hand (`free` / `active`, trial dates
+nulled). The same dead end waited for any customer who cancels Business (the row keeps
+`plan_code = 'business'` and `plan_selected_at`), which is what `0032` fixes. `0027` went through the push simulation described below and
 `rls_isolation.sql` locally first (96 green, sections 11 and 12 new). If an environment ever lacks it,
 the panel just shows no org selector — `OrgContext` treats a failing `list_my_organizations()` as an
 empty list. `0026` went through the push simulation described below and `rls_isolation.sql` (84 green)
@@ -537,10 +566,11 @@ Routes, one router per file, all mounted at the app root:
     Per-item validation could not catch it (two units of different colours are two lines of `qty: 1`), so
     the tier became a bundle like the combo: loose items are only ever valid at `UNIT_PRICE`, and the three
     bundle ids carry a fixed price and `qty: 1`. Reintroducing a per-unit discount reopens the hole.
-  - **In `/api/orders/manual` the email is sent inside its own `try`, after the order is persisted.** If a
-    mail failure returned 500 the browser would fall back to mailing the order itself, with a *different*
-    order number and a "SIN REGISTRAR" subject — leaving a saved order under one number and an alert under
-    another saying it was never saved.
+  - **In `/api/orders/manual` the email is sent inside its own `try`, after the order is persisted.** A
+    mail failure must not turn into a 500: the order *is* saved, and a 500 tells the buyer it wasn't, so
+    they retry and the same order lands twice. (It used to be worse: the browser had a Web3Forms fallback
+    that mailed the order itself under a *different* number and a "SIN REGISTRAR" subject. That fallback
+    was removed in Oct 2026.)
   - `GET /api/orders/:orderNumber` **requires `?email=<buyer_email>`** and matches it against
     `buyer_email` (`ilike`). This client is `service_role`, so it bypasses the `orders_select` policy of
     `0006` — the email check re-implements that policy by hand. Without it, guessing an order number
@@ -570,9 +600,9 @@ Routes, one router per file, all mounted at the app root:
   can't leave a customer cut off while they are actually paying.
 - `routes/contact.js` — `POST /api/contact`, 5 per 15 min per IP. Exists for one reason: the ventas
   contact form used to POST to Web3Forms straight from the browser with the access key inlined in the
-  bundle, so anyone could read it and flood the inbox. The key now lives in `WEB3FORMS_KEY` server-side.
-  Same shape as the checkout: the browser tries the API first and only falls back to the direct call
-  while `services/api` has no deploy target.
+  bundle, so anyone could read it and flood the inbox. The key now lives in `WEB3FORMS_KEY` server-side
+  only; the browser-side fallback to Web3Forms was removed once the API was live (Oct 2026), and an
+  unreachable API now shows the support address instead.
 - `routes/auth.js` — `POST /api/auth/login-event`, behind `requireAuth`. The only writer of
   `profiles.last_login_at`.
 - `routes/health.js` — `GET /api/health`.
@@ -656,8 +686,8 @@ the failure this prevents).
 
 Métricas, Perfil and Publicaciones left the gate on 6 Oct 2026, with the same recipe as Reviews: the page
 file renders `GoogleGate` + its `*Mockup.jsx` without a connection, and a `*Screen.jsx` against real data
-with it. SEO Local, Sentimiento and Palabras clave are still gated (SEO is being redesigned after Tapstar
-changed theirs; the other two are phase 5).
+with it. Sentimiento and Palabras clave followed in phase 5 (see "Review analysis"). SEO Local is the only
+one still gated: it is being redesigned after Tapstar changed theirs.
 
 - **Free vs Business is decided in SQL, like Tapstar's split.** `private.org_has_business(org)` (`0029`)
   = `org_has_access` and plan `business`/`enterprise` (trialing counts). Business-only *data* is cut in the
@@ -669,7 +699,9 @@ changed theirs; the other two are phase 5).
   the same conditions: blurred, `inert`, behind a veil that can't be closed, and with **invented** numbers
   (`*BusinessPreview.jsx` files), never the customer's own Business data — which a free account doesn't
   even receive. It is per card (absolute overlay), and its button goes to Facturación. `useOrg().isBusiness`
-  decides what it draws; the database decides what exists.
+  decides what it draws; the database decides what exists. `fullPage` puts the call to action at the top
+  instead of the middle, for the two Reportes screens where the lock covers the whole section; there the
+  preview is the section's existing `*Mockup.jsx` with `showHeader={false}`.
 - **Metrics** (`google_daily_metrics`, `google_search_keywords`): stored for every org, read through the
   RPC. Google publishes with ~4 days of lag and revises recent days, so each run re-reads the last 10 days
   and upserts; a ficha with no rows gets an 18-month backfill. Keywords are monthly and Google sums
@@ -701,6 +733,42 @@ changed theirs; the other two are phase 5).
   discontinued `localPosts.reportInsights` in 2023.
 - `googleRequest()` retries 429/5xx for GET/PUT/PATCH/DELETE but **never for POST**: retrying a create
   after a slow answer would publish the post twice.
+
+### Review analysis — sentiment, topics and keywords (phase 5, `0033`)
+
+Gemini (`lib/gemini.js`, plain `fetch`, key in the `x-goog-api-key` header) reads the text of each review
+**once** and `lib/reviewAnalysis.js` stores, per review: overall `sentiment` (of the *text*, not the
+stars), `topics` from a **closed list** (`atencion`, `calidad`, `precio`, `espera`, `ambiente`,
+`limpieza`) each with its own tone, and up to 8 `keywords`, each `{term, sentiment}`. It runs as step 5 of
+`syncGoogleOrganization()`, so the daily job and "Actualizar ahora" both analyze what they just read;
+`npm run analyze-reviews` exists for backfills and testing. Things that are deliberate:
+
+- **Business only, cut twice in SQL.** `google_reviews_pending_analysis()` returns nothing for a
+  non-Business org, so no model calls are spent on free accounts; and `google_review_analysis`'s RLS
+  requires `org_has_business()`. An org that upgrades gets its old reviews as pending on the next run
+  (300 per org per run, newest first) — no separate backfill needed. One that downgrades keeps the rows
+  but can't read them.
+- **Keyword tone is per keyword, not inherited from the review.** In "tardaron una hora, una lástima porque
+  el lugar es lindo" the review is negative and "lugar lindo" is praise. The first version inherited the
+  review's tone and put "lugar lindo" under "De qué se quejan"; don't go back to `text[]` keywords.
+- **The database re-validates what the model returns.** `google_record_review_analysis()` drops topics
+  outside the list, lower-cases and de-duplicates keywords, caps them at 8, and takes org and ficha from
+  the review row, never from the caller. The response is also bound to a JSON schema, so a review that
+  says "ignore your instructions" can't change the shape — tested with exactly that text on 7 Oct 2026.
+- **Only text and stars go to the model, never the reviewer's name.** Reviews with no text are not
+  analyzed and the screens say so ("N reseñas sólo de estrellas") instead of inventing a tone from stars.
+- **Re-analysis only on edit:** `review_updated_time` stores the review's `updated_time` at analysis; a
+  newer one makes it pending again. Nothing is recomputed when a screen opens.
+- Analysis failures don't add to the sync's `failures` (that number is shown to the customer as "no
+  pudimos leer N fichas"), and a missing `0033` or Gemini outage is caught and logged without failing the
+  sync. ~8 s per call with `gemini-3.5-flash-lite` (7 Oct 2026), 8 in parallel.
+- Screens: `pages/Reports/ReportsSentimentScreen.jsx` / `ReportsKeywordsScreen.jsx`, reading
+  `v_review_analysis` through `fetchReviewAnalysis()` (paged, filtered by org) and aggregated client-side
+  in `lib/reviewInsights.js`. Months with no reviews are left out of the trend, not drawn as 0%; "la más
+  repetida" shows "—" when no keyword repeats. Free accounts see the mock behind `BusinessLock fullPage`.
+- **Pending outside the code:** the dashboard's privacy policy (`pages/Legal/Privacy.jsx`) does not yet
+  say that review text is processed by an AI provider (Google Gemini); it has to before this ships,
+  because Google's verification reviews that page against what the app does.
 
 ### `apps/dashboard`
 
@@ -813,8 +881,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   answered/unanswered split of the rows actually read). `reviews` stays in `GOOGLE_GATED_SECTIONS`, so
   the subscription banner is also hidden there when connected — accepted to keep `AppShell` from querying
   Google on every section. **`gb-metrics`, `gb-profile` and `gb-posts` followed on 6 Oct 2026** (see
-  "Google Business Profile — the screens"); `gb-seo`, `reports-sentiment` and `reports-keywords` are the
-  three still behind the gate even when connected.
+  "Google Business Profile — the screens"), and `reports-sentiment` / `reports-keywords` in phase 5 (see
+  "Review analysis"); `gb-seo` is the only one still behind the gate even when connected.
 - **The mock JSX is a deliverable, not discarded history.** The tag `maquetas-pre-fase-2` points at the last
   commit where those ten screens were still drawing their grids, tables and charts; seven of them now live
   in the tree as `*Mockup.jsx`, the two "próximamente" ones (`reports-nps`, `monthly-reports`) are still
@@ -1012,10 +1080,11 @@ split below before wiring anything — the shell is finished, the data mostly is
   400 they can't act on. `/finalizar-compra` with an empty cart redirects to the shop — but the guard
   must keep its `step !== 'success'` condition, because confirming empties the cart and without it the
   buyer would be thrown off the screen showing their order number.
-- `src/lib/config.js` — `API_URL` and `WEB3FORMS_KEY`. The key is in **one** place on purpose: it is
-  public (it ships in the bundle), both forms now send through `services/api` instead, and the constant
-  plus the two fallback paths that use it get deleted the day the API is deployed. Until then the only
-  extra mitigations are settings in the Web3Forms panel (allowed domains, required captcha), not code.
+- `src/lib/config.js` — `API_URL` and `SUPPORT_EMAIL` (`linkstar.app1@gmail.com`, what both forms offer
+  when the API doesn't answer). It used to hold `WEB3FORMS_KEY` for the browser-side fallbacks of Contact
+  and Checkout; both fallbacks and the key left the bundle in Oct 2026, and `public/_headers` no longer
+  allows `api.web3forms.com` in `connect-src`. The old key is still readable in every bundle published
+  before that, so rotate it in the Web3Forms panel (the server's `WEB3FORMS_KEY` then needs the new one).
 - The Worker already serves the site with `not_found_handling: "single-page-application"`, so new paths
   work as deep links without touching `wrangler.jsonc`.
 - `pages/LinkstarApp/LinkstarApp.jsx` is a **marketing page with a hardcoded mock dashboard**, not the real
@@ -1031,11 +1100,11 @@ split below before wiring anything — the shell is finished, the data mostly is
   Since 18 Aug 2026 it **does** persist: it POSTs to `/api/orders/manual`, which writes `orders` +
   `order_items` and sends the notification server-side. Before that the order existed only as an email,
   so a lost email was a lost order.
-  It keeps a **fallback path** that was there for one reason: `services/api` had no deploy target
-  until 6 Oct 2026. If the API doesn't answer the page mails the order straight from the browser as it used to, with the subject
-  flagged "SIN REGISTRAR". A `400` is not part of that path — it means the cart didn't match the server
-  catalog, and it's shown to the user instead of being mailed around. **When the API is deployed, delete
-  the fallback and with it `WEB3FORMS_KEY` from the bundle.**
+  If the API doesn't answer, the order is **not** taken: the page says so, keeps the cart for a retry and
+  offers `SUPPORT_EMAIL`. Until Oct 2026 it mailed the order straight from the browser instead (Web3Forms,
+  a client-made order number, subject "SIN REGISTRAR"), which existed only because `services/api` had no
+  deploy target; it was removed with the API live. A `400` means the cart didn't match the server
+  catalog and gets its own message.
   The Mercado Pago routes (`create-preference`, `process-payment`) stay dormant, not dead — their
   hardening (server-side price validation via `lib/catalog.js`, `?email=` on the order lookup) is what a
   future online checkout plugs into. Don't touch checkout/payment without confirming which direction is
@@ -1103,7 +1172,10 @@ only real contact channel in the repo. Replace it when there's a sales email or 
   `send-alerts`, all always, non-zero exit if any fails) at `0 11 * * *` (08:00 Argentina); its secrets are Railway
   references to the `api` service's (`${{api.SUPABASE_SERVICE_ROLE_KEY}}`…), so they live in one place.
   **Live since 6 Oct 2026**, and ventas' `VITE_API_URL` points at it. Still missing there: Mercado Pago
-  production credentials and webhook.
+  production credentials and webhook. **Both Railway services (`api` and `daily`) deploy from `main`**
+  (since 7 Oct 2026; before that `develop`, which is how the API shipped ahead of its migrations — see
+  "Data model"). Work happens on `develop`; merging into `main` *is* the API deploy, so push any new
+  migrations first.
 - `apps/dashboard` deploys to `app.linkstarapp.com` with `wrangler.jsonc` (`custom_domain: true`, so the
   deploy itself creates the DNS record and certificate; SPA fallback) and `.env.production`.
   `apps/dashboard/DEPLOY.md` has the steps and the two decisions, both settled on 6 Oct 2026: publish

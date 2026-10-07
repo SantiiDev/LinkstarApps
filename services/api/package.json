@@ -14,6 +14,7 @@
     "rebuild-rollups": "node scripts/rebuild-rollups.js",
     "send-alerts": "node scripts/send-alerts.js",
     "sync-google": "node scripts/sync-google.js",
+    "analyze-reviews": "node scripts/analyze-reviews.js",
     "daily": "node scripts/daily.js"
   },
   "dependencies": {

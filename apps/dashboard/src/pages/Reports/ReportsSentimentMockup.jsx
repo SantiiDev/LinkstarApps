@@ -4,12 +4,15 @@
  * El JSX que la sección mostraba antes de la fase 2, recuperado del tag
  * `maquetas-pre-fase-2`. Todos los números de acá son inventados.
  *
- * Se renderiza ÚNICAMENTE como `children` de `GoogleGate`, que lo deja borroso,
- * inerte y detrás de un modal que no se puede cerrar. NO agregar otro
- * importador: fuera de esa puerta es una pantalla inventando datos.
+ * Se renderiza ÚNICAMENTE en los dos lugares donde una maqueta es legal:
+ * como `children` de `GoogleGate` (sin Google conectado) y como `preview` de
+ * `BusinessLock` (con Google, en el plan gratis, desde ReportsSentimentScreen,
+ * con `showHeader={false}` porque la pantalla ya muestra el suyo). Los dos la
+ * dejan borrosa, inerte y detrás de un velo que no se cierra. NO agregar otro
+ * importador: fuera de esas puertas es una pantalla inventando datos.
  *
- * Cuando exista la conexión con Google (fase 4) esto no se "destapa": la
- * pantalla se reescribe contra el dato real y este archivo se borra.
+ * La pantalla real es ReportsSentimentScreen (fase 5, 0033); esto queda como
+ * la invitación para quien todavía no conectó Google o no tiene Business.
  */
 
 import PageHeader from '../../components/PageHeader/PageHeader';
@@ -56,7 +59,7 @@ function Icon({ name, ...rest }) {
   return icons[name] || null;
 }
 
-export default function ReportsSentimentMockup() {
+export default function ReportsSentimentMockup({ showHeader = true }) {
   const total = ALL_REVIEWS.length;
   const countBy = (s) => ALL_REVIEWS.filter((r) => r.sentiment === s).length;
 
@@ -75,11 +78,13 @@ export default function ReportsSentimentMockup() {
 
   return (
     <div className="reports-page">
-      <PageHeader
-        eyebrow="Reportes"
-        title="Análisis de Sentimiento"
-        subtitle="Cómo se sienten tus clientes, detectado automáticamente con IA sobre cada reseña"
-      />
+      {showHeader && (
+        <PageHeader
+          eyebrow="Reportes"
+          title="Análisis de Sentimiento"
+          subtitle="Cómo se sienten tus clientes, detectado automáticamente con IA sobre cada reseña"
+        />
+      )}
 
       <div className="reports-stat-grid">
         {/* Mismo color que su porción en el anillo de "Distribución". */}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
-import { API_URL, WEB3FORMS_KEY } from '../../lib/config';
+import { API_URL, SUPPORT_EMAIL } from '../../lib/config';
 import { ROUTES } from '../../lib/routes';
 import './Checkout.css';
 
@@ -14,16 +14,11 @@ import './Checkout.css';
  * además manda el aviso por mail desde el servidor. Antes el pedido existía
  * SÓLO como mail: un mail perdido era un pedido perdido.
  *
- * El camino de respaldo de abajo existe porque services/api todavía no está
- * desplegado (VITE_API_URL en .env.production sigue siendo un placeholder). Si
- * el API no contesta, se manda el mail desde el navegador como antes y se
- * avisa en el asunto que ese pedido NO quedó registrado. Cuando el API esté
- * arriba, este respaldo —y con él la key de Web3Forms en el bundle— se puede
- * borrar. */
-function generateOrderNumber() {
-  return `LS-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-}
-
+ * Mientras el API no estuvo desplegado, si no contestaba se mandaba el pedido
+ * por mail desde el navegador (Web3Forms, con un número de orden inventado acá
+ * y el asunto "SIN REGISTRAR"). Se borró con el API en producción: un pedido
+ * que no quedó en la base ya no se da por hecho. La pantalla lo dice, el
+ * carrito queda intacto para reintentar y se ofrece el mail de soporte. */
 async function createManualOrder({ customer, items }) {
   const response = await fetch(`${API_URL}/api/orders/manual`, {
     method: 'POST',
@@ -59,61 +54,6 @@ async function createManualOrder({ customer, items }) {
   }
 
   return data.order_number;
-}
-
-// Web3Forms (plan free) rechaza llamadas server-to-server, así que este mail
-// se manda desde el navegador (igual que el formulario de Contacto) y no
-// desde server.js. No usamos adjuntos reales porque Web3Forms los reserva
-// para el plan Pro (con esta cuenta, un intento de adjuntar hace que
-// rechace todo el envío) — en su lugar, cada producto lleva el link
-// absoluto a su imagen para que se pueda ver con un click.
-async function sendOrderEmail({ orderNumber, customer, items, total, persisted = true }) {
-  const origin = window.location.origin;
-  const itemsText = items
-    .map(i => i.isBundle
-      ? `• ${i.name} — $${(i.price * i.qty).toLocaleString('es-AR')}\n` +
-        i.items.map(s => `  - ${s.label}: ${s.color === 'negro' ? 'Negro' : 'Blanco'} (${origin}${s.image})`).join('\n')
-      : `• ${i.name} (${i.color === 'negro' ? 'Negro' : 'Blanco'}) x${i.qty} — $${(i.price * i.qty).toLocaleString('es-AR')}\n  Imagen: ${origin}${i.image}`)
-    .join('\n\n');
-
-  const response = await fetch('https://api.web3forms.com/submit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      access_key: WEB3FORMS_KEY,
-      subject: persisted
-        ? `🛒 Nuevo pedido ${orderNumber}`
-        : `⚠️ Pedido SIN REGISTRAR ${orderNumber} — anotalo a mano`,
-      from_name: 'Linkstar Tienda',
-      name: customer.name,
-      email: customer.email,
-      phone: customer.phone || 'No proporcionado',
-      message: `
-NUEVO PEDIDO: ${orderNumber}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-CLIENTE
-  Nombre: ${customer.name}
-  Email: ${customer.email}
-  Teléfono: ${customer.phone || 'No proporcionado'}
-
-DIRECCIÓN DE ENVÍO
-  ${customer.address}
-  ${customer.city}${customer.zip ? ` (${customer.zip})` : ''}
-
-PRODUCTOS
-${itemsText}
-
-TOTAL: $${total.toLocaleString('es-AR')}
-
-⚠️ Pedido sin pago online: coordinar el pago y el envío con el cliente.${persisted ? '' : `
-⚠️ ESTE PEDIDO NO QUEDÓ GUARDADO EN LA BASE — el servidor no respondió.
-   Es el único registro que existe: guardalo o cargalo a mano.`}
-      `.trim(),
-    }),
-  });
-  const result = await response.json();
-  if (!result.success) throw new Error(result.message || 'Web3Forms rechazó el envío');
 }
 
 export default function Checkout({ onBack }) {
@@ -166,33 +106,13 @@ export default function Checkout({ onBack }) {
     try {
       finish(await createManualOrder({ customer: form, items }));
     } catch (err) {
+      console.error('No se pudo registrar el pedido:', err);
       // Un 400 es el pedido en sí: precio que no coincide con el catálogo del
-      // servidor, o un dato que falta. Reintentar por mail escondería el
-      // problema, así que se muestra y no se manda nada.
-      if (err.status === 400) {
-        console.error('Pedido rechazado por el servidor:', err);
-        setOrderError('No pudimos validar tu pedido. Actualizá la página y volvé a armar el carrito.');
-        setProcessing(false);
-        return;
-      }
-
-      // Cualquier otra cosa es el API caído o todavía sin desplegar: el pedido
-      // no se pierde, va por mail avisando que no quedó registrado.
-      console.error('No se pudo registrar el pedido, mando el aviso por mail:', err);
-      const fallbackNumber = generateOrderNumber();
-      try {
-        await sendOrderEmail({
-          orderNumber: fallbackNumber,
-          customer: form,
-          items,
-          total,
-          persisted: false,
-        });
-        finish(fallbackNumber);
-      } catch (mailErr) {
-        console.error('Order email error:', mailErr);
-        setOrderError('Ocurrió un error al enviar el pedido. Intentá de nuevo en unos minutos.');
-      }
+      // servidor, o un dato que falta. Cualquier otra cosa es el API caído: el
+      // pedido NO quedó registrado, y el carrito sigue intacto para reintentar.
+      setOrderError(err.status === 400
+        ? 'No pudimos validar tu pedido. Actualizá la página y volvé a armar el carrito.'
+        : `No pudimos registrar tu pedido. Probá de nuevo en unos minutos o escribinos a ${SUPPORT_EMAIL}.`);
     } finally {
       setProcessing(false);
     }

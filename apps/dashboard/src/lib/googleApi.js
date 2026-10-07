@@ -125,9 +125,10 @@ export async function linkGoogleLocation(googleLocationId, locationId) {
 
 export const REVIEWS_PAGE_SIZE = 50;
 
-/* Los filtros son por ESTRELLAS, no por sentimiento: el sentimiento es la
- * fase 5 y todavía no existe. Decir "positiva" de una reseña de 4★ es leer el
- * puntaje que puso el cliente, no adivinar. */
+/* Los filtros son por ESTRELLAS, no por sentimiento: decir "positiva" de una
+ * reseña de 4★ es leer el puntaje que puso el cliente, no adivinar. El
+ * sentimiento del texto existe desde la fase 5 (0033), pero es de Business y
+ * vive en Reportes; esta pantalla es de todos los planes. */
 export const REVIEW_FILTERS = [
   { id: 'all', label: 'Todas' },
   { id: 'positive', label: 'Positivas (4–5★)' },
@@ -181,6 +182,60 @@ export async function fetchReviewCounts(organizationId) {
     answered: (all.count ?? 0) - (unanswered.count ?? 0),
     unanswered: unanswered.count ?? 0,
   };
+}
+
+/* ─── Análisis de reseñas (fase 5, 0033) ──────────────────────────────────── */
+
+/* Temas de la lista cerrada de la 0033, con su nombre en pantalla. El orden es
+ * el de la leyenda cuando no hay datos para ordenar por menciones. */
+export const REVIEW_TOPICS = [
+  { id: 'atencion', label: 'Atención' },
+  { id: 'calidad', label: 'Calidad' },
+  { id: 'precio', label: 'Precio' },
+  { id: 'espera', label: 'Tiempo de espera' },
+  { id: 'ambiente', label: 'Ambiente' },
+  { id: 'limpieza', label: 'Limpieza' },
+];
+
+const ANALYSIS_PAGE = 1000;
+const ANALYSIS_MAX_PAGES = 20;
+
+/* Todos los análisis visibles de la organización, de la reseña más nueva a la
+ * más vieja: { review_id, location_id, created_time, star_rating, sentiment,
+ * topics, keywords }. Es una función Business: en gratis el RLS devuelve
+ * vacío (0033). Se pagina porque PostgREST corta en 1000 filas; 20 páginas
+ * son 20.000 reseñas, de sobra para las pantallas de Reportes. */
+export async function fetchReviewAnalysis(organizationId) {
+  const org = requireOrg(organizationId);
+  const rows = [];
+  for (let page = 0; page < ANALYSIS_MAX_PAGES; page++) {
+    const { data, error } = await supabase
+      .from('v_review_analysis')
+      .select('review_id, location_id, created_time, star_rating, sentiment, topics, keywords')
+      .eq('organization_id', org)
+      .order('created_time', { ascending: false })
+      .order('review_id', { ascending: true })
+      .range(page * ANALYSIS_PAGE, (page + 1) * ANALYSIS_PAGE - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < ANALYSIS_PAGE) break;
+  }
+  return rows;
+}
+
+/* Cuántas reseñas leídas tienen texto y cuántas no: lo que dice «N de M
+ * analizadas» y explica por qué una reseña de sólo estrellas no tiene tono.
+ * Sale de google_reviews, que ven todos los planes. */
+export async function fetchReviewTextCounts(organizationId) {
+  const org = requireOrg(organizationId);
+  const [all, withText] = await Promise.all([
+    supabase.from('google_reviews').select('id', { count: 'exact', head: true }).eq('organization_id', org),
+    supabase.from('google_reviews').select('id', { count: 'exact', head: true }).eq('organization_id', org)
+      .not('comment', 'is', null).neq('comment', ''),
+  ]);
+  if (all.error) throw all.error;
+  if (withText.error) throw withText.error;
+  return { total: all.count ?? 0, withText: withText.count ?? 0 };
 }
 
 /* ─── Métricas (fase 4.6, 0029) ───────────────────────────────────────────── */

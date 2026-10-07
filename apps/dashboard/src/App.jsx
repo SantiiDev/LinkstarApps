@@ -204,6 +204,16 @@ function GooglePostsRoute() {
   return <GooglePosts onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
 }
 
+function ReportsSentimentRoute() {
+  const navigate = useNavigate();
+  return <ReportsSentiment onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
+function ReportsKeywordsRoute() {
+  const navigate = useNavigate();
+  return <ReportsKeywords onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
 /* ─── App root ─────────────────────────────────────────────── */
 export default function App() {
   const { loading } = useAuth();
@@ -310,8 +320,8 @@ export default function App() {
         <Route path={SECTION_PATHS['gb-seo']} element={<GoogleSeoLocal />} />
 
         <Route path={SECTION_PATHS['reports-nps']} element={<ReportsNps />} />
-        <Route path={SECTION_PATHS['reports-sentiment']} element={<ReportsSentiment />} />
-        <Route path={SECTION_PATHS['reports-keywords']} element={<ReportsKeywords />} />
+        <Route path={SECTION_PATHS['reports-sentiment']} element={<ReportsSentimentRoute />} />
+        <Route path={SECTION_PATHS['reports-keywords']} element={<ReportsKeywordsRoute />} />
 
         <Route path={SECTION_PATHS['monthly-reports']} element={<MonthlyReports />} />
         <Route path={SECTION_PATHS.automations} element={<Automations />} />
