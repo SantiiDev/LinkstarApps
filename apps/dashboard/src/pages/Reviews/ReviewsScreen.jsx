@@ -70,7 +70,7 @@ const ICONS = {
   alert: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>,
 };
 
-export default function ReviewsScreen({ google, onNavigateSettings }) {
+export default function ReviewsScreen({ google, onNavigateSettings, initialFilter }) {
   const { org } = useOrg();
   const orgId = org?.organization_id;
   // Mismo criterio que google_review_reply_target() (0026). Para un manager la
@@ -85,7 +85,11 @@ export default function ReviewsScreen({ google, onNavigateSettings }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
 
-  const [filter, setFilter] = useState('all');
+  // `initialFilter` lo pone «Responder ahora» de Mi Empresa (vía location.state
+  // en App.jsx). Sólo se aceptan los filtros que existen.
+  const [filter, setFilter] = useState(
+    REVIEW_FILTERS.some((f) => f.id === initialFilter) ? initialFilter : 'all'
+  );
   const [search, setSearch] = useState('');
   const [locationId, setLocationId] = useState('all');
   const debouncedSearch = useDebounced(search, 300);

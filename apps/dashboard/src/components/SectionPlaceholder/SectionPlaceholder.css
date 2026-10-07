@@ -93,39 +93,6 @@
   color: var(--color-text-secondary);
 }
 
-.sph__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 1.85rem;
-  padding: 0.65rem 1.3rem;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-button);
-  background: var(--color-white);
-  color: var(--color-navy);
-  font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: var(--glass-shadow);
-  transition: transform var(--transition-base), box-shadow var(--transition-base);
-}
-
-.sph__btn:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--glass-shadow-hover);
-}
-
-/* El margen pasa del botón al contenedor: arriba del botón ahora puede haber
-   un mensaje (resultado de la vuelta desde Google) o el estado de conexión. */
-.sph__action {
-  margin-top: 1.85rem;
-}
-
-.sph__action .sph__btn {
-  margin-top: 0;
-}
-
 .sph__note {
   margin: 1.3rem 0 0;
   max-width: 34rem;
@@ -136,7 +103,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sph { animation: none; }
-  .sph__btn:hover { transform: none; }
 }
 
 @media (max-width: 640px) {

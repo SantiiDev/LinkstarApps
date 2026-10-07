@@ -802,16 +802,6 @@ export default function EmployeesPage({ embedded = false }) {
       }
 
       {/* ── Footer ── */}
-      {!embedded && (
-      <div className="emp-page__footer">
-        <p className="emp-page__footer-text">
-          © {new Date().getFullYear()} <span className="emp-page__footer-brand">
-            linkstar<span className="emp-page__footer-dot">.</span>
-          </span> — Panel de gestión de reseñas
-        </p>
-      </div>
-      )}
-
       {/* ── Modal ── */}
       {selected && (
         <EmployeeModal

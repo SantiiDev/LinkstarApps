@@ -1,38 +1,25 @@
-import { useOrg } from '../../context/OrgContext';
-import { useGoogleConnection } from '../../lib/googleApi';
-import GoogleLogo from '../GoogleLogo/GoogleLogo';
-import GoogleConnect from '../GoogleConnect/GoogleConnect';
 import './SectionPlaceholder.css';
 
 /*
- * Estado de una sección que todavía no tiene de dónde sacar sus datos.
+ * Estado de una sección que todavía no tiene de dónde sacar sus datos, o que
+ * no pudo cargarlos.
  *
  * Reemplaza a los arrays escritos a mano que estas pantallas venían mostrando.
  * La regla es simple: preferimos una pantalla que diga "esto todavía no está"
  * antes que una que muestre un número inventado, porque el número inventado no
  * se distingue de uno real hasta que alguien toma una decisión con él.
  *
- * Dos variantes, y la diferencia importa porque la salida del usuario es
- * distinta en cada una:
+ * NO lleva botón: lo que falta depende de nosotros (NPS, informes, Mapa SEO) o
+ * es un error de carga, y un botón que no resuelve nada es peor que ninguno.
  *
- *   google  Falta conectar la ficha de Google Business. Es algo que el cliente
- *           PUEDE hacer, así que lleva botón.
- *   soon    La función todavía no existe de nuestro lado (NPS, informes,
- *           automatizaciones). No hay nada que el cliente pueda hacer, así que
- *           NO lleva botón — un botón que no resuelve nada es peor que ninguno.
+ * Hasta octubre de 2026 tenía además una variante `google`, con el botón de
+ * conectar la ficha. Su último uso era la Mi Empresa vieja; hoy lo que depende
+ * de Google va detrás de components/GoogleGate, y la variante se borró. Los que
+ * llaman siguen pasando `variant="soon"`, que es la única que queda.
  *
  * `preview` es la lista de lo que la sección va a mostrar cuando tenga datos.
  * No es relleno: es lo que hace que la pantalla siga explicando para qué sirve.
- *
- * La variante google consulta el estado de la conexión (0024). Conectada, el
- * texto que pide permiso deja de ser cierto, así que se reemplaza por uno que
- * dice la verdad: ya leemos la ficha, lo que falta es esta pantalla. Conectar
- * Google NO devuelve las maquetas solas — hay que reescribir cada sección
- * contra google_reviews / google_locations (ver el tag maquetas-pre-fase-2).
  */
-
-const CONNECTED_DESCRIPTION =
-  'Ya estamos leyendo tu ficha de Google todos los días. Esta pantalla todavía no muestra esos datos: la estamos armando, y no hace falta que hagas nada más.';
 
 function ClockIcon({ size = 22 }) {
   return (
@@ -50,27 +37,15 @@ function DotIcon() {
   );
 }
 
-export default function SectionPlaceholder({
-  variant = 'google',
-  title,
-  description,
-  preview = [],
-  note,
-}) {
-  const isGoogle = variant === 'google';
-  const { org } = useOrg();
-  // Sin organización (o variante soon) el hook no consulta nada.
-  const google = useGoogleConnection(isGoogle ? org?.organization_id : null);
-  const connected = isGoogle && google.connection?.status === 'active';
-
+export default function SectionPlaceholder({ title, description, preview = [], note }) {
   return (
-    <div className={`sph sph--${variant}`}>
+    <div className="sph sph--soon">
       <div className="sph__icon">
-        {isGoogle ? <GoogleLogo size={26} /> : <ClockIcon size={24} />}
+        <ClockIcon size={24} />
       </div>
 
       <h3 className="sph__title">{title}</h3>
-      <p className="sph__text">{connected ? CONNECTED_DESCRIPTION : description}</p>
+      <p className="sph__text">{description}</p>
 
       {preview.length > 0 && (
         <>
@@ -84,12 +59,6 @@ export default function SectionPlaceholder({
             ))}
           </ul>
         </>
-      )}
-
-      {isGoogle && (
-        <div className="sph__action">
-          <GoogleConnect google={google} buttonClassName="sph__btn" />
-        </div>
       )}
 
       {note && <p className="sph__note">{note}</p>}

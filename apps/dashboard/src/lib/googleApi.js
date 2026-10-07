@@ -184,6 +184,32 @@ export async function fetchReviewCounts(organizationId) {
   };
 }
 
+/* Todas las reseñas leídas de la organización, sin el texto: { id, star_rating,
+ * created_time, reply_comment, google_locations: { location_id } }. Es lo que
+ * cuenta Mi Empresa (totales, respondidas, distribución, serie y media exacta)
+ * filtrando por sucursal y período en el cliente. Se pagina como el análisis:
+ * PostgREST corta en 1000 filas. */
+const REVIEW_ROWS_PAGE = 1000;
+const REVIEW_ROWS_MAX_PAGES = 20;
+
+export async function fetchReviewRows(organizationId) {
+  const org = requireOrg(organizationId);
+  const rows = [];
+  for (let page = 0; page < REVIEW_ROWS_MAX_PAGES; page++) {
+    const { data, error } = await supabase
+      .from('google_reviews')
+      .select('id, star_rating, created_time, reply_comment, google_locations!inner(location_id)')
+      .eq('organization_id', org)
+      .order('created_time', { ascending: false })
+      .order('id', { ascending: true })
+      .range(page * REVIEW_ROWS_PAGE, (page + 1) * REVIEW_ROWS_PAGE - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < REVIEW_ROWS_PAGE) break;
+  }
+  return rows;
+}
+
 /* ─── Análisis de reseñas (fase 5, 0033) ──────────────────────────────────── */
 
 /* Temas de la lista cerrada de la 0033, con su nombre en pantalla. El orden es
@@ -420,16 +446,27 @@ export const GOOGLE_RESULT_MESSAGES = {
  * Mientras la primera lectura corre en segundo plano (el callback la dispara
  * apenas se conecta), consulta cada 5 segundos hasta que termine — así la
  * pantalla pasa de "leyendo tu ficha" a "última lectura" sin recargar. Corta a
- * los 2 minutos: si para entonces no terminó, lo va a resolver el job diario. */
+ * los 2 minutos: si para entonces no terminó, lo va a resolver el job diario.
+ *
+ * El último estado leído se recuerda por organización mientras la pestaña esté
+ * abierta. Las secciones de Google deciden entre el modal y la pantalla real con
+ * esto, y sin el recuerdo cada vez que se entraba a una se veía el modal medio
+ * segundo antes de la pantalla. Se sigue releyendo al montar; lo recordado sólo
+ * evita arrancar en blanco. */
+const connectionCache = new Map();
+
 export function useGoogleConnection(organizationId) {
-  const [connection, setConnection] = useState(null);
-  const [loading, setLoading] = useState(Boolean(organizationId));
+  const cached = organizationId ? connectionCache.get(organizationId) : undefined;
+  const [connection, setConnection] = useState(cached ?? null);
+  const [loading, setLoading] = useState(Boolean(organizationId) && cached === undefined);
   const [failed, setFailed] = useState(false);
 
   const reload = useCallback(async () => {
     if (!organizationId) return;
     try {
-      setConnection(await fetchGoogleConnection(organizationId));
+      const next = await fetchGoogleConnection(organizationId);
+      connectionCache.set(organizationId, next);
+      setConnection(next);
       setFailed(false);
     } catch (err) {
       console.error('No se pudo leer el estado de la conexión con Google:', err);

@@ -30,13 +30,19 @@ const OrgContext = createContext(null);
 
 export function OrgProvider({ children }) {
   const { user, loading: authLoading } = useAuth();
+  /* El id, no el objeto `user`: Supabase entrega un objeto nuevo cada vez que
+     renueva el token, y eso pasa también al volver a la pestaña del navegador.
+     Con el objeto como dependencia, cada vuelta a la pestaña recargaba el
+     contexto con `loading` en true, RequireActivePlan mostraba «Cargando…» y
+     todo /panel se desmontaba y perdía dónde estaba. */
+  const userId = user?.id ?? null;
   const [context, setContext] = useState(null);
   const [organizations, setOrganizations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
       setContext(null);
       setOrganizations([]);
       setLoading(false);
@@ -66,7 +72,7 @@ export function OrgProvider({ children }) {
       setError(null);
     }
     setLoading(false);
-  }, [user]);
+  }, [userId]);
 
   // Se espera a que AuthContext termine de restaurar la sesión: consultar
   // antes devolvería vacío para un usuario que sí está logueado.

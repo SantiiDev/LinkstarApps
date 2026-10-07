@@ -1,5 +1,13 @@
 /* ============================================
    MI EMPRESA (COMPANY) PAGE
+   La comparten la pantalla real (CompanyScreen) y la maqueta que va detrás del
+   modal de Google (CompanyMockup): las dos dibujan los bloques de
+   CompanyBlocks.jsx.
+
+   Rendimiento (ver CLAUDE.md): las superficies de vidrio llevan
+   `backdrop-filter`, así que acá NADA anima el desenfoque ni usa
+   `transition: all` sobre una tarjeta de vidrio. Los hovers cambian color,
+   sombra o posición, que son baratos.
    ============================================ */
 
 .company-page {
@@ -8,330 +16,26 @@
   margin: 0 auto;
 }
 
-/* Header action buttons */
-.company-btn {
-  display: flex;
+/* La fecha del encabezado es información, no un control: antes era un botón
+   que no hacía nada. */
+.company-date {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.25rem;
-  border-radius: var(--radius-button);
-  font-size: 0.8rem;
-  font-weight: 600;
-  transition: all var(--transition-base);
-  white-space: nowrap;
-}
-
-.company-btn--ghost {
-  background: var(--color-white);
-  border: 1px solid var(--color-border);
-  color: var(--color-navy);
-}
-
-.company-btn--ghost:hover {
-  border-color: var(--color-orange);
-  color: var(--color-orange);
-}
-
-/* ── Connect Google banner ── */
-.company-banner {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  padding: 1.25rem 1.5rem;
-  margin-bottom: 1.5rem;
-  border-radius: var(--radius-card);
-  background: linear-gradient(120deg, rgba(245, 133, 41, 0.1), rgba(245, 158, 11, 0.06));
-  border: 1px solid rgba(245, 133, 41, 0.18);
-  animation: fadeInUp 0.55s ease both;
-  animation-delay: 0.05s;
-}
-
-.company-banner__icon {
-  flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--color-white);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--glass-shadow);
-}
-
-.company-banner__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.company-banner__title {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: var(--color-navy);
-  margin-bottom: 0.15rem;
-}
-
-.company-banner__text {
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
-  line-height: 1.45;
-  max-width: 60ch;
-}
-
-.company-banner__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-shrink: 0;
-}
-
-.company-banner__connect-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.65rem 1.25rem;
-  border-radius: var(--radius-button);
-  background: var(--color-white);
-  color: var(--color-navy);
-  font-size: 0.8rem;
-  font-weight: 700;
-  box-shadow: var(--glass-shadow);
-  transition: all var(--transition-base);
-  white-space: nowrap;
-}
-
-.company-banner__connect-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--glass-shadow-hover);
-}
-
-/* ── Status chips ── */
-.company-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-bottom: 1.5rem;
-  animation: fadeInUp 0.55s ease both;
-  animation-delay: 0.1s;
-}
-
-.company-chip {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.9rem;
+  padding: 0.5rem 1rem;
   border-radius: var(--radius-badge);
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
+  background: rgba(255, 255, 255, 0.5);
   border: 1px solid var(--glass-border);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--color-text-secondary);
-}
-
-.company-chip--ok {
-  color: var(--color-forest);
-  background: rgba(16, 185, 129, 0.08);
-  border-color: rgba(16, 185, 129, 0.2);
-}
-
-.company-chip strong {
-  color: var(--color-navy);
-}
-
-/* ── Negative reviews alert ── */
-.company-alert {
-  position: relative;
-  width: 100%;
-  margin-bottom: 1.75rem;
-  border-radius: var(--radius-card);
-  background: rgba(239, 68, 68, 0.06);
-  border: 1px solid rgba(239, 68, 68, 0.18);
-  transition: all var(--transition-base);
-  animation: fadeInUp 0.55s ease both;
-  animation-delay: 0.14s;
-}
-
-.company-alert:hover {
-  background: rgba(239, 68, 68, 0.1);
-  transform: translateY(-2px);
-}
-
-.company-alert__trigger {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  width: 100%;
-  padding: 1.1rem 2.75rem 1.1rem 1.4rem;
-  text-align: left;
-  background: transparent;
-}
-
-.company-alert__close {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.6rem;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-danger);
-  transition: all var(--transition-base);
-}
-
-.company-alert__close:hover {
-  background: rgba(239, 68, 68, 0.16);
-}
-
-.company-alert__icon {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: rgba(239, 68, 68, 0.12);
-  color: var(--color-danger);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.company-alert__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.company-alert__title {
-  font-size: 0.88rem;
-  font-weight: 800;
-  color: var(--color-navy);
-}
-
-.company-alert__text {
-  font-size: 0.78rem;
-  color: var(--color-text-secondary);
-  margin-top: 0.15rem;
-}
-
-.company-alert__cta {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--color-danger);
   white-space: nowrap;
 }
 
-/* ── KPI grid ── */
-/* minmax(0, 1fr) y no 1fr: `1fr` equivale a `minmax(auto, 1fr)`, así que la
-   columna nunca baja del min-content de la tarjeta más ancha. Basta un texto
-   con `nowrap` adentro (un nombre, una fecha, una insignia) para que la
-   columna crezca por encima del ancho de la pantalla y la grilla entera se
-   desborde hacia la derecha. Con mínimo 0 manda siempre el ancho disponible. */
-.company-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 1.75rem;
+.company-date::first-letter {
+  text-transform: uppercase;
 }
 
-/* ── Nota explicativa ──
-   Para decir por qué un número está en "—" o por qué un gráfico está en cero.
-   Va en el flujo del contenido, no como banner: es contexto de lo que está
-   justo al lado, no un aviso del sistema. */
-.company-hint {
-  margin: 0 0 1.75rem;
-  padding: 0.8rem 1rem;
-  border-left: 2px solid var(--color-orange);
-  border-radius: 0 var(--radius-card) var(--radius-card) 0;
-  background: rgba(245, 133, 41, 0.07);
-  font-size: 0.83rem;
-  line-height: 1.6;
-  color: var(--color-text-primary);
-}
-
-.company-hint code {
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 0.95em;
-  padding: 0.05em 0.3em;
-  border-radius: 3px;
-  background: rgba(26, 38, 57, 0.08);
-}
-
-.company-hint--tight {
-  margin-bottom: 1rem;
-  font-size: 0.8rem;
-}
-
-/* ── Feed de actividad reciente ── */
-.company-activity {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-}
-
-.company-activity__item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.7rem;
-}
-
-.company-activity__dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  margin-top: 0.42rem;
-  border-radius: 50%;
-  background: var(--color-orange);
-  box-shadow: 0 0 0 3px rgba(245, 133, 41, 0.15);
-}
-
-.company-activity__body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.12rem;
-  min-width: 0;
-}
-
-.company-activity__label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  overflow-wrap: anywhere;
-}
-
-.company-activity__meta {
-  font-size: 0.775rem;
-  color: var(--color-text-secondary);
-}
-
-/* ── Two-column sections ── */
-/* align-items left at its default (stretch) so both columns of a row
-   match height — a shorter column (e.g. a single card next to a
-   stacked side-col) fills out instead of leaving a jagged bottom edge. */
-.company-two-col {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-  gap: 1.25rem;
-  margin-bottom: 1.75rem;
-}
-
-.company-side-col {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.company-side-col .company-card {
-  flex: 1;
-}
-
+/* ── Tarjeta base ── */
 .company-card {
   background: var(--glass-bg);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -340,6 +44,7 @@
   border-radius: var(--radius-card);
   padding: 1.5rem;
   box-shadow: var(--glass-shadow);
+  margin-bottom: 1.5rem;
   animation: fadeInUp 0.6s ease both;
 }
 
@@ -369,29 +74,407 @@
   color: var(--color-orange);
   padding: 0.4rem 0.8rem;
   border-radius: var(--radius-button);
-  transition: all var(--transition-base);
+  transition: background-color var(--transition-base);
 }
 
 .company-card__link:hover {
   background: rgba(245, 133, 41, 0.08);
 }
 
-/* ── Star distribution ── */
+.company-muted {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+/* Estado vacío dentro de una tarjeta: ícono tenue y una frase que dice qué
+   falta, centrados en el espacio que ocuparía el contenido. */
+.company-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: 150px;
+  padding: 1rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.company-empty svg {
+  opacity: 0.45;
+}
+
+.company-empty p {
+  max-width: 42ch;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+/* ── Aviso de reconexión ── */
+.company-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-card);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-size: 0.85rem;
+  color: var(--color-navy);
+}
+
+.company-notice p {
+  flex: 1;
+  min-width: 240px;
+}
+
+/* ── Filtros ── */
+.company-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.25rem;
+  padding: 1.1rem 1.5rem;
+  position: relative;
+  /* Por encima de lo que viene abajo: el menú del Select se despliega sobre
+     las tarjetas de KPIs. */
+  z-index: 5;
+}
+
+.company-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 260px;
+  max-width: 100%;
+}
+
+.company-field__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.company-field__control {
+  position: relative;
+}
+
+.company-field__icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  color: var(--color-orange);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* El disparador usa .ls-select-field (components/Select/Select.css). */
+
+/* ── Sin fichas vinculadas ── */
+.company-link-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  flex-wrap: wrap;
+}
+
+.company-link-cta__title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  margin-bottom: 0.2rem;
+}
+
+.company-link-cta__text {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 70ch;
+}
+
+.company-btn-primary {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.3rem;
+  border-radius: var(--radius-button);
+  background: var(--color-orange);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-button);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.company-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-button-hover);
+}
+
+/* ── Alerta de reseñas negativas sin responder ── */
+.company-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem 1.1rem;
+  margin-bottom: 1.5rem;
+  padding: 1.15rem 1.4rem;
+  border-radius: var(--radius-card);
+  background: linear-gradient(120deg, rgba(239, 68, 68, 0.09), rgba(239, 68, 68, 0.04));
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  animation: fadeInUp 0.55s ease both;
+}
+
+.company-alert__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.company-alert__title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--color-navy);
+}
+
+.company-alert__text {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+  margin-top: 0.15rem;
+}
+
+.company-alert__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-button);
+  background: var(--color-white);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-danger);
+  white-space: nowrap;
+  transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+.company-alert__cta:hover {
+  background: var(--color-danger);
+  color: white;
+}
+
+/* ── Estrellas ── */
+.company-star-glyph {
+  flex-shrink: 0;
+  fill: var(--color-gold);
+}
+
+.company-stars {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.company-stars__on { fill: var(--color-gold); }
+.company-stars__off { fill: rgba(26, 38, 57, 0.14); }
+
+/* ── Tu media de estrellas ── */
+.company-goal {
+  display: grid;
+  grid-template-columns: minmax(200px, auto) minmax(0, 1fr);
+  align-items: center;
+  margin-bottom: 1.5rem;
+  border-radius: var(--radius-card);
+  background:
+    linear-gradient(120deg, rgba(245, 133, 41, 0.12), rgba(245, 158, 11, 0.07)),
+    var(--glass-bg);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+  z-index: 4;
+  animation: fadeInUp 0.6s ease both;
+}
+
+.company-goal__score {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1.35rem 1.75rem;
+  border-right: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.company-goal__eyebrow {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b45309;
+}
+
+.company-goal__value {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 2.3rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--color-navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.company-goal__caption {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+
+.company-goal__plan {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.35rem 1.75rem;
+  min-width: 0;
+}
+
+.company-goal__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+}
+
+/* El selector del objetivo: dos o tres caracteres, que no quede un botón
+   minúsculo. */
+.company-goal__row .ls-select-field {
+  min-width: 78px;
+}
+
+.company-goal__target-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.company-goal__target-label svg {
+  color: #b45309;
+}
+
+.company-goal__needed {
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+}
+
+.company-goal__needed strong {
+  color: var(--color-orange);
+  font-weight: 800;
+}
+
+.company-goal__bar-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.company-goal__bound {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #b45309;
+  font-variant-numeric: tabular-nums;
+}
+
+.company-goal__bar {
+  height: 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.18);
+  overflow: hidden;
+}
+
+.company-goal__fill {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--color-gold), var(--color-orange));
+  transition: width 0.6s ease;
+}
+
+.company-goal__pct {
+  min-width: 3ch;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--color-orange);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.company-goal__done {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+.company-goal--empty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.25rem 1.75rem;
+}
+
+.company-goal__empty-text {
+  font-size: 0.83rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 75ch;
+}
+
+/* ── Dos columnas: gráfico + distribución ── */
+/* align-items queda en stretch: las dos tarjetas miden lo mismo. */
+.company-two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.company-two-col > .company-card {
+  margin-bottom: 0;
+}
+
+.company-chart-card .trend-chart__plot {
+  height: 230px;
+}
+
+/* ── Distribución por estrellas ── */
 .star-dist {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 0.95rem;
 }
 
 .star-dist__row {
   display: grid;
-  grid-template-columns: 34px 1fr 34px 34px;
+  grid-template-columns: 36px minmax(0, 1fr) 36px 38px;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.65rem;
 }
 
 .star-dist__label {
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--color-navy);
 }
@@ -403,6 +486,7 @@
   overflow: hidden;
 }
 
+/* Sin ancho mínimo a propósito: una estrella con 0% se ve vacía. */
 .star-dist__fill {
   height: 100%;
   border-radius: 5px;
@@ -413,8 +497,8 @@
 /* El conteo crudo va junto al porcentaje: es lo que hace legible cuál es el
    denominador, en vez de dejarlo implícito en el subtítulo de la tarjeta. */
 .star-dist__count {
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
   color: var(--color-navy);
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -422,90 +506,138 @@
 
 .star-dist__pct {
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text-secondary);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Sentiment teaser card ── */
-.company-sentiment-card {
-  position: relative;
+/* ── Resumen por local ── */
+.company-summary__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.company-summary__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) repeat(5, minmax(0, 1fr));
+  align-items: center;
+  gap: 1rem;
+  padding: 0.95rem 0.25rem;
+  border-top: 1px solid rgba(26, 38, 57, 0.07);
+}
+
+.company-summary__row:first-child {
+  border-top: none;
+  padding-top: 0.25rem;
+}
+
+.company-summary__name {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.company-summary__avatar {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: white;
+}
+
+.company-summary__title {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.35rem;
-  width: 100%;
-  padding: 1.5rem;
-  border-radius: var(--radius-card);
-  text-align: left;
-  color: white;
-  background: linear-gradient(135deg, var(--color-navy), #2a3b57);
-  box-shadow: var(--glass-shadow);
-  transition: all var(--transition-base);
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.company-summary__title strong {
+  max-width: 100%;
   overflow: hidden;
-}
-
-.company-sentiment-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--glass-shadow-hover);
-}
-
-.company-sentiment-card__badge {
-  position: absolute;
-  top: 1.1rem;
-  right: 1.25rem;
-  padding: 0.2rem 0.6rem;
-  border-radius: var(--radius-badge);
-  background: var(--color-orange);
-  font-size: 0.65rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.company-sentiment-card__title {
-  font-size: 1rem;
-  font-weight: 800;
-}
-
-.company-sentiment-card__text {
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.72);
-  line-height: 1.4;
-  margin-bottom: 0.5rem;
-}
-
-.company-sentiment-card__cta {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
   font-weight: 700;
-  color: var(--color-gold);
+  color: var(--color-navy);
 }
 
-/* ── Recent reviews list ── */
-.recent-reviews {
+.company-summary__tag {
+  padding: 0.08rem 0.5rem;
+  border-radius: var(--radius-badge);
+  background: rgba(26, 38, 57, 0.06);
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.company-summary__cell {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.company-summary__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.company-summary__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-navy);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.company-summary__value small {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* ── Actividad reciente ── */
+.recent-reviews {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
 }
 
 .recent-review {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: 0.85rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid rgba(26, 38, 57, 0.07);
+}
+
+.recent-review:first-child {
+  border-top: none;
+  padding-top: 0;
 }
 
 .recent-review__avatar {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--color-orange), var(--color-gold));
   color: white;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -519,50 +651,58 @@
 
 .recent-review__top {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
 }
 
-/* Se recorta el nombre en vez de empujar la fecha fuera de la tarjeta: en el
-   teléfono la fila no tiene ancho para los dos. */
+/* Se recorta el nombre en vez de empujar la insignia fuera de la tarjeta: en
+   el teléfono la fila no tiene ancho para los dos. */
 .recent-review__author {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.82rem;
+  font-size: 0.86rem;
   font-weight: 700;
   color: var(--color-navy);
 }
 
-.recent-review__date {
-  font-size: 0.7rem;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-
-.star-row {
+.recent-review__meta {
   display: flex;
-  gap: 1px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.55rem;
   margin: 0.2rem 0 0.3rem;
 }
 
-.recent-review__text {
-  font-size: 0.78rem;
+.recent-review__date {
+  font-size: 0.72rem;
   color: var(--color-text-secondary);
-  line-height: 1.4;
+}
+
+.recent-review__text {
+  font-size: 0.82rem;
+  color: var(--color-text-primary);
+  opacity: 0.8;
+  line-height: 1.45;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
+.recent-review__text--empty {
+  font-style: italic;
+  color: var(--color-text-secondary);
+  opacity: 1;
+}
+
 .recent-review__badge {
   flex-shrink: 0;
-  font-size: 0.65rem;
+  font-size: 0.66rem;
   font-weight: 700;
-  padding: 0.2rem 0.55rem;
+  padding: 0.2rem 0.6rem;
   border-radius: var(--radius-badge);
   white-space: nowrap;
 }
@@ -577,78 +717,34 @@
   color: var(--color-danger);
 }
 
-/* ── Quick links ── */
-.quick-links {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.quick-link {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  padding: 0.75rem;
-  border-radius: 0.9rem;
-  text-align: left;
-  transition: all var(--transition-base);
-}
-
-.quick-link:hover {
-  background: var(--color-light);
-}
-
-.quick-link__icon {
-  flex-shrink: 0;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.quick-link__icon--orange { background: rgba(245, 133, 41, 0.1); color: var(--color-orange); }
-.quick-link__icon--gold { background: rgba(245, 158, 11, 0.1); color: var(--color-gold); }
-.quick-link__icon--forest { background: rgba(16, 185, 129, 0.1); color: var(--color-forest); }
-.quick-link__icon--navy { background: rgba(26, 38, 57, 0.1); color: var(--color-navy); }
-
-.quick-link__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.quick-link__label {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--color-navy);
-}
-
-.quick-link__text {
-  font-size: 0.72rem;
-  color: var(--color-text-secondary);
-}
-
-.quick-link__arrow {
-  flex-shrink: 0;
-  color: var(--color-text-secondary);
-}
-
 /* ── Responsive ── */
-@media (max-width: 1200px) {
-  .company-stat-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 1024px) {
+  .company-page {
+    padding: 1.5rem;
+  }
+
   .company-two-col {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .company-page {
-    padding: 1.5rem;
+  .company-goal {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .company-goal__score {
+    border-right: none;
+    border-bottom: 1px solid rgba(245, 158, 11, 0.28);
+  }
+
+  /* Seis columnas no entran: el nombre pasa a ocupar la fila y las métricas
+     quedan abajo, de a cinco. */
+  .company-summary__row {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.75rem 1rem;
+  }
+
+  .company-summary__name {
+    grid-column: 1 / -1;
   }
 }
 
@@ -657,101 +753,60 @@
     padding: 1rem;
   }
 
-  /* El banner pasa a bloque: ícono, texto y botón uno debajo del otro. Con
-     flex-wrap el texto quedaba encajonado entre el ícono de 48px y el borde,
-     y el botón caía suelto contra la izquierda. */
-  .company-banner {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.9rem;
-    padding: 1.15rem;
+  .company-card {
+    padding: 1.25rem;
   }
 
-  .company-banner__actions {
-    width: 100%;
-  }
-
-  .company-banner__connect-btn {
-    width: 100%;
-    justify-content: center;
-  }
-
-  /* "Responder ahora" baja a su propia línea, alineado con el texto, en vez de
-     pelearle el ancho al título contra el borde derecho. */
-  .company-alert__trigger {
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 0.75rem 0.9rem;
-    padding: 1.1rem 2.5rem 1.1rem 1.1rem;
-  }
-
-  .company-alert__body {
-    flex: 1 1 60%;
+  .company-alert {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 1.1rem;
   }
 
   .company-alert__cta {
-    flex-basis: 100%;
-    margin-left: calc(40px + 0.9rem);
+    grid-column: 2;
+    justify-self: start;
   }
 
-  .company-card {
-    padding: 1.25rem;
+  .company-summary__row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .company-goal__score,
+  .company-goal__plan {
+    padding: 1.15rem 1.25rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .company-toolbar {
+    flex-direction: column;
+    padding: 1rem 1.15rem;
+  }
+
+  .company-field {
+    width: 100%;
+  }
+
+  .company-card__header {
+    flex-wrap: wrap;
   }
 }
 
 @media (max-width: 480px) {
-  /* Dos columnas y no una: en una sola, cada KPI ocupaba una tarjeta enorme
-     con el número perdido arriba a la izquierda y había que scrollear cuatro
-     pantallas para ver los cuatro. */
-  .company-stat-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 0.75rem;
+  .company-goal__value {
+    font-size: 2rem;
   }
 
-  .company-stat-grid .stat-card {
-    padding: 1.1rem;
+  .company-goal__bar-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
-  /* Ícono y variación no entran en una línea con la tarjeta a media pantalla.
-     La insignia baja SIEMPRE a su propia línea (flex-basis: 100%), no sólo
-     cuando el texto es largo: si no, "+13 esta semana" envolvía y "+5%" no, y
-     los números de dos tarjetas vecinas quedaban a distinta altura. */
-  .company-stat-grid .stat-card__header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-    margin-bottom: 0.7rem;
+  .company-goal__pct {
+    grid-column: 1 / -1;
+    text-align: left;
   }
 
-  .company-stat-grid .stat-card__badge {
-    font-size: 0.65rem;
-    padding: 0.2rem 0.5rem;
-  }
-
-  .company-stat-grid .stat-card__icon-wrapper {
-    width: 36px;
-    height: 36px;
-  }
-
-  .company-stat-grid .stat-card__label {
-    font-size: 0.72rem;
-    line-height: 1.3;
-  }
-
-  .company-chip {
-    font-size: 0.72rem;
-    padding: 0.45rem 0.8rem;
-  }
-
-  .company-sentiment-card {
-    padding: 1.25rem;
-  }
-
-  /* El badge "Nuevo" se superponía con el título cuando este ocupa dos
-     líneas: deja de ser absoluto y se apila arriba del todo. */
-  .company-sentiment-card__badge {
-    position: static;
-    align-self: flex-start;
-    margin-bottom: 0.15rem;
+  .company-summary__row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
