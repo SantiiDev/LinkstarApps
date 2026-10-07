@@ -125,46 +125,142 @@ export async function linkGoogleLocation(googleLocationId, locationId) {
 
 export const REVIEWS_PAGE_SIZE = 50;
 
-/* Los filtros son por ESTRELLAS, no por sentimiento: decir "positiva" de una
- * reseña de 4★ es leer el puntaje que puso el cliente, no adivinar. El
- * sentimiento del texto existe desde la fase 5 (0033), pero es de Business y
- * vive en Reportes; esta pantalla es de todos los planes. */
-export const REVIEW_FILTERS = [
-  { id: 'all', label: 'Todas' },
-  { id: 'positive', label: 'Positivas (4–5★)' },
-  { id: 'neutral', label: 'Neutras (3★)' },
-  { id: 'negative', label: 'Negativas (1–2★)' },
-  { id: 'pending', label: 'Sin responder' },
+/* Los filtros de la bandeja, combinables entre sí (formato de <Select>).
+ *
+ *   - Rating: las estrellas que puso el cliente.
+ *   - Estado: «Resp. automáticamente» (fase 7, responder solas las de 5★) y
+ *     «Retiradas» (reseñas que el autor o Google borraron: la lectura todavía no
+ *     las detecta) no tienen dato. Van deshabilitadas para que se vea lo que
+ *     viene, sin un filtro que devuelva siempre vacío.
+ *   - Tipo: el TONO del texto según la IA (0033), no las estrellas. Es de
+ *     Business: en gratis la pantalla deshabilita las opciones, y aunque no lo
+ *     hiciera el RLS de google_review_analysis no devolvería nada. */
+export const REVIEW_RATING_OPTIONS = [
+  { value: 'all', label: 'Todas' },
+  ...[5, 4, 3, 2, 1].map((n) => ({ value: String(n), label: `${n} estrella${n === 1 ? '' : 's'}` })),
 ];
+
+export const REVIEW_STATUS_OPTIONS = [
+  { value: 'all', label: 'Todas' },
+  { value: 'answered', label: 'Respondidas' },
+  { value: 'pending', label: 'Sin responder' },
+  { value: 'auto', label: 'Resp. automáticamente · próximamente', disabled: true },
+  { value: 'withdrawn', label: 'Retiradas · próximamente', disabled: true },
+];
+
+export const REVIEW_SORT_OPTIONS = [
+  { value: 'recent', label: 'Más recientes' },
+  { value: 'oldest', label: 'Más antiguas' },
+];
+
+export const REVIEW_TYPE_OPTIONS = [
+  { value: 'all', label: 'Todas' },
+  { value: 'positive', label: 'Positivas' },
+  { value: 'neutral', label: 'Neutras' },
+  { value: 'negative', label: 'Negativas' },
+];
+
+export const DEFAULT_REVIEW_FILTERS = {
+  locationId: 'all', rating: 'all', status: 'all', sort: 'recent', sentiment: 'all',
+};
 
 /* Una página de reseñas, filtrada del lado de la base: con paginación, filtrar
  * en el cliente sólo filtraría lo que ya se cargó. */
-export async function fetchReviews(organizationId, { filter = 'all', locationId = null, search = '', from = 0 } = {}) {
+export async function fetchReviews(organizationId, args = {}) {
+  const { data, error } = await reviewsQuery(organizationId, args);
+  if (error) throw error;
+  return data ?? [];
+}
+
+/* El texto tal como lo escribió el cliente. Cuando la reseña está en otro
+ * idioma que la cuenta de Google, la API devuelve las dos versiones juntas:
+ *
+ *   (Translated by Google) Excellent service…\n\n(Original)\nExcelente atención…
+ *
+ * (o al revés: el original primero y la traducción después del marcador). Se
+ * guarda tal cual llega —el análisis y la búsqueda lo leen así—, y se limpia al
+ * mostrarlo. */
+const TRANSLATED_MARK = /\((?:Translated by Google|Traducido por Google)\)/i;
+const ORIGINAL_MARK = /\(Original\)/i;
+
+export function originalReviewText(comment) {
+  if (!comment) return comment;
+  const original = comment.search(ORIGINAL_MARK);
+  if (original !== -1) {
+    const rest = comment.slice(original).replace(ORIGINAL_MARK, '');
+    const cut = rest.search(TRANSLATED_MARK);
+    return (cut === -1 ? rest : rest.slice(0, cut)).trim();
+  }
+  const translated = comment.search(TRANSLATED_MARK);
+  if (translated > 0) return comment.slice(0, translated).trim();
+  return comment.replace(TRANSLATED_MARK, '').trim();
+}
+
+/* La bandeja de Reseñas pagina de a 15, con «Anterior» / «Siguiente». */
+export const REVIEWS_INBOX_PAGE_SIZE = 15;
+
+/* Una página de la bandeja (`page` desde 0), más cuántas reseñas coinciden con
+ * los filtros en total: el «N reseñas» y el «Mostrando 16–30 de N». */
+export async function fetchReviewPage(organizationId, { page = 0, ...args } = {}) {
+  const { data, error, count } = await reviewsQuery(
+    organizationId,
+    { ...args, from: page * REVIEWS_INBOX_PAGE_SIZE, pageSize: REVIEWS_INBOX_PAGE_SIZE },
+    true
+  );
+  if (error) throw error;
+  return { rows: data ?? [], count: count ?? 0 };
+}
+
+function reviewsQuery(organizationId, {
+  rating = 'all', status = 'all', sentiment = 'all', sort = 'recent', locationId = null, search = '',
+  from = 0, pageSize = REVIEWS_PAGE_SIZE,
+} = {}, withCount = false) {
   // `!inner` sobre google_locations: el filtro por sucursal va sobre la tabla
   // embebida, y sin inner PostgREST devolvería las reseñas con el embed en null
-  // en vez de excluirlas.
+  // en vez de excluirlas. Lo mismo con el análisis cuando se filtra por tono.
+  // Sin ese filtro el análisis NO se embebe: es de la 0033, y un entorno sin
+  // ella (el proyecto de pruebas, a 7 oct 2026) rechazaría la consulta entera y
+  // dejaría sin lista a Reseñas y a Mi Empresa. La etiqueta del detalle se lee
+  // aparte, con fetchReviewSentiments.
+  const analysis = sentiment === 'all' ? '' : ', google_review_analysis!inner(sentiment)';
   let query = supabase
     .from('google_reviews')
     .select(
       'id, reviewer_name, is_anonymous, star_rating, comment, created_time, updated_time, reply_comment, reply_updated_time, ' +
-      'google_locations!inner(id, title, maps_uri, location_id, locations(name))'
+      `google_locations!inner(id, title, maps_uri, location_id, locations(name))${analysis}`,
+      withCount ? { count: 'exact' } : undefined
     )
     .eq('organization_id', requireOrg(organizationId))
-    .order('created_time', { ascending: false })
-    .range(from, from + REVIEWS_PAGE_SIZE - 1);
+    .order('created_time', { ascending: sort === 'oldest' })
+    .order('id', { ascending: true })
+    .range(from, from + pageSize - 1);
 
-  if (filter === 'positive') query = query.gte('star_rating', 4);
-  if (filter === 'neutral') query = query.eq('star_rating', 3);
-  if (filter === 'negative') query = query.lte('star_rating', 2);
-  if (filter === 'pending') query = query.is('reply_comment', null);
+  if (rating !== 'all') query = query.eq('star_rating', Number(rating));
+  if (status === 'answered') query = query.not('reply_comment', 'is', null);
+  if (status === 'pending') query = query.is('reply_comment', null);
+  if (sentiment !== 'all') query = query.eq('google_review_analysis.sentiment', sentiment);
   if (locationId) query = query.eq('google_locations.location_id', locationId);
 
   const term = search.trim().replace(/[%,()]/g, ' ');
   if (term) query = query.or(`reviewer_name.ilike.%${term}%,comment.ilike.%${term}%`);
 
-  const { data, error } = await query;
+  return query;
+}
+
+/* El tono (0033) de un grupo de reseñas: Map<review_id, sentiment>. Es la
+ * etiqueta «Positiva / Neutra / Negativa» del detalle de la bandeja. Sólo
+ * Business: en gratis el RLS no devuelve filas. Va aparte de la lista para que
+ * un fallo acá (o un entorno sin la 0033) deje la lista sin etiquetas, no sin
+ * reseñas. */
+export async function fetchReviewSentiments(organizationId, reviewIds) {
+  if (!reviewIds.length) return new Map();
+  const { data, error } = await supabase
+    .from('google_review_analysis')
+    .select('review_id, sentiment')
+    .eq('organization_id', requireOrg(organizationId))
+    .in('review_id', reviewIds);
   if (error) throw error;
-  return data ?? [];
+  return new Map((data ?? []).map((row) => [row.review_id, row.sentiment]));
 }
 
 /* Respondidas y sin responder, sobre todas las reseñas leídas de las fichas
@@ -494,4 +590,48 @@ export function useGoogleConnection(organizationId) {
   }, [firstSyncPending, reload]);
 
   return { connection, loading, failed, reload, firstSyncPending };
+}
+
+/* «Actualizar ahora» y la espera hasta que la lectura termine, sobre el
+ * `google` que devuelve useGoogleConnection. Lo usan Gestión local (Fichas de
+ * Google) y Reseñas.
+ *
+ * El API contesta 202 y lee en segundo plano; terminó cuando `last_synced_at`
+ * avanza. Mientras tanto se relee la conexión cada 4 s, con un tope de un
+ * minuto. `result` queda en 'done' o 'slow' para que cada pantalla diga lo suyo.
+ *
+ * `syncNow` tira el error del API (rol insuficiente, límite de pedidos, API
+ * caído): lo muestra quien llama. */
+export function useGoogleSyncRequest(google) {
+  const { connection, reload } = google;
+  const [waitingFrom, setWaitingFrom] = useState(null); // last_synced_at al pedir
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    if (waitingFrom === null) return undefined;
+    if (connection?.last_synced_at && connection.last_synced_at !== waitingFrom) {
+      setWaitingFrom(null);
+      setResult('done');
+      return undefined;
+    }
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - startedAt > 60_000) {
+        clearInterval(timer);
+        setWaitingFrom(null);
+        setResult('slow');
+      } else {
+        reload();
+      }
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [waitingFrom, connection?.last_synced_at, reload]);
+
+  const syncNow = useCallback(async () => {
+    setResult(null);
+    await requestGoogleSync();
+    setWaitingFrom(connection?.last_synced_at ?? '');
+  }, [connection?.last_synced_at]);
+
+  return { syncing: waitingFrom !== null, result, syncNow };
 }

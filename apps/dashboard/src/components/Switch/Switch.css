@@ -1,4 +1,9 @@
+/* `position: relative` encierra al checkbox (absoluto) dentro del interruptor.
+   Sin eso quedaba posicionado contra otro ancestro, y en un contenedor con
+   scroll (el modal de tono) cada clic le daba foco allá lejos y hacía saltar
+   el scroll: el interruptor se sentía trabado. */
 .ls-switch {
+  position: relative;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -9,6 +14,9 @@
 
 .ls-switch input {
   position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
   opacity: 0;
   width: 1px;
   height: 1px;

@@ -142,36 +142,11 @@
   z-index: 5;
 }
 
-.company-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+/* Los campos son components/Select/SelectField; acá sólo su ancho. */
+.company-toolbar .ls-field {
   width: 260px;
   max-width: 100%;
 }
-
-.company-field__label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--color-text-secondary);
-}
-
-.company-field__control {
-  position: relative;
-}
-
-.company-field__icon {
-  position: absolute;
-  left: 0.85rem;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  color: var(--color-orange);
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* El disparador usa .ls-select-field (components/Select/Select.css). */
 
 /* ── Sin fichas vinculadas ── */
 .company-link-cta {
@@ -783,7 +758,7 @@
     padding: 1rem 1.15rem;
   }
 
-  .company-field {
+  .company-toolbar .ls-field {
     width: 100%;
   }
 

@@ -50,6 +50,65 @@
   padding-left: 2.35rem;
 }
 
+/* Campo de barra de filtros (SelectField / FilterField): etiqueta + control.
+   `.ls-field__input` es el mismo campo para un <input> (el buscador). */
+.ls-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.ls-field__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.ls-field__control {
+  position: relative;
+}
+
+.ls-field__icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  color: var(--color-orange);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ls-field__input {
+  width: 100%;
+  padding: 0.62rem 0.9rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(26, 38, 57, 0.1);
+  font-family: inherit;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--color-navy);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.ls-field__icon + .ls-field__input {
+  padding-left: 2.35rem;
+}
+
+.ls-field__input::placeholder {
+  color: rgba(27, 26, 46, 0.38);
+  font-weight: 500;
+}
+
+.ls-field__input:hover,
+.ls-field__input:focus {
+  outline: none;
+  border-color: rgba(245, 133, 41, 0.55);
+  box-shadow: 0 0 0 3px rgba(245, 133, 41, 0.1);
+}
+
 .ls-select__trigger:disabled {
   cursor: not-allowed;
   opacity: 0.6;

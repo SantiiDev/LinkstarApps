@@ -895,8 +895,28 @@ split below before wiring anything — the shell is finished, the data mostly is
   **`reviews` is the first section out of the gate (6 Oct 2026):** `pages/Reviews/Reviews.jsx` renders
   `ReviewsScreen` (real, over `google_reviews` / `google_locations`) when the connection is `active` or
   `needs_reauth`, and the gate + `ReviewsMockup` otherwise — the mock stays as the invitation for accounts
-  that haven't connected. Its filters are by **stars** (4–5 / 3 / 1–2 / unanswered), not sentiment, which
-  is phase 5; the header counts mix two sources on purpose (Google's per-ficha total and average vs. the
+  that haven't connected. Since Oct 2026 it is an **inbox with Tapstar's structure**: the four KPIs, a bar of
+  combinable filters (Local, Rating 5…1, Estado, Ordenar, Tipo, Buscar — `REVIEW_*_OPTIONS` in
+  `lib/googleApi.js`, applied in the database because the list is paged), the list on the left — 15 per
+  page with Anterior / Siguiente (`fetchReviewPage`, `REVIEWS_INBOX_PAGE_SIZE`) — and the selected review
+  on the right (one column under 900px, with "Volver"). Google returns reviews written in another
+  language as `(Translated by Google) …\n\n(Original)\n…`; they are **stored as received** and
+  `originalReviewText()` shows only the original, in Reseñas and in Mi Empresa's latest reviews. The pieces live in
+  `ReviewsBlocks.jsx`, shared with `ReviewsMockup` like `CompanyBlocks`. Things that are deliberate:
+  **Tipo is the AI sentiment of `0033`, not the stars** — Business only, its options disabled on free;
+  `fetchReviewPage` embeds `google_review_analysis!inner` **only** while that filter is on, and the
+  detail's tone label comes from a separate `fetchReviewSentiments()` whose failure is swallowed. Don't
+  embed the analysis by default: an environment without `0033` (the test project, 7 Oct 2026) rejects
+  the whole query, and `fetchReviews` also feeds Mi Empresa. Estado's "Resp. automáticamente" and
+  "Retiradas" are disabled options — no data exists for either yet. Mi Empresa's "Responder ahora" opens
+  Sin responder, plus Tipo = Negativas on Business. With the Sin responder filter on, publishing removes
+  the review and the detail moves to the next one; the draft is tied to the review id it was written for.
+  "Generar respuesta con IA" and the brand-tone modal (`BrandToneModal.jsx`, also opened by Configuración →
+  Tonos de marca) are **frontend only**: the AI replies (rest of phase 5) are being built separately,
+  "Guardar tono" is disabled, and the data shape the backend should store is documented at the top of that
+  file. Free sees the AI button locked plus a "Probar Business" card, never a fake remaining-replies count.
+  "Actualizar" (owner/admin) uses `useGoogleSyncRequest()`, the same hook as Gestión local's "Actualizar
+  ahora". The header counts mix two sources on purpose (Google's per-ficha total and average vs. the
   answered/unanswered split of the rows actually read). `reviews` stays in `GOOGLE_GATED_SECTIONS`, so
   the subscription banner is also hidden there when connected — accepted to keep `AppShell` from querying
   Google on every section. **`gb-metrics`, `gb-profile` and `gb-posts` followed on 6 Oct 2026** (see
@@ -961,7 +981,12 @@ split below before wiring anything — the shell is finished, the data mostly is
   reload the org, unmount all of `/panel` and log a new login.
 - `components/KpiCard/` — the KPI row of Mi Empresa and Devices (`.kpi-grid` + `KpiCard` + `KpiTrend`),
   built on `StatCard.css`'s glass so it looks like every other KPI. Has an optional `aside` (the
-  "Respondidas" box) and `footer` (a link).
+  "Respondidas" box) and `footer` (a link). The head (icon + label) is its own full-width row and the
+  `aside` sits below it, next to the number: side by side with the head it squeezed the label until it
+  was cut. `components/Select/SelectField` (label + icon + `Select`, and `FilterField` for any control) is
+  the filter-bar field Mi Empresa and Reseñas share. `components/Switch` needs its `position: relative`:
+  without it the hidden checkbox was positioned against another ancestor, and inside a scrolling modal
+  every click focused it far away and jumped the scroll.
 - **Shared pieces added in Oct 2026 — use them instead of copying markup into a page:**
   `components/Icon` (one map of line icons by name — Mi Empresa, Devices and the QR scanner each had
   their own copy; add new icons there), `components/Switch` (labelled on/off toggle over a real

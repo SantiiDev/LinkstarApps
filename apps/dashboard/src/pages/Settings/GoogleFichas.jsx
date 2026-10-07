@@ -6,8 +6,8 @@ import { fetchLocationRows } from '../../lib/catalogApi';
 import {
   fetchGoogleLocations,
   linkGoogleLocation,
-  requestGoogleSync,
   useGoogleConnection,
+  useGoogleSyncRequest,
 } from '../../lib/googleApi';
 import './GoogleFichas.css';
 
@@ -44,7 +44,7 @@ export default function GoogleFichas() {
   const orgId = org?.organization_id;
   const canEdit = org?.role === 'owner' || org?.role === 'admin';
   const google = useGoogleConnection(orgId);
-  const { connection, reload } = google;
+  const { connection } = google;
   const connected = connection?.status === 'active' || connection?.status === 'needs_reauth';
 
   const [fichas, setFichas] = useState(null);
@@ -53,7 +53,7 @@ export default function GoogleFichas() {
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState(null); // { ficha, next, message }
-  const [waitingSync, setWaitingSync] = useState(null); // last_synced_at al pedir
+  const sync = useGoogleSyncRequest(google);
 
   const load = useCallback(async () => {
     if (!orgId) return;
@@ -74,34 +74,18 @@ export default function GoogleFichas() {
     if (connected) load();
   }, [connected, connection?.last_synced_at, load]);
 
-  // Tras pedir "Actualizar ahora", se consulta la conexión cada 4 s hasta que
-  // la lectura termine, con un tope de un minuto.
+  // Tras pedir "Actualizar ahora", useGoogleSyncRequest espera a que la lectura
+  // termine (con un tope de un minuto) y deja el resultado.
   useEffect(() => {
-    if (waitingSync === null) return undefined;
-    if (connection?.last_synced_at && connection.last_synced_at !== waitingSync) {
-      setWaitingSync(null);
-      setNotice('Listo, tu cuenta de Google está al día.');
-      return undefined;
-    }
-    const startedAt = Date.now();
-    const timer = setInterval(() => {
-      if (Date.now() - startedAt > 60_000) {
-        clearInterval(timer);
-        setWaitingSync(null);
-        setNotice('La lectura está tardando. Los cambios van a aparecer en unos minutos.');
-      } else {
-        reload();
-      }
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [waitingSync, connection?.last_synced_at, reload]);
+    if (sync.result === 'done') setNotice('Listo, tu cuenta de Google está al día.');
+    if (sync.result === 'slow') setNotice('La lectura está tardando. Los cambios van a aparecer en unos minutos.');
+  }, [sync.result]);
 
   async function syncNow() {
     setNotice(null);
     setError(null);
     try {
-      await requestGoogleSync();
-      setWaitingSync(connection?.last_synced_at ?? '');
+      await sync.syncNow();
       setNotice('Leyendo tu cuenta de Google…');
     } catch (err) {
       setError(err.message);
@@ -146,8 +130,7 @@ export default function GoogleFichas() {
         // Leer ya las reseñas de la ficha recién vinculada. Si el API no
         // responde, el vínculo ya está guardado: se lee en la próxima corrida.
         try {
-          await requestGoogleSync();
-          setWaitingSync(connection?.last_synced_at ?? '');
+          await sync.syncNow();
           setNotice(`«${ficha.title}» quedó vinculada. Estamos leyendo sus reseñas…`);
         } catch {
           setNotice(`«${ficha.title}» quedó vinculada. Sus reseñas van a aparecer en la próxima lectura diaria.`);
@@ -245,8 +228,8 @@ export default function GoogleFichas() {
           )}
 
           {canEdit && connection?.status === 'active' && (
-            <button type="button" className="gfichas__link gfichas__sync" onClick={syncNow} disabled={waitingSync !== null}>
-              {waitingSync !== null ? 'Actualizando…' : 'Actualizar ahora'}
+            <button type="button" className="gfichas__link gfichas__sync" onClick={syncNow} disabled={sync.syncing}>
+              {sync.syncing ? 'Actualizando…' : 'Actualizar ahora'}
             </button>
           )}
         </>

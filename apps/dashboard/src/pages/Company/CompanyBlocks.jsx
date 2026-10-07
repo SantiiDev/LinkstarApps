@@ -1,9 +1,11 @@
 import Select from '../../components/Select/Select';
+import SelectField from '../../components/Select/SelectField';
 import TrendChart from '../../components/TrendChart/TrendChart';
 import Icon from '../../components/Icon/Icon';
 import Switch from '../../components/Switch/Switch';
 import KpiCard, { KpiTrend as Trend } from '../../components/KpiCard/KpiCard';
 import { colorForIndex, formatRelativeTime, initialsFor } from '../../lib/dashboardApi';
+import { originalReviewText } from '../../lib/googleApi';
 import { RANGE_OPTIONS, formatNumber, formatOneDecimal, starGoal } from '../../lib/companyOverview';
 
 /*
@@ -47,20 +49,8 @@ function StarGlyph({ size = 14 }) {
 export function CompanyToolbar({ locationOptions, locationId, onLocation, range, onRange }) {
   return (
     <div className="company-card company-toolbar">
-      <div className="company-field">
-        <span className="company-field__label">Local</span>
-        <div className="company-field__control">
-          <span className="company-field__icon"><Icon name="store" size={15} /></span>
-          <Select value={locationId} onChange={onLocation} options={locationOptions} triggerClassName="ls-select-field ls-select-field--block ls-select-field--icon" />
-        </div>
-      </div>
-      <div className="company-field">
-        <span className="company-field__label">Rango de fechas</span>
-        <div className="company-field__control">
-          <span className="company-field__icon"><Icon name="calendar" size={15} /></span>
-          <Select value={range} onChange={onRange} options={RANGE_OPTIONS} triggerClassName="ls-select-field ls-select-field--block ls-select-field--icon" />
-        </div>
-      </div>
+      <SelectField label="Local" icon="store" value={locationId} onChange={onLocation} options={locationOptions} />
+      <SelectField label="Rango de fechas" icon="calendar" value={range} onChange={onRange} options={RANGE_OPTIONS} />
     </div>
   );
 }
@@ -444,7 +434,7 @@ export function RecentReviewsCard({ items, failed, showLocation, onViewAll }) {
                     </span>
                   </div>
                   {r.comment
-                    ? <p className="recent-review__text">{r.comment}</p>
+                    ? <p className="recent-review__text">{originalReviewText(r.comment)}</p>
                     : <p className="recent-review__text recent-review__text--empty">Sólo estrellas, sin comentario.</p>}
                 </div>
               </li>

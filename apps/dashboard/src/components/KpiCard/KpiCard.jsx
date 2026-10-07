@@ -13,18 +13,23 @@ import './KpiCard.css';
  * Nunca recibe un número inventado: quien la usa pasa «—» cuando no hay medición.
  * Va dentro de un contenedor `.kpi-grid`.
  */
+/* El encabezado (ícono + etiqueta) va en su propia fila, a todo el ancho; la
+ * cajita del costado va abajo, junto al número. Al lado del encabezado le
+ * comía el ancho y la etiqueta se cortaba. */
 export default function KpiCard({ icon, color = 'orange', label, children, aside, footer }) {
   return (
     <div className={`stat-card stat-card--${color} kpi-card`}>
-      <div className="kpi-card__main">
-        <div className="kpi-card__head">
-          <span className={`kpi-card__icon stat-card__icon-wrapper--${color}`}>{icon}</span>
-          <span className="kpi-card__label">{label}</span>
-        </div>
-        {children}
-        {footer}
+      <div className="kpi-card__head">
+        <span className={`kpi-card__icon stat-card__icon-wrapper--${color}`}>{icon}</span>
+        <span className="kpi-card__label">{label}</span>
       </div>
-      {aside}
+      <div className="kpi-card__body">
+        <div className="kpi-card__main">
+          {children}
+          {footer}
+        </div>
+        {aside}
+      </div>
     </div>
   );
 }

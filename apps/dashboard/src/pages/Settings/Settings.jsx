@@ -5,6 +5,8 @@ import Select from '../../components/Select/Select';
 import EmployeesPage from '../Employees/Employees';
 import LocationsPage from '../Locations/Locations';
 import GoogleFichas from './GoogleFichas';
+import BrandToneModal from '../Reviews/BrandToneModal';
+import { fetchLocationRows } from '../../lib/catalogApi';
 import TeamMembers from './TeamMembers';
 import ActivityLog from './ActivityLog';
 import { supabase } from '../../lib/supabaseClient';
@@ -72,7 +74,19 @@ function CardHead({ icon, iconVariant = 'navy', title, badge, subtitle, action }
 const CONTACT_LOCATION_OPTIONS = [{ value: 'all', label: 'Todos los locales' }];
 
 function LocalTab() {
+  const { org } = useOrg();
   const [contactLocation, setContactLocation] = useState('all');
+  // El mismo modal de tono que abre Reseñas, con el selector de local. Todavía
+  // no guarda (sólo frontend, ver BrandToneModal): por eso la lista de abajo
+  // sigue vacía.
+  const [toneLocations, setToneLocations] = useState(null);
+
+  function openTone() {
+    setToneLocations([]);
+    fetchLocationRows(org?.organization_id)
+      .then((rows) => setToneLocations(rows.map((l) => ({ value: l.id, label: l.name }))))
+      .catch(() => {});
+  }
 
   return (
     <div className="settings-panel">
@@ -109,7 +123,7 @@ function LocalTab() {
           iconVariant="gold"
           title="Tonos de marca"
           subtitle={<p className="settings-card__subtitle">Definí cómo responde la IA por local. El tono específico de un local tiene prioridad sobre el global.</p>}
-          action={<button type="button" className="settings-save-btn">+ Añadir tono</button>}
+          action={<button type="button" className="settings-save-btn" onClick={openTone}>+ Añadir tono</button>}
         />
 
         <div className="settings-empty-state">
@@ -118,6 +132,8 @@ function LocalTab() {
           <p className="settings-empty-state__text">Creá tu primer tono para que la IA responda con tu voz.</p>
         </div>
       </div>
+
+      {toneLocations && <BrandToneModal locationOptions={toneLocations} onClose={() => setToneLocations(null)} />}
 
       <div className="settings-card">
         <CardHead
