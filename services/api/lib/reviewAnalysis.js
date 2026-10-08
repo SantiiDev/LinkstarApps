@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js';
-import { generateJson, geminiModel, isGeminiConfigured } from './gemini.js';
+import { generateJson, analysisModel, isClaudeConfigured } from './claude.js';
 
 /* Sentimiento, temas y palabras clave de cada reseña — fase 5 (0033).
  *
@@ -22,8 +22,8 @@ import { generateJson, geminiModel, isGeminiConfigured } from './gemini.js';
  */
 
 const PER_RUN_LIMIT = 300;
-// Cada llamada tarda unos 8 s (medido el 7/10/2026 con gemini-3.5-flash-lite):
-// con 8 en paralelo, las 300 de una corrida son unos 5 minutos.
+// Con Gemini cada llamada tardaba unos 8 s (7/10/2026); con 8 en paralelo, las
+// 300 de una corrida eran unos 5 minutos. Volver a medir con Claude.
 const CONCURRENCY = 8;
 
 // La misma lista cerrada que valida google_record_review_analysis() (0033).
@@ -31,34 +31,39 @@ export const REVIEW_TOPICS = ['atencion', 'calidad', 'precio', 'espera', 'ambien
 
 const SENTIMENTS = ['positive', 'neutral', 'negative'];
 
+// JSON Schema para structured outputs: cada objeto lleva
+// additionalProperties: false y todos sus campos en required.
 const SCHEMA = {
-  type: 'OBJECT',
+  type: 'object',
   properties: {
-    sentiment: { type: 'STRING', enum: SENTIMENTS },
+    sentiment: { type: 'string', enum: SENTIMENTS },
     topics: {
-      type: 'ARRAY',
+      type: 'array',
       items: {
-        type: 'OBJECT',
+        type: 'object',
         properties: {
-          topic: { type: 'STRING', enum: REVIEW_TOPICS },
-          sentiment: { type: 'STRING', enum: SENTIMENTS },
+          topic: { type: 'string', enum: REVIEW_TOPICS },
+          sentiment: { type: 'string', enum: SENTIMENTS },
         },
         required: ['topic', 'sentiment'],
+        additionalProperties: false,
       },
     },
     keywords: {
-      type: 'ARRAY',
+      type: 'array',
       items: {
-        type: 'OBJECT',
+        type: 'object',
         properties: {
-          term: { type: 'STRING' },
-          sentiment: { type: 'STRING', enum: SENTIMENTS },
+          term: { type: 'string' },
+          sentiment: { type: 'string', enum: SENTIMENTS },
         },
         required: ['term', 'sentiment'],
+        additionalProperties: false,
       },
     },
   },
   required: ['sentiment', 'topics', 'keywords'],
+  additionalProperties: false,
 };
 
 const SYSTEM = `Analizás reseñas de Google de comercios (bares, restaurantes, tiendas, servicios), en su mayoría de Argentina.
@@ -97,9 +102,15 @@ function cleanResult(json) {
   return { sentiment: json.sentiment, topics, keywords };
 }
 
+/* Sólo la llamada al modelo, sin tocar la base: la usa analyzeOne y sirve para
+   probar el análisis con un texto a mano. */
+export async function classifyReview(review, model = analysisModel()) {
+  const { json, usage } = await generateJson({ system: SYSTEM, prompt: promptFor(review), schema: SCHEMA, model });
+  return { ...cleanResult(json), usage };
+}
+
 async function analyzeOne(review, model) {
-  const { json } = await generateJson({ system: SYSTEM, prompt: promptFor(review), schema: SCHEMA, model });
-  const result = cleanResult(json);
+  const result = await classifyReview(review, model);
   const { error } = await supabase.rpc('google_record_review_analysis', {
     p_review_id: review.review_id,
     p_sentiment: result.sentiment,
@@ -121,8 +132,8 @@ export async function analyzeOrganizationReviews(organizationId, { dryRun = fals
   const queue = pending ?? [];
   if (!queue.length) return { analyzed: 0, failures: 0, pending: 0 };
 
-  if (!isGeminiConfigured()) {
-    log(`  ${queue.length} reseña(s) para analizar, pero falta GEMINI_API_KEY: quedan pendientes`);
+  if (!isClaudeConfigured()) {
+    log(`  ${queue.length} reseña(s) para analizar, pero falta ANTHROPIC_API_KEY: quedan pendientes`);
     return { analyzed: 0, failures: 0, pending: queue.length };
   }
   if (dryRun) {
@@ -130,14 +141,14 @@ export async function analyzeOrganizationReviews(organizationId, { dryRun = fals
     return { analyzed: 0, failures: 0, pending: queue.length };
   }
 
-  const model = geminiModel();
+  const model = analysisModel();
   let analyzed = 0;
   let failures = 0;
   let next = 0;
 
   // Unas pocas llamadas en paralelo: alcanza para que 300 reseñas no tarden
   // media hora, sin pelearse con el límite por minuto de la API (los 429 se
-  // reintentan en lib/gemini.js).
+  // reintenta el SDK, en lib/claude.js).
   async function worker() {
     while (next < queue.length) {
       const review = queue[next++];
