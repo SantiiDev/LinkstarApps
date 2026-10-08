@@ -3,10 +3,12 @@
 Monorepo de Linkstar: expositores NFC/QR que llevan a los clientes de un negocio a dejar su reseña en
 Google, y la plataforma SaaS desde la que ese negocio los administra y mide.
 
-> **En desarrollo — todavía no salimos a la venta.** Sólo el esquema está en Supabase; ni la API ni el
-> dashboard tienen deploy, y el checkout del sitio de ventas está desconectado a propósito. Buena parte de
-> las pantallas del dashboard son maquetas con datos hardcodeados. El detalle de qué está realmente
-> conectado y qué no está en [CLAUDE.md](CLAUDE.md).
+> **En desarrollo — todavía no salimos a la venta.** Está publicado: el sitio de ventas
+> (`linkstarapp.com`), el panel (`app.linkstarapp.com`, Cloudflare) y el API (`api.linkstarapp.com`,
+> Railway, con un job diario). El cobro del plan Business sigue apagado hasta tener Mercado Pago de
+> producción, y la tienda toma pedidos sin pago online a propósito. Ninguna pantalla del panel inventa
+> números: o lee la base, o dice qué le falta. El detalle de qué está conectado y qué no está en
+> [CLAUDE.md](CLAUDE.md).
 
 ## Estructura
 
@@ -59,7 +61,7 @@ npm run db:status        # supabase migration list — compara local contra remo
 Scripts de operación de la API, desde `services/api`:
 
 ```bash
-npm run provision-devices      # alta de expositores con claim_code
+npm run provision-devices      # alta de expositores: claim_code, URL pública y URL del QR de vinculación
 npm run rebuild-today-rollup   # recalcula el rollup del día
 node scripts/seed-test-device.js
 ```

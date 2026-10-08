@@ -1,8 +1,14 @@
 # Desplegar el panel
 
 El panel se publica en `https://app.linkstarapp.com` (Cloudflare Workers, gratis,
-la misma cuenta que el sitio de ventas). **El API todavía no está desplegado** (su guía es [services/api/DEPLOY.md](../../services/api/DEPLOY.md)), y
-el panel está preparado para convivir con eso (ver la decisión 1).
+la misma cuenta que el sitio de ventas). Se publicó el 6 de octubre de 2026, antes que el
+API; el API quedó en Railway ese mismo día (`api.linkstarapp.com`, guía en
+[services/api/DEPLOY.md](../../services/api/DEPLOY.md)). Si el API no contesta, el panel lo
+dice en vez de romperse (ver la decisión 1).
+
+**Orden de cada publicación con migraciones:** subirlas a producción, mergear a `main` (eso
+publica el API en Railway) y recién ahí publicar el panel. El panel nuevo puede leer columnas
+que agrega una migración; publicado antes, esa pantalla se rompe.
 
 ## Por qué se despliega antes que el resto de la fase 8
 
@@ -26,8 +32,10 @@ como Enterprise: `VITE_BUSINESS_CHECKOUT=off` en `.env.production`
 del plan se siguen mostrando; sólo cambia el botón. No toca la base: en local, sin
 la variable, el checkout se sigue probando igual.
 
-**El día que el API esté desplegado**: borrar `VITE_BUSINESS_CHECKOUT=off` de
-`.env.production` y volver a desplegar.
+**Hoy (octubre de 2026)** el API ya está desplegado, pero faltan las credenciales de
+producción de Mercado Pago y su webhook, así que el interruptor sigue en `off`. **El día que
+una suscripción de prueba de punta a punta active una cuenta por webhook**: borrar
+`VITE_BUSINESS_CHECKOUT=off` de `.env.production` y volver a desplegar.
 
 Las demás acciones que necesitan el API (conectar Google, responder reseñas,
 "Actualizar ahora", mandar invitaciones por mail) muestran "el servicio no está
@@ -63,8 +71,8 @@ valor de desarrollo en el bundle de producción.
 |---|---|
 | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Del proyecto real. La anon key es pública por diseño; **nunca** la `service_role`. |
 | `VITE_API_URL` | `https://api.linkstarapp.com`, aunque todavía no conteste. |
-| `VITE_REDIRECT_DOMAIN` | Tiene que coincidir con el `REDIRECT_DOMAIN` del API, o el QR que genera el panel apunta a donde nadie contesta. Hoy los dos valen `l.linkstarapp.com`, y ese subdominio **todavía no existe**. |
-| `VITE_BUSINESS_CHECKOUT` | `off` mientras no haya API (decisión 1). |
+| `VITE_REDIRECT_DOMAIN` | Tiene que coincidir con el `REDIRECT_DOMAIN` del API, o el QR que genera el panel apunta a donde nadie contesta. Hoy los dos valen `l.linkstarapp.com`, que apunta al API de Railway. |
+| `VITE_BUSINESS_CHECKOUT` | `off` mientras no haya Mercado Pago de producción (decisión 1). |
 
 ## Después de desplegar
 

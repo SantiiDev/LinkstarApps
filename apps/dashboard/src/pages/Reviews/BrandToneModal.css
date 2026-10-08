@@ -1,0 +1,268 @@
+/* Modal «Crear tono» (BrandToneModal). La estructura —overlay, encabezado,
+   cuerpo que scrollea, pie— es la de components/FormModal; acá sólo lo propio. */
+
+/* Sin el desenfoque del velo de FormModal: detrás están los ~20 paneles de
+   vidrio de Reseñas, y este modal cambia de alto con cada opción de emojis.
+   Un velo más oscuro alcanza para separarlo. */
+.tone-modal-overlay {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgba(16, 24, 40, 0.55);
+}
+
+.tone-modal {
+  width: min(36rem, 100%);
+}
+
+.tone-modal__subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.tone-modal__textarea,
+.tone-modal__signature input,
+.tone-modal__emoji-input input {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid rgba(26, 38, 57, 0.15);
+  border-radius: 0.6rem;
+  background: var(--color-white);
+  font-family: inherit;
+  font-size: 0.86rem;
+  color: var(--color-text-primary);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.tone-modal__textarea {
+  resize: vertical;
+  min-height: 6rem;
+  line-height: 1.5;
+}
+
+.tone-modal__textarea:focus,
+.tone-modal__signature input:focus,
+.tone-modal__emoji-input input:focus {
+  outline: none;
+  border-color: var(--color-orange);
+  box-shadow: 0 0 0 3px rgba(245, 133, 41, 0.15);
+}
+
+.tone-modal__textarea::placeholder,
+.tone-modal__signature input::placeholder,
+.tone-modal__emoji-input input::placeholder {
+  color: rgba(27, 26, 46, 0.35);
+}
+
+.tone-modal__counter {
+  align-self: flex-end;
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+
+/* ── Firma ── */
+.tone-modal__signature {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.1rem;
+  border-radius: 0.85rem;
+  background: rgba(245, 133, 41, 0.06);
+  border: 1px solid rgba(245, 133, 41, 0.25);
+}
+
+.tone-modal__signature-title,
+.tone-modal__emojis-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.tone-modal__signature-title {
+  color: var(--color-orange);
+}
+
+.tone-modal__signature-hint {
+  margin-bottom: 0.35rem;
+  font-size: 0.74rem;
+  color: var(--color-orange);
+  opacity: 0.85;
+}
+
+/* ── Emojis ── */
+.tone-modal__emojis {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem;
+  border-radius: 0.85rem;
+  background: rgba(238, 240, 247, 0.6);
+  border: 1px solid rgba(26, 38, 57, 0.08);
+}
+
+.tone-modal__emojis-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.tone-modal__emojis-title {
+  color: var(--color-navy);
+}
+
+.tone-modal__emojis-title svg {
+  color: var(--color-orange);
+}
+
+.tone-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.tone-choice__label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.tone-choice__options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.tone-choice__btn {
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(26, 38, 57, 0.12);
+  background: var(--color-white);
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--color-navy);
+  cursor: pointer;
+  transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base);
+}
+
+.tone-choice__btn:hover {
+  border-color: rgba(245, 133, 41, 0.5);
+}
+
+.tone-choice__btn--active {
+  background: var(--color-orange);
+  border-color: var(--color-orange);
+  color: #fff;
+  font-weight: 700;
+}
+
+.tone-modal__emoji-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tone-modal__emoji-input input.tone-modal__input--invalid,
+.tone-modal__emoji-input input.tone-modal__input--invalid:focus {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+}
+
+.tone-modal__emoji-error {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.tone-modal__emoji-add {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  border-radius: 0.6rem;
+  background: var(--color-orange);
+  color: #fff;
+  cursor: pointer;
+}
+
+.tone-modal__emoji-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tone-modal__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tone-modal__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.4rem 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(245, 133, 41, 0.12);
+  border: 1px solid rgba(245, 133, 41, 0.3);
+  font-size: 0.95rem;
+}
+
+.tone-modal__chip button {
+  display: inline-flex;
+  padding: 0.15rem;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tone-modal__chip button:hover {
+  color: var(--color-navy);
+  background: rgba(26, 38, 57, 0.08);
+}
+
+/* ── Aviso y enlace ── */
+.tone-modal__soon {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.tone-modal__soon svg {
+  flex: none;
+  margin-top: 0.1rem;
+}
+
+.tone-modal__settings-link {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.tone-modal__settings-link:hover {
+  color: var(--color-orange);
+}
+
+.tone-modal__settings-link svg:first-child {
+  color: #8b5cf6;
+}
+
+.tone-modal__footer .fmodal__btn {
+  flex: 1;
+}

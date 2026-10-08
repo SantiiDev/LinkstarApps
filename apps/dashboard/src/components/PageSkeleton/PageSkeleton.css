@@ -1,0 +1,37 @@
+.page-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.page-skeleton__bar,
+.page-skeleton__card,
+.page-skeleton__wide {
+  border-radius: var(--radius-card);
+  background: rgba(255, 255, 255, 0.5);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.page-skeleton__bar { height: 88px; }
+.page-skeleton__wide { height: 240px; }
+
+/* Imita la fila de KPIs (components/KpiCard): 4, 2 y 2 columnas. */
+.page-skeleton__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.page-skeleton__card { height: 128px; }
+
+@media (max-width: 1200px) {
+  .page-skeleton__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .page-skeleton__grid {
+    gap: 0.75rem;
+  }
+}

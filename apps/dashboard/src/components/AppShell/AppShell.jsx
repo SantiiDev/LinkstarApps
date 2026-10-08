@@ -35,14 +35,8 @@ export default function AppShell() {
     navigate(PUBLIC_ROUTES.landing, { replace: true });
   }, [signOut, navigate]);
 
-  // Cada sección arranca desde arriba. Sin esto se conserva el scroll de la
-  // sección anterior y una página corta puede abrirse ya scrolleada, mostrando
-  // el pie o directamente el vacío de abajo. 'instant' y no 'smooth': el
-  // contenido ya cambió, animar el viaje sólo muestra la página nueva pasando
-  // de largo.
-  useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-  }, [location.pathname]);
+  // Que cada sección arranque desde arriba lo hace ScrollToTop en App.jsx, para
+  // todas las rutas (también las públicas, que no pasan por acá).
 
   useEffect(() => {
     if (!navOpen) return;

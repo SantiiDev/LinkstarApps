@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { supabase } from '../lib/supabase.js';
-import { REDIRECT_DOMAIN } from '../lib/config.js';
+import { REDIRECT_DOMAIN, DASHBOARD_URL } from '../lib/config.js';
 
 // Decisión 4 de CLAUDE.md: los devices nunca se crean client-side. Se
 // provisionan acá, en lote, con status='unassigned' y sin organization_id —
@@ -60,11 +60,21 @@ async function provisionDevices({ kind, count, batchCode, formFactor }) {
   return data;
 }
 
+/* Dos QR por expositor, y no son intercambiables:
+ *   - `url`: el del frente, el que escanean los clientes (y lo que se graba en el
+ *     NFC con ?s=n). Lo ve cualquiera, así que NO sirve para vincular.
+ *   - `claim_url`: el chico de la base, junto al claim_code impreso. Lleva al
+ *     panel con el modal de vinculación ya completado (ScanClaimModal.jsx, en
+ *     apps/dashboard); el botón «Escanear QR» del panel también lo lee. Sale de
+ *     DASHBOARD_URL, así que para imprimir hay que correr esto con el .env de
+ *     producción (https://app.linkstarapp.com), no con localhost. */
 function printTable(devices) {
+  const dashboard = DASHBOARD_URL.replace(/\/+$/, '');
   const rows = devices.map(({ public_id, claim_code }) => ({
     public_id,
     claim_code,
     url: `https://${REDIRECT_DOMAIN}/d/${public_id}`,
+    claim_url: `${dashboard}/panel/dispositivos?vincular=${claim_code}`,
   }));
   console.table(rows);
 }

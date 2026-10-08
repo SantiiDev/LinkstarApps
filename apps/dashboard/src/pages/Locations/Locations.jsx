@@ -924,16 +924,6 @@ export default function LocationsPage({ embedded = false }) {
       }
 
       {/* ── Footer ── */}
-      {!embedded && (
-      <div className="loc-page__footer">
-        <p className="loc-page__footer-text">
-          © {new Date().getFullYear()} <span className="loc-page__footer-brand">
-            linkstar<span className="loc-page__footer-dot">.</span>
-          </span> — Panel de gestión de reseñas
-        </p>
-      </div>
-      )}
-
       {/* ── Modal ── */}
       {selected && (
         <LocationModal
