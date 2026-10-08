@@ -157,11 +157,11 @@ to `.env`, don't rename them away.
   are optional as a group: without all four the Google routes answer 503 and everything else works.
   `GOOGLE_REDIRECT_URI` must match the console entry byte for byte, port included; locally that is
   `PORT` (3001), and `lib/googleOAuth.js` warns at boot if they differ. Losing `GOOGLE_TOKEN_ENC_KEY`
-  makes every stored refresh token unreadable — every customer has to reconnect. `GEMINI_API_KEY` /
-  `GEMINI_MODEL` (optional, default `gemini-3.5-flash-lite`) power the review analysis of phase 5;
-  without the key the Google sync works the same and reviews simply stay pending. The key must belong to
-  a Gemini project **with billing enabled**: on the free tier Google may use what it receives to improve
-  its products, which the Limited Use policy of the Business Profile data (the review text) doesn't allow.
+  makes every stored refresh token unreadable — every customer has to reconnect. `ANTHROPIC_API_KEY` /
+  `ANTHROPIC_MODEL` (optional, default `claude-haiku-5-5`) power the review analysis of phase 5;
+  without the key the Google sync works the same and reviews simply stay pending. The provider that
+  receives the review text is named in the panel's privacy policy, so the key and the policy move together
+  (see "Review analysis").
   `DASHBOARD_URL` is optional too (defaults to the *second* entry of `FRONTEND_URL`) and is where the
   subscription returns from Mercado Pago — it cannot be `FRONTEND_URL`, which points at the sales site.
   `FRONTEND_URL` is **comma-separated**: this one service serves both frontends, so CORS needs both
@@ -279,15 +279,14 @@ fall back to free and raises `paid_plan_active` instead of silently doing nothin
 active-org functions · `0033` review analysis (phase 5): `google_review_analysis`, `v_review_analysis`,
 and the two `service_role` RPCs the analyzer uses (see "Review analysis" below).
 
-**`0032` and `0033` are tested locally but NOT applied to the test project or production** (7 Oct 2026:
-`supabase start` + `db reset --local` through `0033` and `rls_isolation.sql` green, 159, on a local
-Docker stack; on that machine the default ports were free, no remap needed). Push both before deploying
-the API or panel built from this code. Neither breaks if it's missing — `lib/googleSync.js` catches the
-analysis step and the Reportes screens show their load error — but the screens would be empty.
-
-**Everything up to `0031` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
-16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026, `0028`–`0031` on 7 Oct 2026 —
-local and remote matched on `npm run db:status` that day). `0028`–`0031` were built and tested on the
+**Everything up to `0033` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
+16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026, `0028`–`0033` on 7 Oct 2026 —
+local and remote matched on `npm run db:status` against `czdydtkhiqmwujadwlzf`, the ref in
+`apps/dashboard/.env.production`, on 8 Oct). `0032` and `0033` were tested on a local Docker stack
+before the push (`db reset --local` through `0033` and `rls_isolation.sql` green, 159; on that machine
+the default ports were free, no remap needed) but **not on the test project** (as of 7 Oct it had
+not received them; check with `db push --db-url … --dry-run` before relying on it). If an environment lacks them, nothing breaks — `lib/googleSync.js` catches the analysis step
+and the Reportes screens show their load error — but those screens are empty. `0028`–`0031` were built and tested on the
 test project first (`mbhuzrrjyboyimqvnrpy`, 6 Oct, `rls_isolation.sql` green after each one: sections
 13–16 are theirs).
 
@@ -753,8 +752,8 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
 
 ### Review analysis — sentiment, topics and keywords (phase 5, `0033`)
 
-Gemini (`lib/gemini.js`, plain `fetch`, key in the `x-goog-api-key` header) reads the text of each review
-**once** and `lib/reviewAnalysis.js` stores, per review: overall `sentiment` (of the *text*, not the
+Claude (`lib/claude.js`, official `@anthropic-ai/sdk`, `claude-haiku-5-5` by default) reads the text of
+each review **once** and `lib/reviewAnalysis.js` stores, per review: overall `sentiment` (of the *text*, not the
 stars), `topics` from a **closed list** (`atencion`, `calidad`, `precio`, `espera`, `ambiente`,
 `limpieza`) each with its own tone, and up to 8 `keywords`, each `{term, sentiment}`. It runs as step 5 of
 `syncGoogleOrganization()`, so the daily job and "Actualizar ahora" both analyze what they just read;
@@ -770,22 +769,29 @@ stars), `topics` from a **closed list** (`atencion`, `calidad`, `precio`, `esper
   review's tone and put "lugar lindo" under "De qué se quejan"; don't go back to `text[]` keywords.
 - **The database re-validates what the model returns.** `google_record_review_analysis()` drops topics
   outside the list, lower-cases and de-duplicates keywords, caps them at 8, and takes org and ficha from
-  the review row, never from the caller. The response is also bound to a JSON schema, so a review that
-  says "ignore your instructions" can't change the shape — tested with exactly that text on 7 Oct 2026.
+  the review row, never from the caller. The response is also bound to a JSON schema (structured outputs,
+  `output_config.format`), so a review that says "ignore your instructions" can't change the shape —
+  tested with exactly that text on 7 Oct 2026, with Gemini; repeat it with Claude.
+- **No `temperature`.** Gemini ran at 0; `claude-haiku-5-5` rejects any non-default sampling parameter
+  with a 400. The schema is what keeps the output stable. Effort is `low` (it is a short classification),
+  and `max_tokens` leaves room for the model's thinking before the JSON — a response that stops on
+  `max_tokens` or `refusal` is a failed review, logged and left pending, never retried in a loop.
 - **Only text and stars go to the model, never the reviewer's name.** Reviews with no text are not
   analyzed and the screens say so ("N reseñas sólo de estrellas") instead of inventing a tone from stars.
 - **Re-analysis only on edit:** `review_updated_time` stores the review's `updated_time` at analysis; a
   newer one makes it pending again. Nothing is recomputed when a screen opens.
 - Analysis failures don't add to the sync's `failures` (that number is shown to the customer as "no
-  pudimos leer N fichas"), and a missing `0033` or Gemini outage is caught and logged without failing the
-  sync. ~8 s per call with `gemini-3.5-flash-lite` (7 Oct 2026), 8 in parallel.
+  pudimos leer N fichas"), and a missing `0033` or a model outage is caught and logged without failing the
+  sync. 8 calls in parallel; retries on 429/5xx are the SDK's (`maxRetries` in `lib/claude.js`).
 - Screens: `pages/Reports/ReportsSentimentScreen.jsx` / `ReportsKeywordsScreen.jsx`, reading
   `v_review_analysis` through `fetchReviewAnalysis()` (paged, filtered by org) and aggregated client-side
   in `lib/reviewInsights.js`. Months with no reviews are left out of the trend, not drawn as 0%; "la más
   repetida" shows "—" when no keyword repeats. Free accounts see the mock behind `BusinessLock fullPage`.
-- **Pending outside the code:** the dashboard's privacy policy (`pages/Legal/Privacy.jsx`) does not yet
-  say that review text is processed by an AI provider (Google Gemini); it has to before this ships,
-  because Google's verification reviews that page against what the app does.
+- **The privacy policy names the AI provider: Anthropic** (`pages/Legal/Privacy.jsx` §3.2 and §4, and
+  the scope justification in `apps/dashboard/GOOGLE_VERIFICATION.md`). The analysis moved from Gemini to
+  Claude on 8 Oct 2026, before it was ever switched on in production. A review sent to a provider the
+  policy doesn't name is exactly what Google's verification checks this page for, so changing provider
+  again means editing those three places first.
 
 ### `apps/dashboard`
 

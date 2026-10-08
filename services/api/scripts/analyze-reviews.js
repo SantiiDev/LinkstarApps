@@ -1,13 +1,16 @@
 import 'dotenv/config';
 import { supabase } from '../lib/supabase.js';
-import { analyzeOrganizationReviews } from '../lib/reviewAnalysis.js';
+import { analyzeOrganizationReviews, classifyReview } from '../lib/reviewAnalysis.js';
 
 /* analyze-reviews — el análisis de reseñas (fase 5, 0033) por separado.
  *
  *   node scripts/analyze-reviews.js                     todas las organizaciones con Google
  *   node scripts/analyze-reviews.js --org <uuid>        sólo una
  *   node scripts/analyze-reviews.js --limit 1000        tope por organización (default 300)
- *   node scripts/analyze-reviews.js --dry-run           cuenta las pendientes, no llama a Gemini
+ *   node scripts/analyze-reviews.js --dry-run           cuenta las pendientes, no llama a Claude
+ *   node scripts/analyze-reviews.js --muestra "texto" [--estrellas 4]
+ *                                                       clasifica ese texto e imprime el resultado,
+ *                                                       sin tocar la base
  *
  * En el día a día no hace falta: el análisis ya corre dentro de sync-google,
  * después de leer las reseñas. Esto sirve para dos cosas: completar de una vez
@@ -24,7 +27,19 @@ function argValue(name) {
   return index === -1 ? null : process.argv[index + 1] ?? null;
 }
 
+/* --muestra: clasifica un texto escrito a mano y lo imprime. No lee ni escribe
+   la base: sirve para probar la clave, el modelo y el prompt (por ejemplo, con
+   una reseña que intenta darle instrucciones al modelo). */
+async function sample(text) {
+  const stars = Number(argValue('--estrellas')) || null;
+  const result = await classifyReview({ comment: text, star_rating: stars });
+  console.log(JSON.stringify(result, null, 2));
+}
+
 async function main() {
+  const sampleText = argValue('--muestra');
+  if (sampleText) return sample(sampleText);
+
   const dryRun = process.argv.includes('--dry-run');
   const onlyOrg = argValue('--org');
   const limit = Number(argValue('--limit')) || undefined;

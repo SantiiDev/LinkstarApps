@@ -13,7 +13,7 @@ import { analyzeOrganizationReviews } from './reviewAnalysis.js';
  *   2. fichas y reseñas          lib/reviewSync.js
  *   3. métricas y búsquedas      lib/metricsSync.js
  *   4. protección de ficha       lib/profileProtection.js (sólo Business)
- *   5. análisis de reseñas       lib/reviewAnalysis.js (sólo Business, Gemini)
+ *   5. análisis de reseñas       lib/reviewAnalysis.js (sólo Business, Claude)
  *
  * Los pasos 3 y 4 trabajan sobre las fichas vinculadas que devolvió el paso 2,
  * así nunca discrepan sobre qué fichas son de esta organización. El 5 no habla
@@ -36,7 +36,7 @@ export async function syncGoogleOrganization(target, { dryRun = false, log = con
   const protection = await checkProfileChanges(accessToken, organizationId, reviews.linkedLocations, { dryRun, log });
 
   // Lo que se lee de Google ya quedó guardado: si el análisis falla entero (la
-  // API de Gemini caída, o un entorno sin la 0033), se anota y la lectura sigue
+  // API de Claude caída, o un entorno sin la 0033), se anota y la lectura sigue
   // contando como buena. Lo pendiente sale en la próxima corrida.
   let analysis = { analyzed: 0, failures: 0, pending: 0 };
   try {

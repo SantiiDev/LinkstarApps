@@ -75,41 +75,80 @@ hace falta ese y no uno más chico. Texto sugerido (los revisores leen en inglé
 
 > Linkstar is a dashboard for small businesses that use our NFC/QR stands to ask
 > their customers for Google reviews. Business owners connect their own Google
-> Business Profile so the dashboard can (1) list the business locations they
-> manage, so the owner chooses which ones belong to their business; (2) read the
-> reviews, total review count and average rating of those chosen locations only,
-> once a day, to show them in the dashboard and to measure how many new reviews
-> each location gets; and (3) publish the owner's reply to a review when the
-> owner writes it and clicks "Publish" in the dashboard. We never post anything
-> on our own. Reviews of locations the owner did not select are never stored.
+> Business Profile so the dashboard can:
+> (1) list the business locations they manage, so the owner chooses which ones
+> belong to their business;
+> (2) read the reviews, total review count and average rating of those chosen
+> locations only, once a day, to show them and to measure how many new reviews
+> each location gets;
+> (3) publish the owner's reply to a review when the owner writes it and clicks
+> "Publicar en Google";
+> (4) show the location's performance metrics (views, calls, direction requests,
+> website clicks, search keywords);
+> (5) show and edit the location's profile (description, phone numbers, website,
+> opening hours, attributes) and create or delete posts, only when the owner
+> saves a change or publishes a post in the dashboard;
+> (6) on the paid plan, detect once a day when Google changed the profile on its
+> own, notify the owner and let them revert it with a button.
+> We never write anything on our own: every write is an explicit action of the
+> owner. Reviews of locations the owner did not select are never stored.
+> On the paid plan, the text and star rating of each review (never the
+> reviewer's name) are sent to Anthropic's Claude API to classify sentiment and
+> topics shown to that same owner; Anthropic processes them on our behalf and
+> does not use them for training.
 > business.manage is the only scope that grants access to the Account
-> Management, Business Information and My Business (reviews) APIs; there is no
-> narrower read-only scope for reviews, and replying to reviews requires write
-> access. Data is used only to provide these features, is not sold, shared or
-> used for advertising or to train AI models, and is deleted immediately when
-> the owner disconnects their profile or unlinks a location.
+> Management, Business Information, Performance and My Business (reviews and
+> posts) APIs; there is no narrower read-only scope for reviews, and replying,
+> editing the profile and posting require write access. Data is used only to
+> provide these features, is not sold, shared or used for advertising or to
+> train AI models, and is deleted immediately when the owner disconnects their
+> profile or unlinks a location.
+
+Si cambia el proveedor de IA, cambiar este párrafo y `pages/Legal/Privacy.jsx`
+(§3.2 y §4) juntos: el revisor compara los dos.
 
 ## 5. Video de demostración
 
 Google pide un video (en YouTube, como **no listado**) que muestre el flujo
-completo en la app real. Guion, de 2 a 3 minutos:
+completo en la app real y **cada uso del permiso que declara el paso 4**. Lo que
+se declara y no se ve en el video es el motivo de rechazo más común.
 
-1. `https://app.linkstarapp.com` → bajar al pie y abrir **Política de
-   privacidad** (que se vea la URL).
-2. Iniciar sesión → **Reseñas** → **Conectar mi ficha de Google**.
-3. En la pantalla de Google: que se vea **el nombre de la app** y la **barra de
-   direcciones con el `client_id`** del cliente de producción. Elegir la cuenta y
-   aceptar el permiso.
-4. De vuelta en el panel: el mensaje "tu ficha quedó conectada".
-5. **Configuración → Gestión local → Fichas de Google**: vincular una ficha con su
-   sucursal (y mostrar que otra queda sin vincular).
-6. **Reseñas**: la lista con las reseñas de esa ficha. Abrir una, escribir una
-   respuesta y **Publicar en Google**. Mostrar la respuesta en Google Maps.
-7. **Desconectar** desde el panel.
+**Antes de grabar**
 
-Narrado o con subtítulos en inglés. Para el paso 6 hace falta una ficha con al
-menos una reseña real (la de prueba tiene 0): usar una ficha propia con reseñas,
-o una de un cliente **con su permiso**.
+- Panel y API de producción, con el cliente OAuth de producción (paso 3).
+- La IA de reseñas encendida, si se va a declarar en el paso 4 (si no, sacar ese
+  párrafo de la justificación y de la política hasta que lo esté).
+- **Todo se hace sobre la ficha de Linkstar.** La cuenta de Google conectada
+  también administra *Vineria Martu*, ficha de un cliente real: en el paso de
+  vincular va a aparecer en la lista. Dejarla sin vincular está bien (demuestra
+  que no leemos fichas ajenas), pero no editar, publicar ni responder nada ahí, y
+  si no hay permiso del cliente, difuminar su nombre al editar el video.
+- Navegador limpio, zoom al 110–125 % para que se lean los textos, sin otras
+  pestañas ni notificaciones.
+- Desconectar Google antes de empezar, para grabar la conexión desde cero.
+
+**Guion (3 a 4 minutos, narrado o con subtítulos en inglés)**
+
+| # | En pantalla | Qué decir |
+|---|---|---|
+| 1 | `https://app.linkstarapp.com`, bajar al pie y abrir **Política de privacidad**; que se vea la URL. Detenerse en la sección 3. | "This is Linkstar, a dashboard for small businesses. Our privacy policy is public at app.linkstarapp.com/privacidad, and section 3 explains how we use Google Business Profile data." |
+| 2 | Iniciar sesión. Ir a **Reseñas** y tocar **Conectar mi ficha de Google**. | "The owner signs in and connects their own Business Profile. Connecting is optional." |
+| 3 | Pantalla de consentimiento: que se vean **el nombre "Linkstar"**, el permiso, y la **barra de direcciones con el `client_id`**. Elegir la cuenta y aceptar. | "Google shows our app name and the only scope we request, business.manage." |
+| 4 | De vuelta en el panel: el mensaje "Listo, tu ficha de Google quedó conectada". | "We're back in the dashboard. The refresh token is stored encrypted on our server and never reaches the browser." |
+| 5 | **Configuración → Gestión local → Fichas de Google**: vincular *Linkstar* con su sucursal. Mostrar que la otra ficha queda **sin vincular**. Tocar **Actualizar ahora**. | "The owner chooses which locations belong to their business. We only read reviews and metrics of linked locations. Unlinked locations keep only their name and address, so they can be offered here." |
+| 6 | **Reseñas**: la bandeja con las reseñas de Linkstar. Abrir una, escribir una respuesta y tocar **Publicar en Google**. Después mostrar la respuesta en Google Maps, en otra pestaña. | "Reviews of the linked location. The owner writes a reply and publishes it. We only post when the owner clicks this button. Here is the same reply on Google Maps." |
+| 7 | **Google Business → Métricas**: tarjetas y gráfico del período. | "Performance metrics of the linked location: views, calls, direction requests and website clicks." |
+| 8 | **Google Business → Perfil**: cambiar algo inocuo (por ejemplo, una frase de la descripción), **Guardar cambios**, y volver a dejarlo como estaba. | "The owner can edit the profile from here. We only write when the owner saves a change." |
+| 9 | **Google Business → Publicaciones**: **Nueva publicación**, publicarla y después **borrarla**. | "Posts are created and deleted only by the owner." |
+| 10 | (Si la IA está encendida y la cuenta es Business) **Reportes → Sentimiento**. | "On the paid plan, review text and rating, never the reviewer's name, are sent to Anthropic's Claude API to classify sentiment and topics for this owner. It is not used for training." |
+| 11 | **Configuración → Fichas de Google → Desconectar**. Mostrar que las reseñas desaparecen del panel. | "Disconnecting revokes our access at Google and deletes the stored locations and reviews immediately." |
+
+Después de grabar, volver a conectar la ficha de Linkstar: desconectar borra lo
+que se había leído, y la sincronización diaria lo vuelve a traer.
+
+Si la cuenta de producción está en el plan gratis, las tarjetas de Business se
+ven con candado. No hace falta mostrarlas: en ese caso, saltear el paso 10 y
+explicarlo en el texto del envío.
 
 ## 6. Publicar y enviar
 

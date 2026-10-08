@@ -5,8 +5,12 @@ import './Legal.css';
 /* Política de privacidad de LinkstarApp (el panel), distinta de la del sitio de
  * ventas y no por duplicación: tratan datos distintos. El sitio de ventas
  * procesa pedidos, envíos y pagos de hardware; el panel procesa escaneos,
- * cuentas de equipo y —cuando exista la integración— datos de la ficha de
- * Google Business Profile del cliente.
+ * cuentas de equipo y datos de la ficha de Google Business Profile del cliente.
+ *
+ * La sección 3 tiene que coincidir con lo que el panel hace con la ficha: la
+ * verificación de Google la compara con la app. El proveedor de IA de la 3.2
+ * es el que analiza las reseñas en services/api (fase 5); si se cambia de
+ * proveedor, se cambia acá antes de cargar su clave.
  *
  * Tiene que ser PÚBLICA y estar fuera de los guards de /panel. No es una
  * preferencia: la pantalla de consentimiento de Google exige una URL de
@@ -26,7 +30,7 @@ import './Legal.css';
  * la fecha de abajo.
  */
 
-const UPDATED = '6 de octubre de 2026';
+const UPDATED = '8 de octubre de 2026';
 
 /* La casilla real, la misma que usa el topbar del panel. NO usar
  * soporte@linkstar.com.ar: ese dominio nunca se registró (es lo que vino a
@@ -125,14 +129,27 @@ export default function Privacy() {
             <li><strong>Las reseñas de las fichas que vinculaste</strong> — autor tal como lo muestra Google, puntaje, texto, fecha y respuesta, para mostrártelas en el panel. <strong>De una ficha que no vinculaste no leemos ni guardamos reseñas</strong>: tu cuenta de Google puede administrar fichas de otros negocios, y esos datos no son tuyos.</li>
             <li><strong>El conteo total y el puntaje promedio de esas fichas</strong> — se leen una vez por día para estimar cuántas reseñas nuevas generaron tus expositores. Google no avisa cuando entra una reseña, así que la diferencia día a día es la única forma de medirlo.</li>
             <li><strong>Responder reseñas en tu nombre</strong> — sólo cuando vos (o alguien de tu equipo con permiso) escribe una respuesta y la publica desde el panel. Nunca publicamos nada por nuestra cuenta.</li>
+            <li><strong>Las métricas de tus fichas vinculadas</strong> — visualizaciones, llamadas, solicitudes de cómo llegar, visitas a tu web y las búsquedas con las que te encontraron, día por día, para mostrarte su evolución.</li>
+            <li><strong>Los datos de la ficha</strong> — descripción, teléfonos, web, horarios, atributos, servicios, fotos y publicaciones, que se leen cuando abrís el panel para mostrártelos y para calcular el análisis de SEO local. Sólo los modificamos cuando vos (o alguien de tu equipo con permiso) edita un dato o crea o borra una publicación desde el panel. Las fotos que subís para una publicación se guardan en nuestro almacenamiento con una dirección pública, porque Google las descarga desde ahí.</li>
+            <li><strong>Los cambios que Google hace en tu ficha por su cuenta</strong> — en el plan Business, una vez por día comparamos tu ficha con la versión que Google propone, te avisamos si cambió algo y te dejamos revertirlo. Nunca lo revertimos sin que vos lo pidas.</li>
           </ul>
-          <p>
-            <strong>Próximamente</strong>, con el mismo permiso: las métricas de tu ficha (visualizaciones,
-            llamadas, cómo te encuentran) y la edición de sus datos y publicaciones. Cuando estén
-            disponibles, esta sección lo va a decir y va a cambiar la fecha de arriba.
-          </p>
 
-          <h3>3.2 Uso limitado</h3>
+          <h3>3.2 Análisis de reseñas con inteligencia artificial</h3>
+          <p>
+            En el plan Business, el panel te muestra el tono de tus reseñas, los temas que mencionan y
+            las palabras que más se repiten. Para eso enviamos <strong>el texto y el puntaje</strong> de
+            cada reseña de tus fichas vinculadas a <strong>Anthropic</strong>, el proveedor del modelo
+            de inteligencia artificial Claude, que la clasifica y nos devuelve el resultado. Guardamos ese
+            resultado junto a la reseña, así cada una se analiza una sola vez.
+          </p>
+          <ul>
+            <li><strong>No enviamos el nombre ni la foto de quien escribió la reseña</strong>, ni ningún dato tuyo o de tu cuenta.</li>
+            <li>Las reseñas que sólo tienen estrellas, sin texto, no se envían.</li>
+            <li>En el plan gratis no se envía ninguna reseña.</li>
+            <li>Anthropic trata ese texto por nuestra cuenta y sólo para darnos el resultado; según sus condiciones comerciales, no lo usa para entrenar sus modelos.</li>
+          </ul>
+
+          <h3>3.3 Uso limitado</h3>
           <p>
             El uso que LinkstarApp hace de la información recibida de las APIs de Google se ajusta a la{' '}
             <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">
@@ -146,7 +163,7 @@ export default function Privacy() {
             <li>Ninguna persona de nuestro equipo los lee, salvo que vos nos lo pidas expresamente para resolver un problema, que sea necesario por motivos de seguridad, o que nos obligue la ley.</li>
           </ul>
 
-          <h3>3.3 Cómo se revoca</h3>
+          <h3>3.4 Cómo se revoca</h3>
           <p>
             Podés desconectar tu ficha desde el panel en cualquier momento, y también desde{' '}
             <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">
@@ -158,7 +175,7 @@ export default function Privacy() {
             desvincularla de su sucursal, sus reseñas se borran en ese momento.
           </p>
 
-          <h3>3.4 Cómo protegemos el acceso</h3>
+          <h3>3.5 Cómo protegemos el acceso</h3>
           <p>
             El permiso que nos da Google se guarda cifrado, con una clave que no está en la misma base de
             datos, y sólo lo usa nuestro servidor. Nunca llega a tu navegador ni al de nadie de tu equipo.
@@ -175,6 +192,7 @@ export default function Privacy() {
             <li><strong>Mercado Pago</strong> — cobro de los planes pagos.</li>
             <li><strong>Resend</strong> — envío de correos (invitaciones a tu equipo y avisos), cuando el envío está activado.</li>
             <li><strong>Google</strong> — únicamente si conectás tu ficha, y sólo en esa dirección.</li>
+            <li><strong>Anthropic</strong> — análisis del texto de las reseñas con inteligencia artificial, sólo en el plan Business y sólo como se explica en el punto 3.2.</li>
           </ul>
           <p>
             También los entregaríamos si nos lo exigiera una autoridad competente por una vía legal
