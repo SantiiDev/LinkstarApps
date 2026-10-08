@@ -1,11 +1,10 @@
 /* Email transaccional: los mails que le llegan al CLIENTE.
  *
  * No confundir con lib/email.js, que arma los avisos a NUESTRA casilla (pedidos
- * y consultas del formulario de contacto). Ese módulo usa `send()` de acá
- * cuando hay SALES_NOTIFY_EMAIL, y Web3Forms si no. Web3Forms no sirve para los
- * mails al cliente: es un reenviador de formularios a una casilla fija, sin
- * destinatario variable, sin plantillas y sin reputación de dominio. Por eso la
- * fase 3 resolvió las invitaciones de equipo con un link copiable.
+ * y consultas del formulario de contacto). Ese módulo también manda por `send()`:
+ * todo mail del sistema sale por Resend. Las invitaciones de equipo nacieron
+ * como un link copiable (fase 3, antes de tener proveedor de mail) y el link
+ * sigue siendo el camino principal; el mail se suma.
  *
  * Proveedor: Resend. La costura está en `send()`: es la única función que sabe
  * de Resend, y todo lo demás arma contenido y la llama. Cambiar de proveedor es
@@ -32,12 +31,6 @@ if (!process.env.RESEND_API_KEY) {
   console.warn(
     '⚠️  Falta RESEND_API_KEY en .env — los mails al cliente se van a simular por consola, no a enviar.'
   );
-}
-
-/* Si hay proveedor configurado. Lo usa lib/email.js para elegir entre Resend y
- * Web3Forms sin tener que saber qué variable mira Resend. */
-export function isMailerConfigured() {
-  return Boolean(process.env.RESEND_API_KEY);
 }
 
 /* Único punto que conoce el proveedor.

@@ -154,10 +154,10 @@ to `.env`, don't rename them away.
 
 - `services/api/.env` — see `services/api/.env.example`. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
   `PORT`, `FRONTEND_URL`, `DASHBOARD_URL`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `WEBHOOK_URL` (base URL
-  only, no path), `WEB3FORMS_KEY`, `REDIRECT_DOMAIN` (optional, defaults to `l.linkstarapp.com`),
+  only, no path), `REDIRECT_DOMAIN` (optional, defaults to `l.linkstarapp.com`),
   `RESEND_API_KEY` / `RESEND_FROM` (optional; without the key every mail is simulated on the console),
-  `SALES_NOTIFY_EMAIL` (our inbox for new-order and contact notices; with it and the Resend key those go
-  through Resend, otherwise through Web3Forms — see `lib/email.js`), and the four Google
+  `SALES_NOTIFY_EMAIL` (**required**: our inbox for new-order and contact notices, which go through
+  Resend like every other mail — see `lib/email.js`), and the four Google
   ones — `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_TOKEN_ENC_KEY` — which
   are optional as a group: without all four the Google routes answer 503 and everything else works.
   `GOOGLE_REDIRECT_URI` must match the console entry byte for byte, port included; locally that is
@@ -289,13 +289,12 @@ and the two `service_role` RPCs the analyzer uses (see "Review analysis" below) 
 and in `google_metrics_daily()`, the raw-scan purge, and the 30-day guard on `rebuild_today_rollup()`
 (see "Retention by plan" below).
 
-**`0034` is tested locally but NOT applied to the test project or production** (8 Oct 2026: `db reset
---local` through `0034`, `rls_isolation.sql` green with 176, and the push simulation described below
-passed). Push it **before** merging the API that calls `run_purge_scan_events()` into `main`: without it,
-the `daily` run fails at its last step (rollups and expirations are already done by then, on purpose).
-
-**Everything up to `0033` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
-16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026, `0028`–`0033` on 7 Oct 2026 —
+**Everything up to `0034` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
+16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026, `0028`–`0033` on 7 Oct 2026,
+`0034` on 8 Oct 2026, **before** the API that calls `run_purge_scan_events()` reached `main` — the right
+order this time. `0034` went through `db reset --local`, `rls_isolation.sql` (176 green) and the push
+simulation first; its first dry run in production counted 16 raw scans to purge, all of them the test
+taps of August (phase 0). `0000`–`0033` matched local and remote —
 local and remote matched on `npm run db:status` against `czdydtkhiqmwujadwlzf`, the ref in
 `apps/dashboard/.env.production`, on 8 Oct). `0032` and `0033` were tested on a local Docker stack
 before the push (`db reset --local` through `0033` and `rls_isolation.sql` green, 159; on that machine
@@ -486,15 +485,16 @@ for a manager or viewer the RLS returns no row, which is indistinguishable from 
 screen shows a notice instead of the defaults — don't "simplify" that into rendering the form.
 `DEFAULT_PREFERENCES` in `notificationsApi.js` mirrors the `coalesce` defaults of
 `pending_notifications()`; change one, change both.
-`lib/mailer.js` (Resend, customer-facing) is not `lib/email.js` (notifies *us* of an order or a contact
-message) — Web3Forms forwards a form to one fixed mailbox and can't do variable recipients, which is why
-phase 3 shipped the copyable link in the first place. `send()` is the only function that knows about
-Resend. **`lib/email.js` sends through `send()` when `SALES_NOTIFY_EMAIL` and `RESEND_API_KEY` are both
-set, and falls back to Web3Forms otherwise** (Oct 2026): Web3Forms' free plan rejects server-to-server
-submissions — the same reason ventas' browser fallback mails from the browser — so on a deployed API the
-Web3Forms path would fail on every notice. `sendEmailNotification` never throws (the order is already
-saved); it returns whether the notice went out, which is what `/api/orders/manual` reports as
-`email_sent`.
+`lib/mailer.js` (customer-facing) is not `lib/email.js` (notifies *us* of an order or a contact
+message), but **both send through `send()`, the only function that knows about Resend** — Resend is the
+only mail provider in the project. Phase 3 shipped the invitation as a copyable link because there was no
+provider yet, and the link stays the primary path. `lib/email.js` needs `SALES_NOTIFY_EMAIL` (the
+destination lives nowhere else) and throws without it; without `RESEND_API_KEY` the notice is simulated
+on the console and does **not** count as sent. `sendEmailNotification` never throws (the order is already
+saved); it returns whether the notice really went out, which is what `/api/orders/manual` reports as
+`email_sent`. Web3Forms, the original provider, was removed from the project on 8 Oct 2026; its old
+public key is still readable in ventas bundles published before Oct 2026, so the Web3Forms account has
+to be deactivated, and `WEB3FORMS_KEY` deleted from Railway if it is still there.
 
 **The activity log is real now.** `audit_log` (`0004`) existed from the start but only `claim_device()`
 ever wrote to it, so the "Registro de actividad" card was a three-row hardcoded array — with a real
@@ -546,8 +546,8 @@ escape the rate limit.
   route `catch`es read; and it retries 429/5xx up to 3 times **with the same idempotency key**, so a retried
   `payment.create` doesn't charge twice. `withTimeout` still caps the total, retries included.
 - `lib/orders.js` — `generateOrderNumber`, `createOrder`.
-- `lib/email.js` — `sendEmailNotification` / `sendContactMessage`, notices to our inbox: Resend when
-  `SALES_NOTIFY_EMAIL` is set, Web3Forms otherwise (see "Alerts" above).
+- `lib/email.js` — `sendEmailNotification` / `sendContactMessage`, notices to `SALES_NOTIFY_EMAIL`
+  through Resend (see "Alerts" above).
 - `lib/validation.js` — zod schemas (`cartItemSchema`, `customerSchema`, `createPreferenceSchema`,
   `orderTransferSchema`, `processPaymentSchema`) plus `validateBody(schema)`, the middleware every payment
   route runs before its handler. Shape validation only — *amounts* are `lib/catalog.js`'s job.
@@ -586,8 +586,8 @@ Routes, one router per file, all mounted at the app root:
     bundle ids carry a fixed price and `qty: 1`. Reintroducing a per-unit discount reopens the hole.
   - **In `/api/orders/manual` the email is sent inside its own `try`, after the order is persisted.** A
     mail failure must not turn into a 500: the order *is* saved, and a 500 tells the buyer it wasn't, so
-    they retry and the same order lands twice. (It used to be worse: the browser had a Web3Forms fallback
-    that mailed the order itself under a *different* number and a "SIN REGISTRAR" subject. That fallback
+    they retry and the same order lands twice. (It used to be worse: the browser had a fallback that
+    mailed the order itself under a *different* number and a "SIN REGISTRAR" subject. That fallback
     was removed in Oct 2026.)
   - `GET /api/orders/:orderNumber` **requires `?email=<buyer_email>`** and matches it against
     `buyer_email` (`ilike`). This client is `service_role`, so it bypasses the `orders_select` policy of
@@ -616,11 +616,9 @@ Routes, one router per file, all mounted at the app root:
   The body carries **only a plan code**: price and trial length are read from `plans`, never from the
   request. Neither route writes the subscription state — that is the webhook's job, so a failure in MP
   can't leave a customer cut off while they are actually paying.
-- `routes/contact.js` — `POST /api/contact`, 5 per 15 min per IP. Exists for one reason: the ventas
-  contact form used to POST to Web3Forms straight from the browser with the access key inlined in the
-  bundle, so anyone could read it and flood the inbox. The key now lives in `WEB3FORMS_KEY` server-side
-  only; the browser-side fallback to Web3Forms was removed once the API was live (Oct 2026), and an
-  unreachable API now shows the support address instead.
+- `routes/contact.js` — `POST /api/contact`, 5 per 15 min per IP, used by both contact forms (ventas and
+  the panel). Exists for one reason: a mail-service key in the browser bundle lets anyone read it and flood
+  the inbox. No mail key ships to the browser; an unreachable API shows the support address instead.
 - `routes/auth.js` — `POST /api/auth/login-event`, behind `requireAuth`. The only writer of
   `profiles.last_login_at`.
 - `routes/health.js` — `GET /api/health`.
@@ -859,9 +857,9 @@ split below before wiring anything — the shell is finished, the data mostly is
   `/panel/contacto` (`pages/Contact`), reached from the sidebar and from the topbar's "¿Necesitás ayuda?
   Escribinos", which used to be a `mailto`. Inside the panel the form is prefilled from the session and
   appends a `— Enviado desde el panel · Organización: … (id) · Plan: …` line to the message, so a support
-  request arrives knowing which account it's about; the screen says so. Unlike ventas there is **no**
-  browser-side Web3Forms fallback — the panel never shipped that key and must not start; if the API
-  doesn't answer, the form shows the support address instead.
+  request arrives knowing which account it's about; the screen says so. There is **no** browser-side
+  fallback and no mail key in the bundle; if the API doesn't answer, the form shows the support address
+  instead.
 - `AppShell` is the parent route of everything under `/panel`: it renders the sidebar + topbar once and
   the section into its `<Outlet />`. It derives the active section from `useLocation()` (never from its
   own state, or a deep link would leave the wrong sidebar item marked). Resetting the scroll to the top on
@@ -1235,10 +1233,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   must keep its `step !== 'success'` condition, because confirming empties the cart and without it the
   buyer would be thrown off the screen showing their order number.
 - `src/lib/config.js` — `API_URL` and `SUPPORT_EMAIL` (`linkstar.app1@gmail.com`, what both forms offer
-  when the API doesn't answer). It used to hold `WEB3FORMS_KEY` for the browser-side fallbacks of Contact
-  and Checkout; both fallbacks and the key left the bundle in Oct 2026, and `public/_headers` no longer
-  allows `api.web3forms.com` in `connect-src`. The old key is still readable in every bundle published
-  before that, so rotate it in the Web3Forms panel (the server's `WEB3FORMS_KEY` then needs the new one).
+  when the API doesn't answer). No mail-service key lives in this bundle; Contact and Checkout send
+  everything through the API (see "Alerts" for the old Web3Forms key that still has to be deactivated).
 - The Worker already serves the site with `not_found_handling: "single-page-application"`, so new paths
   work as deep links without touching `wrangler.jsonc`.
 - `pages/LinkstarApp/LinkstarApp.jsx` is a **marketing page with a hardcoded mock dashboard**, not the real
@@ -1255,8 +1251,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   `order_items` and sends the notification server-side. Before that the order existed only as an email,
   so a lost email was a lost order.
   If the API doesn't answer, the order is **not** taken: the page says so, keeps the cart for a retry and
-  offers `SUPPORT_EMAIL`. Until Oct 2026 it mailed the order straight from the browser instead (Web3Forms,
-  a client-made order number, subject "SIN REGISTRAR"), which existed only because `services/api` had no
+  offers `SUPPORT_EMAIL`. Until Oct 2026 it mailed the order straight from the browser instead (a
+  client-made order number, subject "SIN REGISTRAR"), which existed only because `services/api` had no
   deploy target; it was removed with the API live. A `400` means the cart didn't match the server
   catalog and gets its own message.
   The Mercado Pago routes (`create-preference`, `process-payment`) stay dormant, not dead — their

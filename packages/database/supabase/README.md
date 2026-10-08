@@ -49,9 +49,9 @@ Desde la raíz del monorepo son `npm run db:reset`, `npm run db:push` y `npm run
 | `0033_review_analysis.sql` | Análisis de reseñas con IA (fase 5): `google_review_analysis`, `v_review_analysis` y las dos RPC `service_role` del analizador |
 | `0034_retention_by_plan.sql` | El historial de cada plan (decisión 3): corte de lectura en escaneos, rollups, reseñas estimadas, métricas y búsquedas; purga de escaneos crudos (`run_purge_scan_events()`); `rebuild_today_rollup()` no reconstruye días ya purgados |
 
-> **Producción tiene hasta la `0033`** (8 oct 2026). **La `0034` está probada en local pero no aplicada**
-> en ningún proyecto remoto: hay que subirla **antes** de mergear a `main` el API que llama a
-> `run_purge_scan_events()`. Ojo con el vínculo del CLI: en la máquina de Santiago apunta al proyecto de
+> **Producción tiene hasta la `0034`** (8 oct 2026; se subió antes que el API que llama a
+> `run_purge_scan_events()`, que es el orden correcto). Según lo último registrado (7 oct), el proyecto
+> de pruebas no recibió `0032`–`0034`: confirmalo con `db push --db-url … --dry-run` antes de usarlo. Ojo con el vínculo del CLI: en la máquina de Santiago apunta al proyecto de
 > pruebas y en otras a producción — revisá `.temp/project-ref` antes de cualquier `db:push`.
 
 > **Al aplicar la `0022` hay que actualizar `tests/rls_isolation.sql` en el mismo cambio.** El test

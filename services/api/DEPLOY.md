@@ -81,8 +81,7 @@ En **Variables**, con **Raw Editor** podés pegar todo junto. **`PORT` no se def
 | `GOOGLE_TOKEN_ENC_KEY` | Una clave **nueva**, sólo para producción (abajo) |
 | `RESEND_API_KEY` | De resend.com → API Keys (paso 7). Si todavía no está, dejala vacía: los mails se simulan en el log |
 | `RESEND_FROM` | `Linkstar <avisos@linkstarapp.com>` cuando el dominio esté verificado en Resend |
-| `SALES_NOTIFY_EMAIL` | `linkstar.app1@gmail.com`: a dónde llegan los avisos de pedidos y consultas |
-| `WEB3FORMS_KEY` | La misma de hoy. Es el respaldo si falta Resend |
+| `SALES_NOTIFY_EMAIL` | `linkstar.app1@gmail.com`: a dónde llegan los avisos de pedidos y consultas. Obligatoria: salen por Resend, y sin ella no tienen destinatario |
 
 Generá la clave de cifrado con:
 
@@ -186,8 +185,8 @@ En este orden, cada uno con el API ya contestando:
 2. **Panel, plan Business.** Cuando MP de producción esté probado de punta a punta (una suscripción
    real que active la cuenta por webhook), borrá `VITE_BUSINESS_CHECKOUT=off` de
    `apps/dashboard/.env.production` y redesplegá el panel (`apps/dashboard/DEPLOY.md`).
-3. **Limpieza.** Borrar el respaldo de Web3Forms del navegador (`Checkout.jsx`, `Contact.jsx`) y
-   `WEB3FORMS_KEY` de `apps/ventas/src/lib/config.js`. Ver «`apps/ventas`» en `CLAUDE.md`.
+3. **Limpieza (hecha, 8 oct 2026).** Web3Forms salió del proyecto: ni el navegador ni el API lo
+   usan, y todo mail sale por Resend. Si `WEB3FORMS_KEY` sigue cargada en Railway, borrala.
 4. **Google.** Con esto arriba ya se puede grabar el video y enviar la verificación (pasos 5 y 6 de
    `apps/dashboard/GOOGLE_VERIFICATION.md`).
 

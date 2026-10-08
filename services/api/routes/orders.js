@@ -18,7 +18,7 @@ import { assertCatalogPrices, assertMatchesCatalogTotal } from '../lib/catalog.j
 const router = Router();
 
 // Estas tres rutas llaman a la API paga de Mercado Pago y/o mandan un email
-// por Web3Forms — sin límite, un atacante puede generar tráfico de pago o
+// por Resend — sin límite, un atacante puede generar tráfico de pago o
 // vaciar la cuota de notificaciones. Un comprador real hace como mucho un
 // puñado de intentos en unos minutos.
 const paymentLimiter = rateLimit({

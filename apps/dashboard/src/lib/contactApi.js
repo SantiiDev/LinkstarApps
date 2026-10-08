@@ -1,12 +1,10 @@
 import { API_URL } from './config';
 
 /* Consultas de contacto: POST /api/contact de services/api, la misma ruta que
- * usa el formulario del sitio de ventas. El aviso nos llega por Resend (o por
- * Web3Forms si el API no tiene Resend configurado), con rate limit de 5 cada
- * 15 minutos por IP.
+ * usa el formulario del sitio de ventas. El aviso nos llega por Resend, con
+ * rate limit de 5 cada 15 minutos por IP.
  *
- * A diferencia de ventas, acá NO hay respaldo directo a Web3Forms desde el
- * navegador: el panel nunca tuvo la access_key en el bundle y no la va a tener.
+ * No hay respaldo desde el navegador: ninguna clave de mail va en el bundle.
  * Si el API no contesta, el formulario lo dice y ofrece el mail. */
 export async function sendContactMessage({ name, email, phone, message }) {
   let response;
