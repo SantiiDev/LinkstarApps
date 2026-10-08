@@ -14,11 +14,10 @@ import './Checkout.css';
  * además manda el aviso por mail desde el servidor. Antes el pedido existía
  * SÓLO como mail: un mail perdido era un pedido perdido.
  *
- * Mientras el API no estuvo desplegado, si no contestaba se mandaba el pedido
- * por mail desde el navegador (Web3Forms, con un número de orden inventado acá
- * y el asunto "SIN REGISTRAR"). Se borró con el API en producción: un pedido
- * que no quedó en la base ya no se da por hecho. La pantalla lo dice, el
- * carrito queda intacto para reintentar y se ofrece el mail de soporte. */
+ * Si el API no contesta, el pedido NO se da por hecho: un pedido que no quedó
+ * en la base no existe. La pantalla lo dice, el carrito queda intacto para
+ * reintentar y se ofrece el mail de soporte. Nunca mandar el pedido por mail
+ * desde el navegador: quedaría un aviso con un número que la base no tiene. */
 async function createManualOrder({ customer, items }) {
   const response = await fetch(`${API_URL}/api/orders/manual`, {
     method: 'POST',

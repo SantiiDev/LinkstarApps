@@ -63,7 +63,7 @@ export default function Privacy() {
             <li><strong>Supabase</strong> — base de datos y alojamiento de la información de pedidos y cuentas.</li>
             <li><strong>Cloudflare</strong> — publicación de este sitio.</li>
             <li><strong>Mercado Pago</strong> — procesamiento de los pagos. Los datos de tu tarjeta los cargás directamente ahí y nunca pasan por nuestros servidores.</li>
-            <li><strong>Web3Forms</strong> — envío a nuestra casilla de los avisos de pedidos y consultas.</li>
+            <li><strong>Resend</strong> — envío por correo de los avisos de tus pedidos y consultas.</li>
           </ul>
           <p>
             También los entregaríamos si nos lo exigiera una autoridad competente por una vía legal

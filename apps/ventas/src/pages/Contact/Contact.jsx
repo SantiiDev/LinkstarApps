@@ -2,13 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { API_URL, SUPPORT_EMAIL } from '../../lib/config';
 import './Contact.css';
 
-/* La consulta se manda por services/api (POST /api/contact): ahí la access_key
- * de Web3Forms vive en el .env y la ruta tiene rate limit. Desde el navegador
- * la key es pública y cualquiera puede usarla para llenarnos la casilla.
+/* La consulta se manda por services/api (POST /api/contact), que la reenvía a
+ * nuestra casilla por Resend y tiene rate limit. Ninguna clave de mail viaja
+ * en el navegador: cualquiera podría usarla para llenarnos la casilla.
  *
- * Hasta que el API se desplegó había un respaldo que mandaba directo a
- * Web3Forms desde el navegador. Se borró: si el API no contesta, la pantalla
- * ofrece la casilla de soporte, como el formulario del panel. */
+ * Si el API no contesta, la pantalla ofrece la casilla de soporte, como el
+ * formulario del panel. */
 async function sendContactMessage(form) {
   const response = await fetch(`${API_URL}/api/contact`, {
     method: 'POST',
