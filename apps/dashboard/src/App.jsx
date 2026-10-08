@@ -1,3 +1,4 @@
+import { useCallback, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import './App.css';
 import AppShell from './components/AppShell/AppShell';
@@ -124,13 +125,22 @@ function LandingRoute() {
   return <Landing onEnterDashboard={enterDashboard} />;
 }
 
+/* A dónde volver después de iniciar sesión o registrarse: el path y también la
+   query. Sin la query se perdía el ?vincular=CODIGO del QR de vinculación de un
+   expositor cuando quien lo escaneaba todavía no había iniciado sesión. */
+function returnPathOf(location) {
+  const from = location.state?.from;
+  if (!from?.pathname) return null;
+  return `${from.pathname}${from.search ?? ''}`;
+}
+
 /* Con sesión activa, /iniciar-sesion y /registro no tienen nada que ofrecer:
    redirigen al panel en vez de mostrar un formulario para volver a entrar. */
 function LoginRoute() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname;
+  const from = returnPathOf(location);
 
   if (user) return <Navigate to={from || HOME_SECTION_PATH} replace />;
 
@@ -152,7 +162,7 @@ function RegisterRoute() {
      tiene cuenta todavía, se registra, y tiene que volver a /invitacion/:token
      a canjear el token. Sin esto aterrizaba en el panel, el guard lo mandaba a
      crear una empresa propia y la invitación quedaba sin usar. */
-  const from = location.state?.from?.pathname;
+  const from = returnPathOf(location);
 
   if (user) return <Navigate to={from || HOME_SECTION_PATH} replace />;
 
@@ -168,26 +178,44 @@ function RegisterRoute() {
 /* ─── Páginas que navegan a otras secciones ────────────────────
    Siguen hablando en ids de sección ('reviews', 'gb-metrics'); el id se
    traduce a path acá, así las páginas no saben nada del router. */
+/* Mi Empresa además manda a dos pestañas de Configuración ('settings-local' para
+   vincular fichas, 'settings-billing' para ver planes) y puede pasar un `state`:
+   «Responder ahora» abre Reseñas con el filtro de negativas ya puesto. */
 function CompanyRoute() {
   const navigate = useNavigate();
-  return <Company onNavigate={(section) => navigate(pathForSection(section))} />;
+  const pathFor = (section) => {
+    if (section === 'settings-local') return settingsTabPath('local');
+    if (section === 'settings-billing') return settingsTabPath('facturacion');
+    return pathForSection(section);
+  };
+  return <Company onNavigate={(section, state) => navigate(pathFor(section), state ? { state } : undefined)} />;
 }
 
+/* El QR de vinculación de la base del expositor abre
+   /panel/dispositivos?vincular=CODIGO: la página abre el modal ya completado y
+   acá se limpia el parámetro, para que recargar no lo vuelva a abrir. */
 function DevicesRoute() {
   const navigate = useNavigate();
-  return (
-    <DevicesPage
-      onNavigate={(section) => navigate(pathForSection(section))}
-      onNavigateSettings={(tab) => navigate(settingsTabPath(tab))}
-    />
+  const location = useLocation();
+  const claimCode = new URLSearchParams(location.search).get('vincular') ?? '';
+  const clearClaimCode = useCallback(
+    () => navigate(SECTION_PATHS.devices, { replace: true }),
+    [navigate]
   );
+  return <DevicesPage claimCode={claimCode} onClaimCodeHandled={clearClaimCode} />;
 }
 
 /* Las pantallas de Google mandan a Gestión local cuando no hay ninguna ficha
    vinculada. */
 function ReviewsRoute() {
   const navigate = useNavigate();
-  return <ReviewsPage onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+  const location = useLocation();
+  return (
+    <ReviewsPage
+      initialFilter={location.state?.reviewFilter}
+      onNavigateSettings={(tab) => navigate(settingsTabPath(tab))}
+    />
+  );
 }
 
 function GoogleMetricsRoute() {
@@ -229,6 +257,23 @@ function ReportsKeywordsRoute() {
   return <ReportsKeywords onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
 }
 
+/* ─── Cada página arranca desde arriba ─────────────────────────
+   En una SPA el navegador conserva el scroll al cambiar de ruta: desde el pie
+   de la landing, «Política de privacidad» abría la política ya scrolleada hasta
+   el final. Vive acá, en la raíz, para cubrir todas las rutas — las públicas
+   (landing, privacidad, login, registro, invitación, alta) y las de /panel, que
+   antes lo resolvían por su cuenta en AppShell. 'instant' y no 'smooth': el
+   contenido ya cambió, animar el viaje sólo muestra la página nueva pasando de
+   largo. Con un #ancla en la URL no se toca: el destino es el ancla. */
+function ScrollToTop() {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (hash) return;
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname, hash]);
+  return null;
+}
+
 /* ─── App root ─────────────────────────────────────────────── */
 export default function App() {
   const { loading } = useAuth();
@@ -240,6 +285,8 @@ export default function App() {
   }
 
   return (
+    <>
+    <ScrollToTop />
     <Routes>
       <Route path={PUBLIC_ROUTES.landing} element={<LandingRoute />} />
       <Route path={PUBLIC_ROUTES.login} element={<LoginRoute />} />
@@ -357,5 +404,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to={PUBLIC_ROUTES.landing} replace />} />
     </Routes>
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { API_URL } from '../lib/config';
 
@@ -44,6 +44,13 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
+  // De quién es la sesión que ya tenemos. Supabase revalida la sesión cada vez
+  // que la pestaña vuelve a tener el foco y emite SIGNED_IN (o TOKEN_REFRESHED)
+  // con un objeto `user` nuevo para el MISMO usuario. Eso no es un login: no se
+  // registra en el backend, y los consumidores tienen que mirar el id, no el
+  // objeto (OrgContext recargaba todo el panel con «Cargando…» al volver a la
+  // pestaña por eso).
+  const currentUserId = useRef(null);
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
@@ -57,9 +64,13 @@ export function AuthProvider({ children }) {
         return;
       }
 
+      const newUserId = newSession?.user?.id ?? null;
+      const isNewLogin = event === 'SIGNED_IN' && newSession && newUserId !== currentUserId.current;
+      currentUserId.current = newUserId;
+
       setSession(newSession);
       if (event === 'INITIAL_SESSION') setLoading(false);
-      if (event === 'SIGNED_IN' && newSession) {
+      if (isNewLogin) {
         setSessionExpired(false);
         markActivity();
         notifyLoginEvent(newSession.access_token);
@@ -74,9 +85,12 @@ export function AuthProvider({ children }) {
 
   // Cierra la sesión a los 30 minutos sin actividad del usuario (mouse,
   // teclado, scroll, touch). Cada evento reinicia el timer; sólo corre
-  // mientras hay una sesión activa.
+  // mientras hay una sesión activa. Depende del usuario y no del objeto de
+  // sesión: renovar el token (al volver a la pestaña, o cada hora) no es
+  // actividad y no tiene que reiniciar el contador.
+  const sessionUserId = session?.user?.id ?? null;
   useEffect(() => {
-    if (!session) return;
+    if (!sessionUserId) return;
 
     let timeoutId;
     let lastSeen = 0;
@@ -116,7 +130,7 @@ export function AuthProvider({ children }) {
       clearTimeout(timeoutId);
       ACTIVITY_EVENTS.forEach((event) => window.removeEventListener(event, onActivity));
     };
-  }, [session]);
+  }, [sessionUserId]);
 
   const signIn = useCallback(async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

@@ -19,8 +19,10 @@ import { supabase } from './supabaseClient';
 // recibe la organización activa —org.organization_id de useOrg()— y la exige:
 // sin ella lanza, en vez de devolver la unión en silencio.
 //
-// v_dashboard_kpis y v_recent_activity las consume Mi Empresa, que es la
-// pantalla post-login y la única con un panel de KPIs generales.
+// v_dashboard_kpis la consume Dispositivos (los KPIs de escaneos de 30 días),
+// desde que en octubre de 2026 Mi Empresa se rehízo sobre reseñas. La otra vista
+// que usaba la Mi Empresa vieja, v_recent_activity, quedó sin lector en el panel
+// y su fetcher se borró; la vista sigue en la base.
 //
 // ---------------------------------------------------------------------------
 // "Escaneos" = human_scans, en todas las pantallas
@@ -109,21 +111,6 @@ export async function fetchDashboardKpis(organizationId) {
   if (error) throw error;
   const rows = assertColumn(data ?? [], 'human_scans', '0018');
   return rows[0] ?? null;
-}
-
-// El feed de actividad. La vista ya filtra `not is_bot` desde el 0008 y se
-// acota sola a 7 días y 200 filas, así que acá sólo se recorta a lo que entra
-// en pantalla. No hace falta assertColumn: no tiene columnas del 0018.
-export async function fetchRecentActivity(organizationId, limit = 8) {
-  const { data, error } = await supabase
-    .from('v_recent_activity')
-    .select('event_type, device_label, kind, occurred_at')
-    .eq('organization_id', requireOrg(organizationId))
-    .order('occurred_at', { ascending: false })
-    .limit(limit);
-
-  if (error) throw error;
-  return data ?? [];
 }
 
 // v_scans_daily agrega TODO el historial de scan_daily_rollups agrupado por
@@ -247,6 +234,37 @@ export function fetchEmployeeScansSeries(organizationId, days = 7) {
   return fetchEntitySeries('v_employee_scans_daily', 'employee_id', organizationId, days);
 }
 
+// Escaneos humanos por sucursal desde `sinceDay` ('YYYY-MM-DD', o null para todo
+// el historial): Map<location_id, number>. Es lo que suma la columna «Escaneos»
+// del resumen por local de Mi Empresa, que filtra por un rango elegido y no por
+// la ventana fija de 30 días de v_location_performance. Pagina porque PostgREST
+// corta en 1000 filas y una fila es (sucursal, día).
+const SCAN_TOTALS_PAGE = 1000;
+const SCAN_TOTALS_MAX_PAGES = 20;
+
+export async function fetchLocationScanTotals(organizationId, sinceDay = null) {
+  const org = requireOrg(organizationId);
+  const totals = new Map();
+  for (let page = 0; page < SCAN_TOTALS_MAX_PAGES; page++) {
+    let query = supabase
+      .from('v_location_scans_daily')
+      .select('location_id, day, human_scans')
+      .eq('organization_id', org)
+      .order('day', { ascending: true })
+      .order('location_id', { ascending: true })
+      .range(page * SCAN_TOTALS_PAGE, (page + 1) * SCAN_TOTALS_PAGE - 1);
+    if (sinceDay) query = query.gte('day', sinceDay);
+    const { data, error } = await query;
+    if (error) throw error;
+    for (const row of data ?? []) {
+      if (!row.location_id) continue;
+      totals.set(row.location_id, (totals.get(row.location_id) ?? 0) + (row.human_scans ?? 0));
+    }
+    if (!data || data.length < SCAN_TOTALS_PAGE) break;
+  }
+  return totals;
+}
+
 // Decisión 6 de CLAUDE.md: Google no avisa reseñas nuevas, sólo se puede
 // medir por diferencia de contador día a día (review_deltas). Cualquier
 // número de "reseñas" que salga de ahí (directo o vía las vistas que lo
@@ -262,7 +280,12 @@ export function formatRelativeTime(isoString) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `Hace ${hours} h`;
   const days = Math.floor(hours / 24);
-  return `Hace ${days} día${days === 1 ? '' : 's'}`;
+  if (days < 30) return `Hace ${days} día${days === 1 ? '' : 's'}`;
+  // Las reseñas pueden tener años: «Hace 800 días» no se lee.
+  const months = Math.floor(days / 30);
+  if (months < 12) return `Hace ${months} mes${months === 1 ? '' : 'es'}`;
+  const years = Math.floor(days / 365);
+  return `Hace ${years} año${years === 1 ? '' : 's'}`;
 }
 
 const PALETTE = ['#F58529', '#1A2639', '#10B981', '#F59E0B', '#6366f1', '#8b5cf6', '#ec4899'];

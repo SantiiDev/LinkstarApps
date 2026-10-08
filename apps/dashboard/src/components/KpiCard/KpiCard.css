@@ -1,0 +1,228 @@
+/* ============================================
+   KPI CARD — fila de KPIs de Mi Empresa y Dispositivos
+   Va sobre .stat-card (StatCard.css): vidrio, hover y filete de color. Nada
+   acá anima el desenfoque (ver la nota de rendimiento de CLAUDE.md).
+   ============================================ */
+
+/* minmax(0, 1fr) y no 1fr: `1fr` equivale a `minmax(auto, 1fr)`, así que la
+   columna nunca baja del min-content de la tarjeta más ancha. Basta un texto
+   con `nowrap` adentro para que la grilla entera se desborde hacia la derecha.
+   Con mínimo 0 manda siempre el ancho disponible. */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1.25rem 1.35rem;
+}
+
+.kpi-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  position: relative;
+  z-index: 1;
+}
+
+/* Número (y variación) a la izquierda, cajita opcional a la derecha. */
+.kpi-card__body {
+  flex: 1;
+  display: flex;
+  gap: 0.75rem;
+  position: relative;
+  z-index: 1;
+}
+
+.kpi-card__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.kpi-card__icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kpi-card__label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kpi-card__value {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.05;
+  color: var(--color-navy);
+  font-variant-numeric: tabular-nums;
+  animation: countUp 0.8s ease both;
+}
+
+.kpi-card__value small {
+  margin-left: 0.15rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.kpi-card__value--muted {
+  display: flex;
+  align-items: center;
+  height: 2.1rem;
+  color: rgba(26, 38, 57, 0.28);
+}
+
+.kpi-card__trend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.45rem;
+  min-height: 1.3rem;
+}
+
+.kpi-card__caption {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+
+.kpi-card__link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: auto;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-orange);
+  transition: gap var(--transition-base);
+}
+
+.kpi-card__link:hover {
+  gap: 0.5rem;
+}
+
+/* Cajita al costado del número (la de «Respondidas» del KPI de reseñas),
+   compacta y abajo: nunca a la altura del encabezado. */
+.kpi-card__aside {
+  flex-shrink: 0;
+  align-self: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.65rem;
+  background: rgba(16, 185, 129, 0.09);
+  border: 1px solid rgba(16, 185, 129, 0.16);
+}
+
+.kpi-card__aside-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--color-forest);
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-card__aside-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--color-forest);
+  white-space: nowrap;
+}
+
+.kpi-card__aside-pct {
+  font-size: 0.62rem;
+  white-space: nowrap;
+  color: rgba(16, 185, 129, 0.85);
+  font-weight: 600;
+}
+
+/* Variación contra el período anterior. */
+.kpi-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: var(--radius-badge);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.kpi-trend--up { background: rgba(16, 185, 129, 0.1); color: var(--color-forest); }
+.kpi-trend--down { background: rgba(239, 68, 68, 0.1); color: var(--color-danger); }
+.kpi-trend--flat { background: rgba(26, 38, 57, 0.06); color: var(--color-text-secondary); }
+
+/* Píldoras: nivel de SEO, marca de función Business, «estimado». */
+.kpi-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.14rem 0.55rem;
+  border-radius: var(--radius-badge);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.kpi-pill--good { background: rgba(16, 185, 129, 0.12); color: var(--color-forest); }
+.kpi-pill--mid { background: rgba(245, 158, 11, 0.14); color: #b45309; }
+.kpi-pill--bad { background: rgba(239, 68, 68, 0.12); color: var(--color-danger); }
+.kpi-pill--neutral { background: rgba(26, 38, 57, 0.06); color: var(--color-text-secondary); }
+.kpi-pill--business {
+  background: linear-gradient(120deg, rgba(245, 133, 41, 0.16), rgba(245, 158, 11, 0.16));
+  color: var(--color-orange);
+}
+
+@media (max-width: 1200px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  /* Dos columnas y no una: en una sola, cada KPI ocupaba una tarjeta enorme
+     y había que scrollear cuatro pantallas para ver los cuatro. La cajita del
+     costado baja debajo del número. */
+  .kpi-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .kpi-card {
+    padding: 1.05rem;
+  }
+
+  .kpi-card__body {
+    flex-direction: column;
+  }
+
+  .kpi-card__value {
+    font-size: 1.6rem;
+  }
+
+  .kpi-card__aside {
+    align-self: stretch;
+  }
+}

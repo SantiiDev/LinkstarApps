@@ -1,0 +1,62 @@
+/* `position: relative` encierra al checkbox (absoluto) dentro del interruptor.
+   Sin eso quedaba posicionado contra otro ancestro, y en un contenedor con
+   scroll (el modal de tono) cada clic le daba foco allá lejos y hacía saltar
+   el scroll: el interruptor se sentía trabado. */
+.ls-switch {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ls-switch input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.ls-switch__track {
+  position: relative;
+  width: 34px;
+  height: 19px;
+  border-radius: 999px;
+  background: rgba(26, 38, 57, 0.14);
+  transition: background-color var(--transition-base);
+}
+
+.ls-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(26, 38, 57, 0.25);
+  transition: transform var(--transition-base);
+}
+
+.ls-switch--orange input:checked + .ls-switch__track { background: var(--color-orange); }
+.ls-switch--gold input:checked + .ls-switch__track { background: var(--color-gold); }
+
+.ls-switch input:checked + .ls-switch__track .ls-switch__thumb {
+  transform: translateX(15px);
+}
+
+.ls-switch input:focus-visible + .ls-switch__track {
+  outline: 2px solid var(--color-orange);
+  outline-offset: 2px;
+}
+
+.ls-switch__label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}

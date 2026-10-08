@@ -269,17 +269,20 @@ export async function deleteEmployee(id) {
  * Dispositivos — sólo update
  * ------------------------------------------------------------------------- */
 
-/* `destination_url` no está en v_device_performance, que es una vista de
- * métricas: hay que traerlo de la tabla para poder mostrarlo y editarlo.
- * Devuelve Map<device_id, url>. */
-export async function fetchDeviceDestinations(organizationId) {
+/* Lo que v_device_performance no trae porque es una vista de métricas:
+ * `destination_url` (para mostrarlo y editarlo) y `claimed_at` (el «Activo
+ * desde» del detalle). Devuelve Map<device_id, { destinationUrl, claimedAt }>. */
+export async function fetchDeviceDetails(organizationId) {
   const { data, error } = await supabase
     .from('devices')
-    .select('id, destination_url')
+    .select('id, destination_url, claimed_at')
     .eq('organization_id', requireOrg(organizationId));
 
   if (error) throw error;
-  return new Map((data ?? []).map(d => [d.id, d.destination_url ?? '']));
+  return new Map((data ?? []).map(d => [d.id, {
+    destinationUrl: d.destination_url ?? '',
+    claimedAt: d.claimed_at ?? null,
+  }]));
 }
 
 /* Lo que el cliente puede cambiar de un expositor ya vinculado. Deliberadamente

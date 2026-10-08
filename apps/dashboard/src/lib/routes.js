@@ -87,12 +87,14 @@ export const DEFAULT_SECTION = 'company';
  * a la pantalla. El aviso vuelve solo en cuanto la sección deje de estar
  * bloqueada.
  *
- * Es una lista fija aunque desde la 0024 la conexión sí se registra
- * (google_connections): con la ficha conectada la puerta SIGUE puesta, porque la
- * maqueta sigue siendo inventada y la pantalla real todavía no existe. Cuando una
- * sección se reescriba contra el dato real, sale de esta lista y de GoogleGate a
- * la vez. */
+ * Es una lista fija aunque la conexión se registra (google_connections, 0024):
+ * todas estas secciones muestran el modal SIN conexión y la pantalla real con
+ * ella, y con la lista fija AppShell no tiene que consultar a Google en cada
+ * sección. El costo es que, conectada la ficha, el aviso de suscripción tampoco
+ * aparece en ellas. Mi Empresa entró en octubre de 2026, cuando se rehízo sobre
+ * reseñas. */
 export const GOOGLE_GATED_SECTIONS = new Set([
+  'company',
   'reviews',
   'gb-metrics',
   'gb-profile',

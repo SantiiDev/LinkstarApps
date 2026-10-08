@@ -625,8 +625,8 @@ the failure this prevents).
   `DASHBOARD_URL/panel/resenas?google=<conectado|cancelado|sin_permiso|sin_rol|error_estado|error>`. The
   callback never renders an error itself. On the panel side, `lib/googleApi.js` (calls +
   `useGoogleConnection`) and `components/GoogleConnect/` (button, status, return message, disconnect)
-  are used by `GoogleGate` (the modal over the seven Google sections), `SectionPlaceholder`'s
-  `google` variant and the two connect banners (Devices, Company), which hide once the ficha is connected.
+  are used by `GoogleGate` (the modal over the Google sections and, without a connection, Mi Empresa) and
+  `GoogleConnectBanner` (Devices), which hides once the ficha is connected.
   The return lands on `/panel/resenas` because that page always renders a `GoogleGate` — move `RETURN_PATH` in `routes/google.js` and the `?google=` message has
   nowhere to show.
 - **The state is double-bound, and the cookie is the part that matters.** A row in
@@ -816,8 +816,9 @@ split below before wiring anything — the shell is finished, the data mostly is
   doesn't answer, the form shows the support address instead.
 - `AppShell` is the parent route of everything under `/panel`: it renders the sidebar + topbar once and
   the section into its `<Outlet />`. It derives the active section from `useLocation()` (never from its
-  own state, or a deep link would leave the wrong sidebar item marked) and resets scroll to the top on
-  every pathname change.
+  own state, or a deep link would leave the wrong sidebar item marked). Resetting the scroll to the top on
+  every pathname change is `ScrollToTop` in `App.jsx`, for **every** route: in an SPA the browser keeps
+  the scroll, and the landing's footer link to `/privacidad` used to open the policy scrolled to its end.
 - `RequireAuth` in `App.jsx` gates the whole `/panel` subtree: with no authenticated user it redirects to
   `/iniciar-sesion` carrying `state.from`, and `LoginRoute` sends the user back there after signing in.
   `/panel/empresa` is the post-login landing page.
@@ -839,8 +840,8 @@ split below before wiring anything — the shell is finished, the data mostly is
 - Settings tabs live in the URL (`/panel/configuracion/:tab` — `local`, `equipo`, `facturacion`, `legal`),
   which is what makes Devices' "Ver más" able to deep-link into "Gestión local". `SETTINGS_TAB_ALIASES`
   keeps the old ids (`general`, `employees`, `locations`, `team`, `billing`) working.
-- **No screen fabricates data any more.** The screens that read the database: `company` (via
-  `lib/dashboardApi.js`), `devices`, `employees` / `locations` (embedded in `settings`), the whole `/alta`
+- **No screen fabricates data any more.** The screens that read the database: `company` (reviews and
+  scans per sucursal, see the `pages/Company/` bullet), `devices`, `employees` / `locations` (embedded in `settings`), the whole `/alta`
   onboarding, and the "Facturación" tab of `settings` (plan and status from `OrgContext`, history from
   `subscription_payments`), and `automations` (`notification_preferences` / `notification_log`, see
   "Alerts"). `profile` reads the logged-in user from `AuthContext`.
@@ -848,25 +849,25 @@ split below before wiring anything — the shell is finished, the data mostly is
   `monthly-reports`) render `components/SectionPlaceholder`, and the seven that depend on
   the customer's Google profile render their old mock behind `components/GoogleGate` (see below). The rule
   that replaced the hardcoded arrays: a page with no data source says so; it never prints a number that
-  can't be distinguished from a measured one. The placeholder has two variants and picking the wrong one
-  misleads:
-  `google` for what the *customer* can unblock by connecting their Business Profile (it carries the connect
-  button), `soon` for what *we* haven't built — NPS, monthly reports — which gets no button,
-  because a button that resolves nothing is worse than none. Each converted file keeps a header comment
-  saying what it used to fake and which roadmap phase feeds it. Since `GoogleGate` landed, `variant="google"`
-  has exactly one caller left — the one on `company` — so changing that variant barely moves anything; the
-  copy that used to live in the other seven (`description`, `preview`, `note`) moved into the gate's modal.
+  can't be distinguished from a measured one. The placeholder is for what *we* haven't built — NPS, monthly
+  reports, Mapa SEO — or a failed load, and it gets no button, because a button that resolves nothing is
+  worse than none. Each converted file keeps a header comment saying what it used to fake and which roadmap
+  phase feeds it. It used to have a second variant, `google`, with the connect button; its last caller was
+  the old Mi Empresa, and it was deleted in Oct 2026 — what depends on Google goes behind `GoogleGate`.
+  Callers still pass `variant="soon"`, which is now ignored.
   Two mocks outlived that sweep because they were embedded in `Settings.jsx` and in `AppShell` rather than
   being screens of their own, and were removed on 18 Aug 2026: the "Cuentas de Google conectadas" card
   (a fabricated connected account carrying a real person's name and an address on the unregistered
   domain, plus a "0 de 1 locales activos" counter backed by nothing) and the topbar's invented support
   phone number. Same rule as the rest — no button, since connecting the Business Profile lands in phase 4.
-  Since 5 Oct 2026 the connect button is real in all four places — the `google` variant of
-  `SectionPlaceholder`, `GoogleGate`, `GoogleConnectBanner` and the Company banner — all rendering
-  `components/GoogleConnect` over `useGoogleConnection()` (`lib/googleApi.js`).
+  Since 5 Oct 2026 the connect button is real, rendering `components/GoogleConnect` over
+  `useGoogleConnection()` (`lib/googleApi.js`). Since Oct 2026 it lives in two places: `GoogleGate` and
+  `GoogleConnectBanner` (Devices, Company's settings card). `useGoogleConnection()` remembers the last status per org for the tab's lifetime, so
+  entering a Google section doesn't flash the gate before the real screen.
 - **`components/GoogleGate` is the only place a mock is allowed to render, and that is what makes it
-  legal.** The seven sections that depend on the customer's Google profile — `reviews`, the four `gb-*`,
-  `reports-sentiment`, `reports-keywords` — show their pre-phase-2 mock *as the background* of a modal that
+  legal.** The sections that depend on the customer's Google profile — `reviews`, the four `gb-*`,
+  `reports-sentiment`, `reports-keywords`, and since Oct 2026 `company` (with a mock written for its new
+  layout, `CompanyMockup.jsx`, instead of a recovered one) — show their mock *as the background* of a modal that
   invites you to connect: blurred, `inert` (no clicks, no tab stops, no text selection, no screen reader),
   and with no way to close the modal and no `Escape`. The page file is a thin wrapper that passes copy to
   the gate; the recovered JSX lives next to it in a `*Mockup.jsx`, with `data/reviews.js` back for the
@@ -894,8 +895,28 @@ split below before wiring anything — the shell is finished, the data mostly is
   **`reviews` is the first section out of the gate (6 Oct 2026):** `pages/Reviews/Reviews.jsx` renders
   `ReviewsScreen` (real, over `google_reviews` / `google_locations`) when the connection is `active` or
   `needs_reauth`, and the gate + `ReviewsMockup` otherwise — the mock stays as the invitation for accounts
-  that haven't connected. Its filters are by **stars** (4–5 / 3 / 1–2 / unanswered), not sentiment, which
-  is phase 5; the header counts mix two sources on purpose (Google's per-ficha total and average vs. the
+  that haven't connected. Since Oct 2026 it is an **inbox with Tapstar's structure**: the four KPIs, a bar of
+  combinable filters (Local, Rating 5…1, Estado, Ordenar, Tipo, Buscar — `REVIEW_*_OPTIONS` in
+  `lib/googleApi.js`, applied in the database because the list is paged), the list on the left — 15 per
+  page with Anterior / Siguiente (`fetchReviewPage`, `REVIEWS_INBOX_PAGE_SIZE`) — and the selected review
+  on the right (one column under 900px, with "Volver"). Google returns reviews written in another
+  language as `(Translated by Google) …\n\n(Original)\n…`; they are **stored as received** and
+  `originalReviewText()` shows only the original, in Reseñas and in Mi Empresa's latest reviews. The pieces live in
+  `ReviewsBlocks.jsx`, shared with `ReviewsMockup` like `CompanyBlocks`. Things that are deliberate:
+  **Tipo is the AI sentiment of `0033`, not the stars** — Business only, its options disabled on free;
+  `fetchReviewPage` embeds `google_review_analysis!inner` **only** while that filter is on, and the
+  detail's tone label comes from a separate `fetchReviewSentiments()` whose failure is swallowed. Don't
+  embed the analysis by default: an environment without `0033` (the test project, 7 Oct 2026) rejects
+  the whole query, and `fetchReviews` also feeds Mi Empresa. Estado's "Resp. automáticamente" and
+  "Retiradas" are disabled options — no data exists for either yet. Mi Empresa's "Responder ahora" opens
+  Sin responder, plus Tipo = Negativas on Business. With the Sin responder filter on, publishing removes
+  the review and the detail moves to the next one; the draft is tied to the review id it was written for.
+  "Generar respuesta con IA" and the brand-tone modal (`BrandToneModal.jsx`, also opened by Configuración →
+  Tonos de marca) are **frontend only**: the AI replies (rest of phase 5) are being built separately,
+  "Guardar tono" is disabled, and the data shape the backend should store is documented at the top of that
+  file. Free sees the AI button locked plus a "Probar Business" card, never a fake remaining-replies count.
+  "Actualizar" (owner/admin) uses `useGoogleSyncRequest()`, the same hook as Gestión local's "Actualizar
+  ahora". The header counts mix two sources on purpose (Google's per-ficha total and average vs. the
   answered/unanswered split of the rows actually read). `reviews` stays in `GOOGLE_GATED_SECTIONS`, so
   the subscription banner is also hidden there when connected — accepted to keep `AppShell` from querying
   Google on every section. **`gb-metrics`, `gb-profile` and `gb-posts` followed on 6 Oct 2026** (see
@@ -944,8 +965,36 @@ split below before wiring anything — the shell is finished, the data mostly is
 - `lib/dashboardApi.js` — reads **only** the `0008` views (`v_device_performance`,
   `v_employee_leaderboard`, `v_location_performance`, `v_scans_daily`), never `scan_events`/
   `scan_daily_rollups` (invariant 2). Exports `ESTIMATED_LABEL` — any number derived from `review_deltas`
-  must be labeled "estimado" (invariant 6). `v_dashboard_kpis` and `v_recent_activity` are consumed by
-  `company` through `fetchDashboardKpis()` / `fetchRecentActivity()`.
+  must be labeled "estimado" (invariant 6). `fetchDashboardKpis()` (`v_dashboard_kpis`) feeds the scan
+  KPIs of Devices since Oct 2026, when Mi Empresa was rebuilt on reviews; `v_recent_activity` lost its
+  only reader then and its fetcher was deleted (the view stays). `fetchLocationScanTotals()` sums `v_location_scans_daily`
+  per sucursal for an arbitrary range (Mi Empresa's summary).
+- **`lib/viewMemory.js` — the last view of a screen, kept in memory** (`recall(userId, key)` /
+  `remember(key, value)`). Mi Empresa (`useCompanyOverview.js`) and Devices (`useDevicesData.js`) show
+  what they last showed immediately and refetch behind it, so coming back from another section doesn't
+  flash "Cargando…"; a failed refetch keeps what was there. It is per user — a different user in the same
+  tab wipes it, because what each one sees depends on their role. Keys carry the org id. Not
+  `localStorage`: it is lost on reload, on purpose. Both screens also keep their filters in a module-level
+  variable per org. The other half of the "Cargando" fix lives in the contexts: `OrgContext` and the
+  inactivity timer in `AuthContext` depend on the **user id**, not the `user` object, because Supabase
+  hands out a new object (and fires `SIGNED_IN`) every time the browser tab regains focus — that used to
+  reload the org, unmount all of `/panel` and log a new login.
+- `components/KpiCard/` — the KPI row of Mi Empresa and Devices (`.kpi-grid` + `KpiCard` + `KpiTrend`),
+  built on `StatCard.css`'s glass so it looks like every other KPI. Has an optional `aside` (the
+  "Respondidas" box) and `footer` (a link). The head (icon + label) is its own full-width row and the
+  `aside` sits below it, next to the number: side by side with the head it squeezed the label until it
+  was cut. `components/Select/SelectField` (label + icon + `Select`, and `FilterField` for any control) is
+  the filter-bar field Mi Empresa and Reseñas share. `components/Switch` needs its `position: relative`:
+  without it the hidden checkbox was positioned against another ancestor, and inside a scrolling modal
+  every click focused it far away and jumped the scroll.
+- **Shared pieces added in Oct 2026 — use them instead of copying markup into a page:**
+  `components/Icon` (one map of line icons by name — Mi Empresa, Devices and the QR scanner each had
+  their own copy; add new icons there), `components/Switch` (labelled on/off toggle over a real
+  checkbox), `components/PageSkeleton` (first-load placeholder shaped like a KPI page) and the
+  `.ls-select-field` classes in `components/Select/Select.css` (`--block` for a full-width filter,
+  `--icon` to leave room for a leading icon), passed as `triggerClassName` — `Select` itself has no
+  trigger style, and every page used to carry its own near-identical one. Older pages (Metrics, Reports,
+  Settings…) still have their local versions; move them over when you touch them.
 - **Every read takes the active `organizationId` and filters by it** — the fetchers of `dashboardApi.js`,
   `catalogApi.js` and `googleApi.js`, through `requireOrg()`, which throws without one. RLS is the
   *security* boundary and lets a user read **all** their orgs; before `0027` a member of two saw the union
@@ -974,13 +1023,38 @@ split below before wiring anything — the shell is finished, the data mostly is
   this migration existed to remove. `unique_scans` is *not* a substitute: it counts distinct people, which
   is what `v_location_performance` was showing under an "Escaneos" label until `0018` added
   `human_scans_30d` next to it.
-- **Linking an expositor from inside the panel is real since 18 Aug 2026.** `ClaimDeviceModal` in
-  `pages/Devices/Devices.jsx` used to set its own success screen without calling anything; it now calls
-  `claim_device()` and reloads the list. It matters more than it looks: with `0022` the onboarding step is
-  optional, so this modal is the path for everyone whose expositor arrives after signup.
-- `pages/Devices/`, `pages/Employees/`, `pages/Locations/` read real data with the same pattern: fall back
-  to `data/*.js` mock **only if the query throws**; an empty result (new org) renders as-is. Fields with no
-  backing in the views render `'—'` instead of being fabricated. All three distinguish **two**
+- **Devices (`pages/Devices/`), rebuilt in Oct 2026 after Tapstar's screen:** employee-ranking teaser
+  ("Próximamente", deliberately not clickable — decision 11), four scan KPIs from `v_dashboard_kpis`
+  (scans, active expositores, estimated reviews, conversion — the last two `'—'` until a ficha has a
+  snapshot), a **table only** (the card grid and its toggle are gone; under 900px each row becomes a card
+  via CSS), daily activity (7/30/90 days, "personas distintas" toggle, previous period dashed — it fetches
+  twice the window) and the location ranking, whose "Ver más" expands in place. Things that are deliberate:
+  - **No mock fallback any more.** Until Oct 2026 a failed load rendered `data/devices.js` as if it were the
+    customer's expositores — it happened in production. Now it shows an error (`SectionPlaceholder`), and
+    `data/devices.js` is deleted.
+  - **Per-expositor reviews are a prorate** labeled "estimado" (invariant 6): the sucursal's
+    `new_reviews_30d` split by the expositor's share of the sucursal's `human_scans_30d`. `'—'` with no
+    sucursal, no Google snapshot, or no scans to split by. Per-expositor **conversion was removed** (it was
+    always `null`); conversion survives only as the org KPI.
+  - **"Escanear QR" scans a *claim* QR, not the public one.** The big QR on the front encodes
+    `l.linkstarapp.com/d/<public_id>` and anyone at the table can read it, so it must never be enough to
+    claim a device (someone could claim an expositor left on a table before its owner did). The claim QR is
+    a small one printed on the base next to the `XXXX-XXXX` code and encodes
+    `https://app.linkstarapp.com/panel/dispositivos?vincular=<claim_code>` — `provision-devices.js` prints it
+    as `claim_url` (from `DASHBOARD_URL`, so run it with the production `.env` to print). `ScanClaimModal`
+    reads it from the camera or an uploaded image with `qr-scanner` (lazy-loaded, its own ~16 kB chunk),
+    accepts a bare code too, explains the difference when it reads the public QR, and keeps the manual code
+    entry. A phone's own camera opening that URL lands on the same modal prefilled: `DevicesRoute` reads
+    `?vincular=` and clears it, and `LoginRoute`/`RegisterRoute` now keep `from.search` so the code
+    survives a login. `claim_device()` is unchanged — this only gets the code to it.
+  - The (i) button is a click popover (it used to be a hover-only `title`), and the panel has no "© linkstar"
+    footer on any section any more (the public landing keeps its own, which links the privacy policy).
+  - With `0022` the onboarding step is optional, so this modal is the path for everyone whose expositor
+    arrives after signup.
+- `pages/Employees/`, `pages/Locations/` read real data with the same pattern: fall back
+  to `data/*.js` mock **only if the query throws** (Devices no longer does, see above); an empty result
+  (new org) renders as-is. Fields with no backing in the views render `'—'` instead of being fabricated.
+  The three distinguish **two**
   empty states, and the distinction is `hasAny` (computed over the unfiltered list, not the filtered one):
   "you haven't linked an expositor / loaded a branch yet" carries an instruction and a CTA, while "the
   filter matched nothing" offers to clear the filter. Telling a day-one account that nothing matched a
@@ -1045,16 +1119,30 @@ split below before wiring anything — the shell is finished, the data mostly is
   footer (Settings already has a `PageHeader`, and they'd otherwise show two titles and two footers). They
   used to be orphaned — written, wired to real data, and unreachable. If you move them again, keep them
   reachable from somewhere.
-- `pages/Company/Company.jsx` is the post-login landing and is now **real, built on scans**: KPIs from
-  `v_dashboard_kpis`, the 30-day series from `v_scans_daily`, and the feed from `v_recent_activity`. It is
-  the only screen that **does not** fall back to a mock when its query fails — it exists precisely to stop
-  showing invented numbers, so a failure is reported.
-  The review KPIs render `'—'`, never `0`, and the page says why. That distinction is the whole point: a
-  `0` is indistinguishable from "we measured and there were none", and the truth is nothing measures them
-  yet for an org without Google — `location_review_snapshots` is written only by `sync-google` (`0024`),
-  which needs a connected Google account plus a ficha linked to a sucursal. The gate is
-  `hasReviewData`, derived from whether any location has a non-null `total_reviews`, so the numbers appear
-  on their own once the first snapshot lands and nobody has to remember to edit this file.
+- `pages/Company/` is the post-login landing (Mi Empresa), **rebuilt on reviews** in Oct 2026 with
+  Tapstar's structure. Same recipe as the other Google sections: `Company.jsx` renders `GoogleGate` +
+  `CompanyMockup.jsx` without a connection (so `company` is in `GOOGLE_GATED_SECTIONS`, and the
+  subscription banner no longer shows on the landing) and `CompanyScreen.jsx` with it. Filters by
+  sucursal and range (7/30/90 days, 12 months, all), then: unanswered-negatives alert (1–2★ with no reply,
+  all history; "Responder ahora" opens Reviews with the `negative` filter through `location.state`),
+  four KPIs (reviews + answered, positive sentiment, period rating, SEO score), "Tu media de estrellas",
+  reviews over time, star distribution, per-sucursal summary (with **scans**, the only scan number left on
+  this screen) and the latest reviews. The blocks live in `CompanyBlocks.jsx`, shared by the screen and
+  the mock; the arithmetic lives in `lib/companyOverview.js` (pure, no queries) and the loading in
+  `useCompanyOverview.js`. Things that are deliberate:
+  - **All reviews are fetched once without text** (`fetchReviewRows`, paged) and filtered client-side, so
+    changing a filter doesn't refetch; scans per sucursal come from `v_location_scans_daily`
+    (`fetchLocationScanTotals`) and refetch per range; SEO is a separate, non-blocking call because
+    `fetchSeoAudit` reads Google live.
+  - **Google stores the average rounded to one decimal** (`reviewSync.js`), so "media exacta" is computed
+    from the stored rows only when there are as many rows as Google's total; otherwise Google's number is
+    used and not called exact. The 5★ goal uses Google's display rounding: reaching 4,9 means ≥ 4,85
+    (`starGoal()`, checked against Tapstar's screen: 145 reviews at 4,766 → 82 to reach 4,9).
+  - Sentiment is Business-only and isn't even requested on free (the card shows a "Business" pill, not a
+    `BusinessLock`: a blurred mock inside a small KPI reads badly). `seoLevelOf()` copies the cut-offs of
+    `services/api/lib/seoAudit.js` for the multi-sucursal average.
+  - Still no fallback to a mock when the base query fails, and still `'—'` (never `0`) for anything not
+    measured: a sucursal without a linked ficha shows `—` in every Google column.
 - `pages/Settings/TeamMembers.jsx` + `lib/teamApi.js` are the members UI (invite by link, change role,
   remove, revoke a pending invitation); `pages/Settings/ActivityLog.jsx` reads `audit_log`. Both live under
   the "Equipo" tab, above the employees screen. See "Team" under Architecture before changing either — the

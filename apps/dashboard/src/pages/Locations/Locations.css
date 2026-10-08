@@ -1280,17 +1280,6 @@
   box-shadow: 0 6px 16px -8px rgba(245,133,41,0.9);
 }
 
-/* ── Footer ── */
-.loc-page__footer {
-  text-align: center;
-  padding: 2rem 0;
-  margin-top: 2rem;
-}
-
-.loc-page__footer-text { font-size: 0.75rem; color: var(--color-text-secondary); }
-.loc-page__footer-brand { font-weight: 700; color: var(--color-navy); }
-.loc-page__footer-dot   { color: var(--color-orange); }
-
 /* ── Responsive ── */
 @media (max-width: 1024px) {
   .loc-stats { grid-template-columns: repeat(2, 1fr); }

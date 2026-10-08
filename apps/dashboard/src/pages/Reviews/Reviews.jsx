@@ -31,13 +31,13 @@ import ReviewsScreen from './ReviewsScreen';
  * sección.
  */
 
-export default function ReviewsPage({ onNavigateSettings }) {
+export default function ReviewsPage({ onNavigateSettings, initialFilter }) {
   const { org } = useOrg();
   const google = useGoogleConnection(org?.organization_id);
   const status = google.connection?.status;
 
   if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
-    return <ReviewsScreen google={google} onNavigateSettings={onNavigateSettings} />;
+    return <ReviewsScreen google={google} onNavigateSettings={onNavigateSettings} initialFilter={initialFilter} />;
   }
 
   return (

@@ -1193,17 +1193,6 @@
   box-shadow: 0 6px 16px -8px rgba(245, 133, 41, 0.9);
 }
 
-/* ── Footer ── */
-.emp-page__footer {
-  text-align: center;
-  padding: 2rem 0;
-  margin-top: 2rem;
-}
-
-.emp-page__footer-text { font-size: 0.75rem; color: var(--color-text-secondary); }
-.emp-page__footer-brand { font-weight: 700; color: var(--color-navy); }
-.emp-page__footer-dot   { color: var(--color-orange); }
-
 /* ── Responsive ── */
 @media (max-width: 1024px) {
   .emp-stats { grid-template-columns: repeat(2, 1fr); }
