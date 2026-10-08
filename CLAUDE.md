@@ -76,7 +76,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0033 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0034 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -110,8 +110,9 @@ all order by it) was decided by physical row order. The test now gives the secon
 `created_at`. `0032` also adds `m.organization_id` as a tie-breaker to `active_org_id_for()` and
 `my_org_context()` (`list_my_organizations()` already ordered by `lower(name), id`), so the functions no
 longer depend on physical row order either. 142 assertions green on the test project as of 6 Oct 2026;
-159 green on a local stack (`db reset` through `0033`) on 7 Oct 2026 — sections 17 (review analysis) and
-18 (`0032`'s free-plan fallback) are new and have not run against the test project yet.
+159 green on a local stack (`db reset` through `0033`) on 7 Oct 2026, and 176 on 8 Oct 2026 through
+`0034` — sections 17 (review analysis), 18 (`0032`'s free-plan fallback) and 19 (`0034`'s retention) have
+not run against the test project yet. The local stack started on the default ports on this machine.
 
 Test accounts in that project: `linkstar.app1@gmail.com` (free plan) and `business@linkstar.test` (org
 "Linkstar Business (prueba)", Business `active` for a year, set by hand — no Mercado Pago involved; the
@@ -124,11 +125,15 @@ Ops scripts live in `services/api/scripts/` and run with `node scripts/<name>.js
 (`provision-devices.js`, `rebuild-today-rollup.js`, `rebuild-rollups.js`, `send-alerts.js`,
 `sync-google.js` and `analyze-reviews.js` also have npm aliases — `npm run provision-devices`,
 `npm run rebuild-today-rollup`, `npm run rebuild-rollups`, `npm run send-alerts`, `npm run sync-google`,
-`npm run analyze-reviews`; `seed-test-device.js` doesn't;
+`npm run analyze-reviews`, `npm run print-claim-sheet`; `seed-test-device.js` doesn't;
 `npm run daily` runs `rebuild-rollups` → `sync-google` → `send-alerts` and is what the deployed cron calls).
 `sync-google.js` was `sync-reviews.js` until phase 4.6, when it started reading metrics and checking
 profile changes too. `provision-devices.js` takes `--form=<device_form>` (default `nfc_stand`; `nfc_card`
-for personal cards). They use the same `service_role` client as the server, so `services/api/.env`
+for personal cards) and also writes `claim-sheet-<lote>.html`: an A4 sheet of the small **claim** QRs
+(`claim_url` + `claim_code`, never the public QR of the front) for the base of each expositor, built by
+`lib/claimSheet.js`; `print-claim-sheet.js --batch=<lote>` regenerates it for a batch's unclaimed devices.
+Both warn when `DASHBOARD_URL` is localhost — a printed QR pointing there can't be fixed after the print
+run, so generate the sheet with `DASHBOARD_URL=https://app.linkstarapp.com`. They use the same `service_role` client as the server, so `services/api/.env`
 decides whether you are writing to local, the test project or production.
 
 `npm run dev:api` (`node --watch`) fell into a silent restart loop on Santiago's Windows machine on
@@ -220,7 +225,9 @@ Railway `daily` job (`npm run daily`, 8:00 Argentina) rebuilds **yesterday and t
 `rebuild_today_rollup(day)` (`0012`) — yesterday too, because once a day would otherwise leave the tail of
 each day out forever — and expires subscriptions through `run_expire_subscriptions()` (`0028`, a thin
 `service_role` wrapper, like `0012`'s). Review deltas come from `sync-google` (`compute_review_deltas`).
-`purge_old_scan_events()` still runs nowhere (decision 3, retention, is open). Day boundaries are UTC
+Since `0034` the same script also purges raw `scan_events` older than each org's plan history
+(`run_purge_scan_events()`; the old fixed-400-day `purge_old_scan_events()` stays unused). Decision 3 is
+closed — see "Retention by plan" below. Day boundaries are UTC
 (decision 10). If the dashboard shows no data, check the last `daily` run before suspecting RLS. Moving
 these to `pg_cron` remains possible and is a tracked pending in `packages/database/supabase/README.md`;
 a scan is still invisible until the next run, and whether to also rebuild "today" on dashboard load is
@@ -277,7 +284,15 @@ and the public Storage bucket `google-post-media` (see "Google Business Profile 
 `0032` `select_free_plan()` lets an org that lost access (cancelled/expired Business, legacy `trial`)
 fall back to free and raises `paid_plan_active` instead of silently doing nothing; tie-breaker for the
 active-org functions · `0033` review analysis (phase 5): `google_review_analysis`, `v_review_analysis`,
-and the two `service_role` RPCs the analyzer uses (see "Review analysis" below).
+and the two `service_role` RPCs the analyzer uses (see "Review analysis" below) · `0034` retention by plan:
+`private.org_history_start()`, the date cut on the read policies of scans/rollups/review estimates/keywords
+and in `google_metrics_daily()`, the raw-scan purge, and the 30-day guard on `rebuild_today_rollup()`
+(see "Retention by plan" below).
+
+**`0034` is tested locally but NOT applied to the test project or production** (8 Oct 2026: `db reset
+--local` through `0034`, `rls_isolation.sql` green with 176, and the push simulation described below
+passed). Push it **before** merging the API that calls `run_purge_scan_events()` into `main`: without it,
+the `daily` run fails at its last step (rollups and expirations are already done by then, on purpose).
 
 **Everything up to `0033` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
 16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026, `0028`–`0033` on 7 Oct 2026 —
@@ -525,7 +540,11 @@ escape the rate limit.
 - `lib/config.js` — `PORT`, `FRONTEND_URLS` (parsed list) / `FRONTEND_URL` (first entry, for MP
   `back_urls`), `REDIRECT_DOMAIN`.
 - `lib/supabase.js` — the single `service_role` client, imported by every route.
-- `lib/mercadopago.js` — MP SDK client, `isValidMpSignature`, `withTimeout`.
+- `lib/mercadopago.js` — MP SDK client, `isValidMpSignature`, `withTimeout`. The SDK is **v3** since 8 Oct
+  2026 (v2 dragged a vulnerable `uuid`; v3 has no dependencies). Same method signatures; errors are now
+  `Error` subclasses (`MPNotFoundError`…) that keep `status` / `message` / `causes`, which is all the
+  route `catch`es read; and it retries 429/5xx up to 3 times **with the same idempotency key**, so a retried
+  `payment.create` doesn't charge twice. `withTimeout` still caps the total, retries included.
 - `lib/orders.js` — `generateOrderNumber`, `createOrder`.
 - `lib/email.js` — `sendEmailNotification` / `sendContactMessage`, notices to our inbox: Resend when
   `SALES_NOTIFY_EMAIL` is set, Web3Forms otherwise (see "Alerts" above).
@@ -792,6 +811,29 @@ stars), `topics` from a **closed list** (`atencion`, `calidad`, `precio`, `esper
   Claude on 8 Oct 2026, before it was ever switched on in production. A review sent to a provider the
   policy doesn't name is exactly what Google's verification checks this page for, so changing provider
   again means editing those three places first.
+
+### Retention by plan — what each plan shows and what we keep (`0034`, decision 3)
+
+`plans.data_retention_days` (free 30 · Business 365 · Enterprise 1095) is enforced in two separate ways:
+
+- **What the customer sees** is a read cut, in SQL: `private.org_history_start(org)` (= today − the plan's
+  days; 30 if the org has no subscription or an unknown plan code like the legacy `trial`) is added to the
+  read policies of `scan_events`, `scan_daily_rollups`, `location_review_snapshots`, `review_deltas` and
+  `google_search_keywords` (by month), and `google_metrics_daily()` clamps `p_from` to it. The `0008`/`0016`
+  views are `security_invoker`, so they inherit it. **Individual reviews and their analysis are not cut**
+  (product decision, 8 Oct 2026): they are the customer's own public reviews.
+- **What we keep**: raw `scan_events` older than the plan's history (never less than 30 days) are deleted by
+  `run_purge_scan_events()` from the daily job. Rollups and metrics are never purged — an upgrade brings the
+  history back. `rebuild_today_rollup()` refuses days older than 30 (hint `day_purged`): rebuilding a day
+  whose raw events are gone would silently replace its total with zero.
+
+In the panel, `useOrg().retentionDays` (read from `plans`) only decides what is offered and how it is
+labeled — `lib/retention.js` disables periods longer than the history, and any comparison whose "previous
+period" falls outside it renders "—" plus `components/RetentionNote` instead of a line of zeros (Devices
+activity, Google metrics; Mi Empresa's per-location scan column says it covers only the plan's days). Same
+rule as everywhere: a zero that wasn't measured must not look like one that was. Metrics need extra care:
+Google publishes with ~4 days of lag, so a free account's "last 30 days" starts *before* its history and is
+trimmed to it, and the note says so.
 
 ### `apps/dashboard`
 

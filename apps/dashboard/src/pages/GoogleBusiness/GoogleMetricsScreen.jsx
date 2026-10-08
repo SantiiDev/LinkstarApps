@@ -5,7 +5,9 @@ import TrendChart from '../../components/TrendChart/TrendChart';
 import Select from '../../components/Select/Select';
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
 import BusinessLock from '../../components/BusinessLock/BusinessLock';
+import RetentionNote from '../../components/RetentionNote/RetentionNote';
 import { useOrg } from '../../context/OrgContext';
+import { periodOptionsFor, clampPeriod } from '../../lib/retention';
 import { fetchGoogleLocations, fetchGoogleMetrics, fetchSearchKeywords } from '../../lib/googleApi';
 import { SPLIT_2 } from '../../lib/chartColors';
 import {
@@ -29,6 +31,13 @@ import './GoogleMetrics.css';
  * días» termina en el último día que Google ya publicó, no hoy: si terminara hoy,
  * los últimos días se verían en cero y parecería una caída. El período anterior
  * es el mismo largo, justo antes. Las dos series se piden en una sola consulta.
+ *
+ * ── El historial del plan (0034) ──────────────────────────────────────────
+ * La RPC no devuelve nada anterior al inicio del historial (30 días en gratis).
+ * Por el atraso de Google, «últimos 30 días» en gratis arranca unos días antes
+ * de ese inicio: el período se recorta ahí y la nota lo dice, en vez de dibujar
+ * esos días en cero. Si el período anterior no entra, no hay comparación: «—»,
+ * sin línea punteada y sin porcentaje.
  *
  * ── Gratis y Business ─────────────────────────────────────────────────────
  * Gratis: las cuatro tarjetas, los gráficos y la comparativa de sucursales.
@@ -293,7 +302,7 @@ function KeywordsCard({ orgId, locationId }) {
 }
 
 export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
-  const { org } = useOrg();
+  const { org, retentionDays } = useOrg();
   const orgId = org?.organization_id;
 
   const [fichas, setFichas] = useState(null);
@@ -302,7 +311,9 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
   const [range, setRange] = useState('30');
   const [locationId, setLocationId] = useState('all');
 
-  const days = Number(range);
+  const activeRange = clampPeriod(range, RANGE_OPTIONS, retentionDays);
+  const days = Number(activeRange);
+  const historyStart = retentionDays ? addDays(todayIso(), -retentionDays) : null;
   // Se pide de más: el doble del rango (período anterior) más el atraso de
   // Google y un margen, y después se recorta según el último día publicado.
   const fetchFrom = addDays(todayIso(), -(2 * days + GOOGLE_LAG_DAYS + 10));
@@ -338,9 +349,12 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
     const filtered = locationId === 'all' ? rows : rows.filter((r) => r.location_id === locationId);
     const lastPublished = rows.reduce((max, r) => (r.day > max ? r.day : max), '');
     const end = lastPublished || addDays(todayIso(), -GOOGLE_LAG_DAYS);
-    const curFrom = addDays(end, -(days - 1));
-    const prevTo = addDays(curFrom, -1);
+    const fullFrom = addDays(end, -(days - 1));
+    // Lo anterior al historial del plan no llega: el período arranca ahí.
+    const curFrom = historyStart && historyStart > fullFrom ? historyStart : fullFrom;
+    const prevTo = addDays(fullFrom, -1);
     const prevFrom = addDays(prevTo, -(days - 1));
+    const hasPrevious = !historyStart || prevFrom >= historyStart;
 
     const cur = filtered.filter((r) => r.day >= curFrom && r.day <= end);
     const prev = filtered.filter((r) => r.day >= prevFrom && r.day <= prevTo);
@@ -360,25 +374,29 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
       .filter((f) => locationId === 'all' || f.location_id === locationId)
       .map((f) => {
         const c = sumRows(cur.filter((r) => r.location_id === f.location_id));
-        const p = sumRows(prev.filter((r) => r.location_id === f.location_id));
+        const p = hasPrevious ? sumRows(prev.filter((r) => r.location_id === f.location_id)) : null;
         return { locationId: f.location_id, name: names.get(f.location_id), cur: c, prev: p };
       })
       .sort((a, b) => b.cur.impressions - a.cur.impressions)
       .slice(0, 4);
 
+    // Sin período anterior, `prev` es null y cada consumidor muestra «—»: un
+    // objeto en cero se leería como «el mes pasado no hubo nada».
     return {
       hasData: Boolean(lastPublished),
       end, curFrom, prevFrom, prevTo,
+      trimmed: curFrom !== fullFrom,
+      hasPrevious,
       labels: curDays.map(shortDate),
       series: Object.fromEntries(METRICS.map((m) => [m.key, {
         cur: seriesOf(cur, curDays, m.key),
-        prev: seriesOf(prev, prevDays, m.key),
+        prev: hasPrevious ? seriesOf(prev, prevDays, m.key) : undefined,
       }])),
       cur: sumRows(cur),
-      prev: sumRows(prev),
+      prev: hasPrevious ? sumRows(prev) : null,
       byLocation,
     };
-  }, [rows, linked, locationId, days]);
+  }, [rows, linked, locationId, days, historyStart]);
 
   const header = (
     <PageHeader
@@ -458,7 +476,7 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
 
   const { cur, prev } = view;
   const convCur = cur.impressions ? cur.interactions / cur.impressions : 0;
-  const convPrev = prev.impressions ? prev.interactions / prev.impressions : 0;
+  const convPrev = prev?.impressions ? prev.interactions / prev.impressions : 0;
 
   return (
     <div className="gb-page">
@@ -475,15 +493,21 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
           )}
           <label className="gbm-field">
             <span>Rango de fechas</span>
-            <Select value={range} onChange={setRange} options={RANGE_OPTIONS} />
+            <Select value={activeRange} onChange={setRange} options={periodOptionsFor(RANGE_OPTIONS, retentionDays)} />
           </label>
         </div>
         <p className="gbm-note">
           <Icon name="info" />
-          Google publica las métricas con unos días de atraso, así que el período llega hasta el {longDate(view.end)}.
-          Período anterior: {longDate(view.prevFrom)} – {longDate(view.prevTo)}.
+          {view.trimmed
+            ? `Período: ${longDate(view.curFrom)} – ${longDate(view.end)}. Google publica con unos días de atraso, y lo anterior al ${longDate(view.curFrom)} queda fuera del historial de tu plan.`
+            : `Google publica las métricas con unos días de atraso, así que el período llega hasta el ${longDate(view.end)}.`}
+          {view.hasPrevious && ` Período anterior: ${longDate(view.prevFrom)} – ${longDate(view.prevTo)}.`}
         </p>
       </div>
+
+      {!view.hasPrevious && (
+        <RetentionNote days={retentionDays}>No hay período anterior para comparar.</RetentionNote>
+      )}
 
       <div className="gb-stat-grid">
         {METRICS.map((m) => (
@@ -491,9 +515,9 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
             key={m.key}
             icon={<Icon name={m.icon} />}
             value={NUM.format(cur[m.key])}
-            label={`${m.label} · antes ${NUM.format(prev[m.key])}`}
+            label={`${m.label} · antes ${prev ? NUM.format(prev[m.key]) : '—'}`}
             color={m.color}
-            {...trendOf(cur[m.key], prev[m.key])}
+            {...trendOf(cur[m.key], prev?.[m.key])}
           />
         ))}
       </div>
@@ -502,7 +526,9 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
         <div className="gb-card__header">
           <div>
             <h3 className="gb-card__title">Tendencia de interacciones</h3>
-            <span className="gb-card__subtitle">Línea llena: este período · punteada: el anterior</span>
+            <span className="gb-card__subtitle">
+              {view.hasPrevious ? 'Línea llena: este período · punteada: el anterior' : 'Este período'}
+            </span>
           </div>
         </div>
         <div className="gbm-trends__grid">
@@ -538,7 +564,7 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
             <div className="gbm-conv__main">
               <span className="gbm-conv__value">{PCT.format(convCur)}</span>
               <span className="gbm-conv__label">{NUM.format(cur.interactions)} interacciones de {NUM.format(cur.impressions)} impresiones</span>
-              <span className="gbm-conv__prev">Período anterior: {PCT.format(convPrev)}</span>
+              <span className="gbm-conv__prev">Período anterior: {prev ? PCT.format(convPrev) : '—'}</span>
             </div>
             {METRICS.slice(1).map((m) => (
               <div key={m.key} className="gbm-conv__item">
@@ -595,7 +621,7 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
               </div>
             </div>
             <ul className="gbm-insights">
-              {buildInsights(cur, prev).map((i) => (
+              {buildInsights(cur, prev ?? sumRows([])).map((i) => (
                 <li key={i.title}>
                   <strong>{i.title}</strong>
                   <span>{i.text}</span>
@@ -627,10 +653,10 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
           <div className="gbm-compare">
             {view.byLocation.map((l) => {
               const conv = l.cur.impressions ? l.cur.interactions / l.cur.impressions : 0;
-              const convP = l.prev.impressions ? l.prev.interactions / l.prev.impressions : 0;
+              const convP = l.prev?.impressions ? l.prev.interactions / l.prev.impressions : 0;
               const rowsOf = [
-                ['Impresiones', NUM.format(l.cur.impressions), trendOf(l.cur.impressions, l.prev.impressions)],
-                ['Interacciones', NUM.format(l.cur.interactions), trendOf(l.cur.interactions, l.prev.interactions)],
+                ['Impresiones', NUM.format(l.cur.impressions), trendOf(l.cur.impressions, l.prev?.impressions)],
+                ['Interacciones', NUM.format(l.cur.interactions), trendOf(l.cur.interactions, l.prev?.interactions)],
                 ['Conversión', PCT.format(conv), trendOf(conv, convP)],
               ];
               return (

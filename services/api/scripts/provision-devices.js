@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { supabase } from '../lib/supabase.js';
-import { REDIRECT_DOMAIN, DASHBOARD_URL } from '../lib/config.js';
+import { claimUrlFor, claimUrlWarning, publicUrlFor, writeClaimSheet } from '../lib/claimSheet.js';
 
 // Decisión 4 de CLAUDE.md: los devices nunca se crean client-side. Se
 // provisionan acá, en lote, con status='unassigned' y sin organization_id —
@@ -15,16 +15,26 @@ const ALLOWED_FORMS = ['nfc_stand', 'nfc_sticker', 'nfc_card', 'qr_stand', 'qr_s
 const MAX_COUNT = 500;
 
 function usage() {
-  console.error('Uso: node scripts/provision-devices.js <kind> <cantidad> [batch_code] [--form=<forma>]');
+  console.error('Uso: node scripts/provision-devices.js <kind> <cantidad> [batch_code] [--form=<forma>] [--out=<carpeta>] [--qr-mm=<mm>]');
   console.error(`  kind debe ser uno de: ${ALLOWED_KINDS.join(', ')}`);
   console.error(`  --form (default nfc_stand): ${ALLOWED_FORMS.join(', ')}`);
+  console.error('  --out   carpeta de la hoja de QR de vinculación (default: la actual)');
+  console.error('  --qr-mm lado del QR impreso, en mm (default 20)');
   process.exit(1);
 }
+
+const flag = (args, name) => args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 
 function parseArgs() {
   const args = process.argv.slice(2);
   const formArg = args.find((a) => a.startsWith('--form='));
   const [kind, countArg, batchCode] = args.filter((a) => !a.startsWith('--'));
+  const outDir = flag(args, 'out');
+  const qrMm = flag(args, 'qr-mm') ? Number(flag(args, 'qr-mm')) : undefined;
+  if (qrMm !== undefined && !(qrMm >= 10 && qrMm <= 60)) {
+    console.error('--qr-mm debe estar entre 10 y 60');
+    process.exit(1);
+  }
 
   if (!ALLOWED_KINDS.includes(kind)) usage();
 
@@ -37,7 +47,7 @@ function parseArgs() {
   const formFactor = formArg ? formArg.slice('--form='.length) : 'nfc_stand';
   if (!ALLOWED_FORMS.includes(formFactor)) usage();
 
-  return { kind, count, batchCode: batchCode || null, formFactor };
+  return { kind, count, batchCode: batchCode || null, formFactor, outDir, qrMm };
 }
 
 async function provisionDevices({ kind, count, batchCode, formFactor }) {
@@ -60,31 +70,35 @@ async function provisionDevices({ kind, count, batchCode, formFactor }) {
   return data;
 }
 
-/* Dos QR por expositor, y no son intercambiables:
- *   - `url`: el del frente, el que escanean los clientes (y lo que se graba en el
- *     NFC con ?s=n). Lo ve cualquiera, así que NO sirve para vincular.
- *   - `claim_url`: el chico de la base, junto al claim_code impreso. Lleva al
- *     panel con el modal de vinculación ya completado (ScanClaimModal.jsx, en
- *     apps/dashboard); el botón «Escanear QR» del panel también lo lee. Sale de
+/* Dos QR por expositor, y no son intercambiables (ver lib/claimSheet.js):
+ *   - `url`: el del frente, el que escanean los clientes. NO sirve para vincular.
+ *   - `claim_url`: el chico de la base, junto al claim_code impreso. Sale de
  *     DASHBOARD_URL, así que para imprimir hay que correr esto con el .env de
- *     producción (https://app.linkstarapp.com), no con localhost. */
+ *     producción (https://app.linkstarapp.com), no con localhost.
+ * La hoja de QR de vinculación se puede volver a generar después con
+ * scripts/print-claim-sheet.js --batch=<lote>. */
 function printTable(devices) {
-  const dashboard = DASHBOARD_URL.replace(/\/+$/, '');
   const rows = devices.map(({ public_id, claim_code }) => ({
     public_id,
     claim_code,
-    url: `https://${REDIRECT_DOMAIN}/d/${public_id}`,
-    claim_url: `${dashboard}/panel/dispositivos?vincular=${claim_code}`,
+    url: publicUrlFor(public_id),
+    claim_url: claimUrlFor(claim_code),
   }));
   console.table(rows);
 }
 
-const { kind, count, batchCode, formFactor } = parseArgs();
+const { kind, count, batchCode, formFactor, outDir, qrMm } = parseArgs();
+
+// Se avisa ANTES de crear nada: lo provisionado no se deshace, la hoja sí.
+const warning = claimUrlWarning();
+if (warning) console.warn(`⚠️  ${warning}\n`);
 
 provisionDevices({ kind, count, batchCode, formFactor })
-  .then((devices) => {
+  .then(async (devices) => {
     console.log(`\n${devices.length} dispositivo(s) '${kind}' / '${formFactor}' provisionados${batchCode ? ` (batch ${batchCode})` : ''}.\n`);
     printTable(devices);
+    const file = await writeClaimSheet(devices, { outDir, batchCode, qrMm });
+    console.log(`\nHoja de QR de vinculación: ${file}`);
   })
   .catch((err) => {
     console.error('Error provisionando dispositivos:', err.message || err);

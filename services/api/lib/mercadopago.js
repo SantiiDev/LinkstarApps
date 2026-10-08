@@ -17,6 +17,13 @@ export const mpClient = new MercadoPagoConfig({
 // 200 antes de esto, un colgado silencioso dejaría el evento sin marcar como
 // procesado para siempre. Este timeout garantiza que siempre se llegue al
 // catch y se registre el error.
+//
+// Desde la v3 (oct 2026) la SDK trae su propio timeout por intento (10 s) y
+// reintenta 429/5xx hasta 3 veces con la MISMA clave de idempotencia (un
+// reintento de payment.create no cobra dos veces). Este tope sigue haciendo
+// falta: acota el total, reintentos incluidos. Sus errores son subclases de
+// Error (MercadoPagoError) con `status`, `message` y `causes`, que es lo que
+// leen los catch de las rutas.
 export function withTimeout(promise, ms, label) {
   return Promise.race([
     promise,

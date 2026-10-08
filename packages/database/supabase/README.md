@@ -45,12 +45,14 @@ Desde la raíz del monorepo son `npm run db:reset`, `npm run db:push` y `npm run
 | `0029_business_features_and_google_metrics.sql` | `private.org_has_business()`, métricas de la ficha (`google_daily_metrics`, sólo por `google_metrics_daily()`) y palabras de búsqueda (`google_search_keywords`, Business) |
 | `0030_google_profile_protection.sql` | `google_location_write_target()` (quién escribe en una ficha), protección de ficha (`google_profile_changes`, Business) y `org_alert_recipient()` |
 | `0031_google_posts.sql` | `google_location_read_target()`, publicaciones (`google_posts`, cupo de 1 por mes en gratis) y el bucket público `google-post-media` |
+| `0032_free_plan_fallback_and_org_tiebreak.sql` | `select_free_plan()` deja volver a gratis a una organización sin acceso (Business cancelado, `trial` viejo) y avisa `paid_plan_active` en vez de no hacer nada; desempate de la organización activa |
+| `0033_review_analysis.sql` | Análisis de reseñas con IA (fase 5): `google_review_analysis`, `v_review_analysis` y las dos RPC `service_role` del analizador |
+| `0034_retention_by_plan.sql` | El historial de cada plan (decisión 3): corte de lectura en escaneos, rollups, reseñas estimadas, métricas y búsquedas; purga de escaneos crudos (`run_purge_scan_events()`); `rebuild_today_rollup()` no reconstruye días ya purgados |
 
-> **`0028`–`0031` están aplicadas sólo en el proyecto de PRUEBAS** (`mbhuzrrjyboyimqvnrpy`, 6 oct 2026),
-> no en producción. Al subirlas a producción: en orden, y **antes** de desplegar el API y el panel de este
-> mismo código (el panel lee `google_locations.metrics_synced_at`, que agrega la `0029`). Ojo: en la
-> máquina de Santiago el CLI quedó vinculado al proyecto de pruebas — revisá `.temp/project-ref` y hacé
-> `supabase link` a producción antes del `db:push`.
+> **Producción tiene hasta la `0033`** (8 oct 2026). **La `0034` está probada en local pero no aplicada**
+> en ningún proyecto remoto: hay que subirla **antes** de mergear a `main` el API que llama a
+> `run_purge_scan_events()`. Ojo con el vínculo del CLI: en la máquina de Santiago apunta al proyecto de
+> pruebas y en otras a producción — revisá `.temp/project-ref` antes de cualquier `db:push`.
 
 > **Al aplicar la `0022` hay que actualizar `tests/rls_isolation.sql` en el mismo cambio.** El test
 > assertea la regla de la `0015` —"plan gratis sin expositor: `org_has_access` sí,
@@ -236,7 +238,7 @@ Todavía no salimos a la venta: no hay tenants reales, así que el esquema puede
 plan de migración de datos. Esta lista es lo que sí hay que tener antes de vender la primera suscripción.
 
 - [x] Correr `tests/rls_isolation.sql` (verifica que un tenant no vea al otro) — en verde de punta a punta desde agosto de 2026; **se vuelve a correr antes de cada cambio de RLS**
-- [ ] Habilitar `pg_cron` y descomentar los `cron.schedule` de `0007` — opcional desde la `0028`: rollups y vencimientos ya corren en el job diario del API; falta sólo la purga (`purge_old_scan_events`, ligada a la decisión de retención)
+- [ ] Habilitar `pg_cron` y descomentar los `cron.schedule` de `0007` — opcional desde la `0028`: rollups y vencimientos ya corren en el job diario del API; la purga también corre ahí desde la `0034` (`run_purge_scan_events`, según el plan de cada organización)
 - [x] Construir `sync-reviews` (`0024` + `services/api/scripts/sync-reviews.js`, hoy `sync-google.js`)
 - [x] Programar `sync-google` una vez por día en el host del API (`npm run daily`, ver `services/api/DEPLOY.md`)
 - [ ] Publicar la app OAuth de Google (en modo Testing los refresh tokens vencen a los 7 días)

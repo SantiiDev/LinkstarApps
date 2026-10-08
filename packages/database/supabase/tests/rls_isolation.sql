@@ -1328,6 +1328,138 @@ reset role;
 update public.subscriptions set plan_code = 'business', status = 'active'
  where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
 
+-- =========================================================================
+-- 19. El historial de cada plan: qué se ve y qué se guarda (0034)
+-- =========================================================================
+-- Fixtures propias sobre el expositor de Pichincha (eeee..02), en días que
+-- nadie más usa (hace 10, 100 y 400 días). Todos los conteos filtran por ese
+-- expositor o esa sucursal: en el proyecto de pruebas hay datos reales.
+insert into public.scan_daily_rollups
+  (organization_id, day, location_id, device_id, employee_id, kind, scans, unique_scans, bot_scans)
+values
+  ('aaaaaaaa-0000-0000-0000-000000000001', current_date - 10,  'dddddddd-0000-0000-0000-000000000002',
+   'eeeeeeee-0000-0000-0000-000000000002', null, 'google_review', 3, 3, 0),
+  ('aaaaaaaa-0000-0000-0000-000000000001', current_date - 100, 'dddddddd-0000-0000-0000-000000000002',
+   'eeeeeeee-0000-0000-0000-000000000002', null, 'google_review', 5, 5, 0),
+  ('aaaaaaaa-0000-0000-0000-000000000001', current_date - 400, 'dddddddd-0000-0000-0000-000000000002',
+   'eeeeeeee-0000-0000-0000-000000000002', null, 'google_review', 7, 7, 0);
+
+insert into public.scan_events (organization_id, device_id, location_id, kind, occurred_at) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000002',
+   'dddddddd-0000-0000-0000-000000000002', 'google_review', now() - interval '10 days'),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000002',
+   'dddddddd-0000-0000-0000-000000000002', 'google_review', now() - interval '100 days'),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000002',
+   'dddddddd-0000-0000-0000-000000000002', 'google_review', now() - interval '400 days');
+
+insert into public.review_deltas (organization_id, location_id, day, new_reviews) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000002', current_date - 10, 1),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000002', current_date - 100, 2);
+
+insert into public.google_daily_metrics (google_location_id, day, organization_id, call_clicks) values
+  ('9a000000-0000-0000-0000-000000000002', current_date - 100, 'aaaaaaaa-0000-0000-0000-000000000001', 4);
+
+-- Business: 365 días.
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+select pg_temp.check('Business ve los rollups de hace 10 y 100 días, no el de hace 400',
+  (select count(*) from public.scan_daily_rollups
+    where device_id = 'eeeeeeee-0000-0000-0000-000000000002' and day < current_date - 5) = 2);
+select pg_temp.check('Business ve los escaneos crudos de hace 10 y 100 días',
+  (select count(*) from public.scan_events
+    where device_id = 'eeeeeeee-0000-0000-0000-000000000002' and occurred_at < now() - interval '5 days') = 2);
+select pg_temp.check('Business ve las reseñas estimadas de hace 100 días',
+  (select count(*) from public.review_deltas
+    where location_id = 'dddddddd-0000-0000-0000-000000000002' and day < current_date - 5) = 2);
+select pg_temp.check('Business ve las métricas de Google de hace 100 días',
+  (select count(*) from public.google_metrics_daily('aaaaaaaa-0000-0000-0000-000000000001', current_date - 200, current_date)
+    where google_location_id = '9a000000-0000-0000-0000-000000000002' and day = current_date - 100) = 1);
+reset role;
+
+-- Gratis: 30 días. Es un corte de lectura: los datos siguen ahí.
+update public.subscriptions set plan_code = 'free'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+select pg_temp.check('Gratis ve sólo el rollup de hace 10 días',
+  (select count(*) from public.scan_daily_rollups
+    where device_id = 'eeeeeeee-0000-0000-0000-000000000002' and day < current_date - 5) = 1);
+select pg_temp.check('Gratis ve sólo el escaneo crudo de hace 10 días',
+  (select count(*) from public.scan_events
+    where device_id = 'eeeeeeee-0000-0000-0000-000000000002' and occurred_at < now() - interval '5 days') = 1);
+select pg_temp.check('Gratis no ve las reseñas estimadas de hace 100 días',
+  (select count(*) from public.review_deltas
+    where location_id = 'dddddddd-0000-0000-0000-000000000002' and day < current_date - 5) = 1);
+select pg_temp.check('Gratis: pedir métricas de antes del historial devuelve lo que el plan deja ver, sin error',
+  (select count(*) from public.google_metrics_daily('aaaaaaaa-0000-0000-0000-000000000001', current_date - 200, current_date)
+    where day = current_date - 100) = 0);
+select pg_temp.check('Gratis sigue viendo los rollups de hoy',
+  (select count(*) from public.scan_daily_rollups where day = current_date) > 0);
+reset role;
+
+select pg_temp.check('El corte de lectura no borró ningún rollup',
+  (select count(*) from public.scan_daily_rollups
+    where device_id = 'eeeeeeee-0000-0000-0000-000000000002' and day < current_date - 5) = 3);
+
+-- La purga. Gratis: se borran los crudos de más de 30 días; los rollups quedan.
+select pg_temp.check('La simulación de la purga cuenta sin borrar',
+  public.run_purge_scan_events(true) >= 2
+  and (select count(*) from public.scan_events
+        where device_id = 'eeeeeeee-0000-0000-0000-000000000002' and occurred_at < now() - interval '5 days') = 3);
+select public.run_purge_scan_events();
+select pg_temp.check('En gratis la purga deja sólo el escaneo crudo de hace 10 días',
+  (select count(*) from public.scan_events
+    where device_id = 'eeeeeeee-0000-0000-0000-000000000002' and occurred_at < now() - interval '5 days') = 1);
+select pg_temp.check('La purga no toca los rollups: al volver a Business, la historia vuelve',
+  (select count(*) from public.scan_daily_rollups
+    where device_id = 'eeeeeeee-0000-0000-0000-000000000002' and day < current_date - 5) = 3);
+
+-- Business: 365 días. Un crudo de hace 400 se borra, uno de hace 100 no.
+update public.subscriptions set plan_code = 'business'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+insert into public.scan_events (organization_id, device_id, location_id, kind, occurred_at) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000002',
+   'dddddddd-0000-0000-0000-000000000002', 'google_review', now() - interval '100 days'),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000002',
+   'dddddddd-0000-0000-0000-000000000002', 'google_review', now() - interval '400 days');
+select public.run_purge_scan_events();
+select pg_temp.check('En Business la purga conserva el de hace 100 días y borra el de hace 400',
+  (select count(*) from public.scan_events
+    where device_id = 'eeeeeeee-0000-0000-0000-000000000002'
+      and occurred_at between now() - interval '101 days' and now() - interval '99 days') = 1
+  and (select count(*) from public.scan_events
+    where device_id = 'eeeeeeee-0000-0000-0000-000000000002' and occurred_at < now() - interval '365 days') = 0);
+
+-- Ni el panel ni anon pueden purgar.
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+do $$
+begin
+  perform public.run_purge_scan_events();
+  raise exception 'FALLA: authenticated pudo ejecutar la purga';
+exception
+  when insufficient_privilege then
+    raise notice '  OK   authenticated no puede ejecutar la purga';
+end $$;
+reset role;
+
+-- No se reconstruye un día ya purgado: quedaría en cero.
+create or replace function pg_temp.rebuild_hint(p_day date)
+returns text language plpgsql as $$
+declare
+  v_hint text;
+begin
+  perform public.rebuild_today_rollup(p_day);
+  return 'ok';
+exception
+  when others then
+    get stacked diagnostics v_hint = pg_exception_hint;
+    return coalesce(nullif(v_hint, ''), sqlerrm);
+end;
+$$;
+select pg_temp.check('rebuild_today_rollup rechaza un día anterior al piso de 30 días',
+  pg_temp.rebuild_hint(current_date - 40) = 'day_purged');
+select pg_temp.check('… y sigue reconstruyendo ayer',
+  pg_temp.rebuild_hint(current_date - 1) = 'ok');
+
 do $$ begin
   raise notice '';
   raise notice '=== Todos los tests de aislamiento pasaron ===';
