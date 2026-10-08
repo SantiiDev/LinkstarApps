@@ -9,6 +9,8 @@ import Select from '../../components/Select/Select';
 import Icon from '../../components/Icon/Icon';
 import Switch from '../../components/Switch/Switch';
 import PageSkeleton from '../../components/PageSkeleton/PageSkeleton';
+import RetentionNote from '../../components/RetentionNote/RetentionNote';
+import { periodOptionsFor, clampPeriod, canComparePrevious } from '../../lib/retention';
 import {
   formatRelativeTime,
   colorForIndex,
@@ -655,10 +657,13 @@ function buildActivity(rows, days, unique) {
   };
 }
 
-function ActivityCard({ activity, period, onPeriod, unique, onUnique }) {
+function ActivityCard({ activity, period, onPeriod, retentionDays, unique, onUnique }) {
   const days = Number(period);
   const series = useMemo(() => buildActivity(activity.rows, days, unique), [activity.rows, days, unique]);
   const total = series.current.reduce((s, v) => s + v, 0);
+  // Si el período anterior cae fuera del historial del plan, la base no lo
+  // devuelve y se vería en cero: se muestra «—» y se dice por qué (0034).
+  const hasPrevious = canComparePrevious(days, retentionDays);
   const previousTotal = series.previous.reduce((s, v) => s + v, 0);
 
   return (
@@ -667,7 +672,7 @@ function ActivityCard({ activity, period, onPeriod, unique, onUnique }) {
         <div>
           <h3 className="devices-panel__title"><Icon name="activity" size={17} /> Actividad de Dispositivos</h3>
           <span className="devices-panel__subtitle">
-            {unique ? 'Personas distintas' : 'Escaneos'} por día · línea punteada: el período anterior
+            {unique ? 'Personas distintas' : 'Escaneos'} por día{hasPrevious ? ' · línea punteada: el período anterior' : ''}
           </span>
         </div>
         <div className="devices-activity__controls">
@@ -675,7 +680,7 @@ function ActivityCard({ activity, period, onPeriod, unique, onUnique }) {
           <Select
             value={period}
             onChange={onPeriod}
-            options={ACTIVITY_PERIOD_OPTIONS}
+            options={periodOptionsFor(ACTIVITY_PERIOD_OPTIONS, retentionDays)}
             triggerClassName="ls-select-field"
           />
         </div>
@@ -687,9 +692,12 @@ function ActivityCard({ activity, period, onPeriod, unique, onUnique }) {
         <>
           <div className="devices-activity__totals">
             <span><strong>{NUM.format(total)}</strong> en el período</span>
-            <span className="devices-activity__prev">{NUM.format(previousTotal)} en el anterior</span>
+            <span className="devices-activity__prev">{hasPrevious ? NUM.format(previousTotal) : '—'} en el anterior</span>
           </div>
-          {total === 0 && previousTotal === 0 && (
+          {!hasPrevious && (
+            <RetentionNote days={retentionDays}>No hay período anterior para comparar.</RetentionNote>
+          )}
+          {total === 0 && (!hasPrevious || previousTotal === 0) && (
             <p className="devices-note">
               Todavía no registramos escaneos en este período. Van a aparecer acá en cuanto alguien toque o
               escanee un expositor (se suman todos los días a las 8:00).
@@ -697,7 +705,7 @@ function ActivityCard({ activity, period, onPeriod, unique, onUnique }) {
           )}
           <TrendChart
             data={series.current}
-            compareData={series.previous}
+            compareData={hasPrevious ? series.previous : undefined}
             labels={series.labels}
             color="orange"
             seriesName={unique ? 'Personas distintas' : 'Escaneos'}
@@ -771,7 +779,7 @@ function LocationRanking({ locations, showAll, onToggle }) {
 
 /* ─── Página ────────────────────────────────────────────────── */
 export default function DevicesPage({ claimCode, onClaimCodeHandled }) {
-  const { org } = useOrg();
+  const { org, retentionDays } = useOrg();
   const orgId = org?.organization_id;
 
   const initial = lastView.orgId === orgId ? lastView : DEFAULT_VIEW;
@@ -785,7 +793,10 @@ export default function DevicesPage({ claimCode, onClaimCodeHandled }) {
     lastView = { orgId, search, filter, period, unique, showAllLocations };
   }, [orgId, search, filter, period, unique, showAllLocations]);
 
-  const { base, activity, reload } = useDevicesData(orgId, { period });
+  // Un período guardado de antes de bajar de plan no puede pedir más historia
+  // de la que la base deja ver (0034).
+  const activePeriod = clampPeriod(period, ACTIVITY_PERIOD_OPTIONS, retentionDays);
+  const { base, activity, reload } = useDevicesData(orgId, { period: activePeriod });
 
   const [selectedId, setSelectedId] = useState(null);
   const [claim, setClaim] = useState(null); // null | { code }
@@ -994,8 +1005,9 @@ export default function DevicesPage({ claimCode, onClaimCodeHandled }) {
 
       <ActivityCard
         activity={activity}
-        period={period}
+        period={activePeriod}
         onPeriod={setPeriod}
+        retentionDays={retentionDays}
         unique={unique}
         onUnique={setUnique}
       />

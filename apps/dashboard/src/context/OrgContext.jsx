@@ -40,6 +40,7 @@ export function OrgProvider({ children }) {
   const [organizations, setOrganizations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [retentionDays, setRetentionDays] = useState(null);
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -81,6 +82,31 @@ export function OrgProvider({ children }) {
     load();
   }, [authLoading, load]);
 
+  /* Cuántos días de historial deja ver el plan (plans.data_retention_days, 0034).
+     El corte de verdad lo hacen las políticas de la base; esto sólo sirve para
+     que las pantallas no ofrezcan un período que la base va a devolver vacío, y
+     para que digan por qué. Se pide aparte y no bloquea la carga: mientras no
+     llega es null, y null significa «no recortar nada en pantalla». */
+  const planCode = context?.plan_code ?? null;
+  useEffect(() => {
+    if (!planCode) {
+      setRetentionDays(null);
+      return undefined;
+    }
+    let cancelled = false;
+    supabase
+      .from('plans')
+      .select('data_retention_days')
+      .eq('code', planCode)
+      .maybeSingle()
+      .then(({ data, error: planError }) => {
+        if (cancelled) return;
+        if (planError) console.error('No se pudo leer el historial del plan:', planError);
+        setRetentionDays(data?.data_retention_days ?? null);
+      });
+    return () => { cancelled = true; };
+  }, [planCode]);
+
   /* Lanza si la base rechaza el cambio (p. ej. ya no sos miembro): quien llama
      muestra el error. Si sale bien, recarga todo el contexto. */
   const switchOrganization = useCallback(async (organizationId) => {
@@ -114,6 +140,7 @@ export function OrgProvider({ children }) {
     /* Lo que BusinessLock destapa. Es la misma regla que private.org_has_business()
        (0029), que es la que corta de verdad: esto sólo decide qué se dibuja. */
     isBusiness: Boolean(context?.has_access) && ['business', 'enterprise'].includes(context?.plan_code),
+    retentionDays,
     loading: authLoading || loading,
     error,
     refresh: load,

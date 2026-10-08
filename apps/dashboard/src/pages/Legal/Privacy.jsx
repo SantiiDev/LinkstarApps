@@ -201,9 +201,11 @@ export default function Privacy() {
 
           <h2>5. Cuánto tiempo los guardamos</h2>
           <p>
-            Los datos de tu cuenta y de tu empresa se conservan mientras la cuenta exista. El historial
-            de escaneos se conserva según tu plan, y los eventos individuales se borran automáticamente
-            pasado ese plazo — los totales agregados, que son los que ves en el panel, se conservan.
+            Los datos de tu cuenta y de tu empresa se conservan mientras la cuenta exista. Cada escaneo
+            individual se borra automáticamente cuando supera el historial de tu plan (30 días en el plan
+            gratis, un año en Business, nunca menos de 30 días). Los totales diarios, que son los que ves
+            en el panel, se conservan, y el panel te muestra los del período que cubre tu plan, igual que
+            las métricas de tu ficha de Google.
           </p>
           <p>
             Si cerrás tu cuenta, eliminamos tus datos personales dentro de los 30 días. Podemos conservar

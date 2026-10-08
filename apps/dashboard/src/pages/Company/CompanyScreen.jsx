@@ -52,7 +52,7 @@ const DEFAULT_FILTERS = { locationId: 'all', range: '30', chartMode: 'count', ta
 let lastFilters = { orgId: null, ...DEFAULT_FILTERS };
 
 export default function CompanyScreen({ google, onNavigate }) {
-  const { org, isBusiness } = useOrg();
+  const { org, isBusiness, retentionDays } = useOrg();
   const orgId = org?.organization_id;
 
   const initial = lastFilters.orgId === orgId ? lastFilters : DEFAULT_FILTERS;
@@ -66,6 +66,11 @@ export default function CompanyScreen({ google, onNavigate }) {
   }, [orgId, locationId, range, chartMode, pickedTarget]);
 
   const period = useMemo(() => periodFor(range), [range]);
+  /* Las reseñas no se recortan por plan, los escaneos sí (0034): con un período
+     más largo que el historial, la columna «Escaneos» cuenta sólo lo que el plan
+     guarda, y el resumen lo dice en vez de presentarlo como el total del período. */
+  const periodDays = range === 'all' ? Infinity : Number(range);
+  const scanDaysCap = retentionDays && periodDays > retentionDays ? retentionDays : null;
   const { base, scans, recent, seo } = useCompanyOverview(orgId, {
     isBusiness,
     scanSince: period.fromKey,
@@ -249,7 +254,7 @@ export default function CompanyScreen({ google, onNavigate }) {
         <StarDistributionCard distribution={view.distribution} total={view.periodRows.length} />
       </div>
 
-      <LocationSummaryCard rows={summaryRows} scansFailed={scans.failed} />
+      <LocationSummaryCard rows={summaryRows} scansFailed={scans.failed} scanDaysCap={scanDaysCap} />
 
       <RecentReviewsCard
         items={recent.items}

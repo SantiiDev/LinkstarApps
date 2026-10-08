@@ -10,6 +10,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "provision-devices": "node scripts/provision-devices.js",
+    "print-claim-sheet": "node scripts/print-claim-sheet.js",
     "rebuild-today-rollup": "node scripts/rebuild-today-rollup.js",
     "rebuild-rollups": "node scripts/rebuild-rollups.js",
     "send-alerts": "node scripts/send-alerts.js",
@@ -25,7 +26,8 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.6.2",
     "helmet": "^8.3.0",
-    "mercadopago": "^2.0.15",
+    "mercadopago": "^3.6.1",
+    "qrcode": "^1.5.4",
     "zod": "^4.4.3"
   }
 }

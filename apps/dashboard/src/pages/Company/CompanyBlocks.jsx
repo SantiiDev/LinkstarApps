@@ -335,13 +335,19 @@ function SummaryCell({ label, children }) {
   );
 }
 
-export function LocationSummaryCard({ rows, scansFailed }) {
+/* `scanDaysCap`: el período elegido supera el historial del plan (0034). Las
+   reseñas cubren todo el período; los escaneos, sólo esos días. */
+export function LocationSummaryCard({ rows, scansFailed, scanDaysCap = null }) {
   return (
     <div className="company-card company-summary">
       <div className="company-card__header">
         <div>
           <h3 className="company-card__title">Resumen por local</h3>
-          <span className="company-card__subtitle">Escaneos de tus expositores y reseñas del período, por sucursal</span>
+          <span className="company-card__subtitle">
+            {scanDaysCap
+              ? `Reseñas del período y escaneos de los últimos ${scanDaysCap} días (el historial de tu plan), por sucursal`
+              : 'Escaneos de tus expositores y reseñas del período, por sucursal'}
+          </span>
         </div>
       </div>
 
