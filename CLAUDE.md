@@ -780,7 +780,11 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
   frees it. Deleting a post does **not** give the quota back. Photos go to the public bucket
   `google-post-media/<org_id>/…` (Google fetches them from that URL); the API rejects any `mediaUrl` outside
   that org's folder. The list is read live from Google; there are no per-post views/clicks — Google
-  discontinued `localPosts.reportInsights` in 2023.
+  discontinued `localPosts.reportInsights` in 2023. Two Tapstar features are deliberately left for later
+  (noted at the top of `GooglePostsScreen.jsx`): publishing to several fichas at once (each ficha is one
+  post for Google, so it collides with the free quota — it would be Business, publishing ficha by ficha
+  and reporting which failed) and a "Publicaciones programadas" card, which waits for scheduling itself.
+  "Escribir con IA" in the composer is a button only, marked Próximamente — same rule as Reviews' AI reply.
 - `googleRequest()` retries 429/5xx for GET/PUT/PATCH/DELETE but **never for POST**: retrying a create
   after a slow answer would publish the post twice.
 - **SEO Local → Análisis SEO** (7 Oct 2026, structure copied from Tapstar's redesign, screenshots in the
