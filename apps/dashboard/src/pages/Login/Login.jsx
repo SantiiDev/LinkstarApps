@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { translateAuthError } from '../../lib/authErrors';
+import { credentialsError, translateAuthError } from '../../lib/authErrors';
 import './Login.css';
 
 export default function Login({ onSuccess, onGoRegister, onBack }) {
@@ -24,10 +24,12 @@ export default function Login({ onSuccess, onGoRegister, onBack }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError('');
+    const invalid = credentialsError(email, password);
+    setError(invalid);
+    if (invalid) return;
     setSubmitting(true);
 
-    const { error: signInError } = await signIn(email, password);
+    const { error: signInError } = await signIn(email.trim(), password);
 
     setSubmitting(false);
     if (signInError) {
@@ -59,7 +61,7 @@ export default function Login({ onSuccess, onGoRegister, onBack }) {
         )}
         {error && <div className="auth-card__error">{error}</div>}
 
-        <form className="auth-form" onSubmit={handleSubmit}>
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
           <label className="auth-form__field">
             <span className="auth-form__label">Email</span>
             <input

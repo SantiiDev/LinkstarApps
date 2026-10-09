@@ -15,9 +15,9 @@ function TrendArrow({ direction }) {
   );
 }
 
-export default function StatCard({ icon, label, value, trend, trendDirection = 'up', color = 'orange', delay = 0 }) {
+export default function StatCard({ icon, label, value, trend, trendDirection = 'up', color = 'orange' }) {
   return (
-    <div className={`stat-card stat-card--${color}`} style={{ animationDelay: `${delay}s` }}>
+    <div className={`stat-card stat-card--${color}`}>
       <div className="stat-card__header">
         <div className={`stat-card__icon-wrapper stat-card__icon-wrapper--${color}`}>{icon}</div>
         {trend && (

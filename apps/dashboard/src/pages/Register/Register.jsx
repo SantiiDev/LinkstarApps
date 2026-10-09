@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { translateAuthError } from '../../lib/authErrors';
+import { credentialsError, translateAuthError } from '../../lib/authErrors';
 import './Register.css';
 
 export default function Register({ onSuccess, onGoLogin, onBack }) {
@@ -17,6 +17,15 @@ export default function Register({ onSuccess, onGoLogin, onBack }) {
     e.preventDefault();
     setError('');
 
+    if (!fullName.trim()) {
+      setError('Ingresá tu nombre.');
+      return;
+    }
+    const invalid = credentialsError(email, password);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
     if (password.length < 6) {
       setError('La contraseña debe tener al menos 6 caracteres.');
       return;
@@ -27,7 +36,7 @@ export default function Register({ onSuccess, onGoLogin, onBack }) {
     }
 
     setSubmitting(true);
-    const { error: signUpError, needsEmailConfirmation } = await signUp(email, password, fullName);
+    const { error: signUpError, needsEmailConfirmation } = await signUp(email.trim(), password, fullName);
     setSubmitting(false);
 
     if (signUpError) {
@@ -66,7 +75,7 @@ export default function Register({ onSuccess, onGoLogin, onBack }) {
         )}
 
         {!confirmationSent && (
-          <form className="auth-form" onSubmit={handleSubmit}>
+          <form className="auth-form" onSubmit={handleSubmit} noValidate>
             <label className="auth-form__field">
               <span className="auth-form__label">Nombre completo</span>
               <input

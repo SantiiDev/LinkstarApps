@@ -32,7 +32,6 @@
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
-  animation: fadeInUp 0.4s ease both;
   transition: all var(--transition-base);
 }
 

@@ -149,12 +149,22 @@ router.get('/api/google/locations/:id/profile', readLimiter, requireAuth(supabas
     const target = await readTarget(req.user.id, req.params.id);
     const accessToken = await accessTokenForOrg(target.organization_id);
 
-    const [location, current, metadata, editable] = await Promise.all([
+    const [location, current, editable] = await Promise.all([
       getLocationProfile(accessToken, target.google_location),
-      getAttributes(accessToken, target.google_location).catch(() => []),
-      listAttributeMetadata(accessToken, target.google_location).catch(() => []),
+      getAttributes(accessToken, target.google_location).catch((err) => {
+        console.error('No se pudieron leer los atributos de la ficha:', err.message);
+        return [];
+      }),
       canWrite(req.user.id, req.params.id),
     ]);
+    // Después de la ficha: los nombres en castellano se piden por su categoría.
+    const metadata = await listAttributeMetadata(accessToken, target.google_location, {
+      categoryName: location.categories?.primaryCategory?.name,
+      regionCode: location.storefrontAddress?.regionCode,
+    }).catch((err) => {
+      console.error('No se pudieron leer los atributos que admite la ficha:', err.message);
+      return null;
+    });
 
     res.json({
       canEdit: editable,
@@ -171,7 +181,9 @@ router.get('/api/google/locations/:id/profile', readLimiter, requireAuth(supabas
         openStatus: location.openInfo?.status ?? null,
         mapsUri: location.metadata?.mapsUri ?? null,
       },
-      attributes: shapeAttributes(metadata, current),
+      attributes: shapeAttributes(metadata ?? [], current),
+      // El panel distingue «Google no habilita atributos para tu rubro» de «no pudimos leerlos».
+      attributesError: metadata === null,
     });
   } catch (err) {
     sendError(res, err, 'No pudimos leer tu ficha de Google', 'Error leyendo la ficha');
@@ -216,8 +228,9 @@ router.patch(
       if (mask.length) await patchLocation(accessToken, target.google_location, fields, mask);
 
       const attributes = [
-        ...(body.attributes ?? []).map((a) => ({ name: a.name, valueType: 'BOOL', values: [a.value] })),
-        // Un enlace vacío se manda en la máscara sin valores: así Google lo borra.
+        // Un atributo o un enlace vacío se manda en la máscara sin valores: así
+        // Google lo borra (un sí/no «sin cargar» no es lo mismo que «No»).
+        ...(body.attributes ?? []).map((a) => ({ name: a.name, valueType: 'BOOL', values: a.value === null ? [] : [a.value] })),
         ...(body.links ?? []).map((l) => ({ name: l.name, valueType: 'URL', uriValues: l.uri ? [{ uri: l.uri }] : [] })),
       ];
       if (attributes.length) await updateAttributes(accessToken, target.google_location, attributes);

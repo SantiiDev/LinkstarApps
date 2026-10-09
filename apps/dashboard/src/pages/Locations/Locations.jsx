@@ -369,7 +369,7 @@ function LocationCardGrid({ locations, hasAny, onSelect, onClearFilters, onCreat
 
   return (
     <div className="loc-grid">
-      {locations.map((loc, index) => {
+      {locations.map((loc) => {
         const maxScans = Math.max(...loc.weeklyScans, 1);
         const progress = pct(loc.totalReviews, loc.monthlyGoal);
 
@@ -377,7 +377,6 @@ function LocationCardGrid({ locations, hasAny, onSelect, onClearFilters, onCreat
           <div
             key={loc.id}
             className="loc-card"
-            style={{ animationDelay: `${index * 0.07}s` }}
             onClick={() => onSelect(loc)}
           >
             {/* Accent stripe */}

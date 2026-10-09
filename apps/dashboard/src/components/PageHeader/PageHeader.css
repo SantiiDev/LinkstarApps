@@ -9,6 +9,12 @@
   gap: 1rem;
   margin-bottom: 1.75rem;
   animation: fadeInUp 0.5s ease both;
+  /* El `transform` que deja la animación lo vuelve un contexto de apilado, y
+     las tarjetas que vienen después se pintaban encima de lo que se despliega
+     desde las acciones (el (i) de Dispositivos). Con z-index propio queda
+     arriba del contenido y abajo de la topbar (90) y del modal de Google (80). */
+  position: relative;
+  z-index: 6;
 }
 
 .page-header__title-block {

@@ -204,14 +204,12 @@ export async function getAttributes(accessToken, locationName) {
   return data.attributes ?? [];
 }
 
-/* Qué atributos admite esta ficha (dependen de su categoría y país), con el
- * nombre y el grupo en castellano. */
-export async function listAttributeMetadata(accessToken, locationName) {
+async function attributeMetadataPages(accessToken, query) {
   const items = [];
   for await (const item of paginate(
     accessToken,
     (pageToken) => {
-      const params = new URLSearchParams({ parent: locationName, languageCode: 'es', pageSize: '200' });
+      const params = new URLSearchParams({ ...query, pageSize: '200' });
       if (pageToken) params.set('pageToken', pageToken);
       return `${BUSINESS_INFO_BASE}/attributes?${params}`;
     },
@@ -220,6 +218,33 @@ export async function listAttributeMetadata(accessToken, locationName) {
     items.push(item);
   }
   return items;
+}
+
+/* Qué atributos admite esta ficha, con el nombre y el grupo en castellano.
+ *
+ * Son dos pedidos porque Google no deja hacerlo en uno: con `parent` (la ficha)
+ * responde 400 si además va `languageCode` — y así estuvo hasta el 8 oct 2026,
+ * con la tarjeta de atributos y las redes siempre vacías. Por ficha devuelve la
+ * lista que vale para ESA ficha (una sin local a la calle no admite los de
+ * accesibilidad, aunque su rubro sí), pero en inglés. Los nombres salen de un
+ * segundo pedido por categoría en español latinoamericano (`es-419`, que dice
+ * «Estacionamiento» y no «Aparcamiento»); si ese falla, quedan en inglés. */
+export async function listAttributeMetadata(accessToken, locationName, { categoryName, regionCode } = {}) {
+  const [items, localized] = await Promise.all([
+    attributeMetadataPages(accessToken, { parent: locationName }),
+    categoryName
+      ? attributeMetadataPages(accessToken, { categoryName, regionCode: regionCode || 'AR', languageCode: 'es-419' })
+        .catch((err) => {
+          console.error('No se pudieron leer los nombres de los atributos en castellano:', err.message);
+          return [];
+        })
+      : [],
+  ]);
+  const names = new Map(localized.map((m) => [m.parent, m]));
+  return items.map((m) => {
+    const es = names.get(m.parent);
+    return es ? { ...m, displayName: es.displayName || m.displayName, groupDisplayName: es.groupDisplayName || m.groupDisplayName } : m;
+  });
 }
 
 /* `attributes`: [{ name: 'attributes/…', valueType, values | uriValues }]. Sólo

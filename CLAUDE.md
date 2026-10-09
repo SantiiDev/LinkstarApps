@@ -724,6 +724,16 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
   whatever range you ask for, so they are fetched one closed month at a time (3 per run, 12 on first).
   The screen's period ends at the last day Google published, not today, so the tail doesn't read as a
   drop; the previous period comes from the same query. `TrendChart` gained `compareData` (dashed series).
+  Since 8 Oct 2026 the Business cards follow Tapstar's Métricas (screenshots in the session that built
+  it): conversion as a gauge plus three channel tiles (rate changes in **points**, `pointsTrend`, not
+  relative %), the four platform columns as a `PieChart` next to grouped bars against the previous
+  period (one `BusinessLock` over both), and searches as a table with a search box and «vs. mes
+  anterior» (`Nueva` only when the previous month has rows at all — otherwise every term would be
+  "new"). The real cards and their `BusinessLock` mocks render the same components from
+  `GoogleMetricsBlocks.jsx` (the `CompanyBlocks` pattern), so a design change is made once; the mock
+  numbers live in `GoogleMetricsBusinessPreview.jsx`. Platform colors are `PLATFORM_4` in
+  `lib/chartColors.js` (validated). Tapstar fills empty Business cards with «datos de ejemplo»; we
+  deliberately don't.
 - **Profile is read and written live** (`routes/googleProfile.js`), not stored. Who may read
   (`google_location_read_target`, `0031`: viewer too) and write (`google_location_write_target`, `0030`:
   same rule as replying — owner/admin, manager only in their branches, never a viewer, only linked fichas)
@@ -731,6 +741,30 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
   hours, boolean attributes and `url_*` social links. **Not** address (changing it triggers a new
   verification at Google), categories (needs a search against Google's catalog), or split-shift hours (the
   editor holds one range per day and would flatten a second shift — it says so and sends you to Google).
+  Since 8 Oct 2026 the screen follows Tapstar's Perfil: protection first, then business info, contact
+  (WhatsApp and the second phone as their own fields, one icon per social network), hours, categories
+  and attributes as rows with a group icon and, for ~15 common ones, a one-line hint (`ATTRIBUTE_HINTS`
+  in `lib/googleProfile.js`, keyed by attribute name — a name that doesn't match just shows no hint).
+  Attributes are still **only the ones Google enables for the ficha's category**: Tapstar shows a fixed
+  list («Se admiten perros» to a software company), and Google rejects attributes outside the category.
+  The protection card is `ProtectionBlock` (`GoogleProfileBlocks.jsx`), shared by the real card and its
+  `BusinessLock` mock, and shows pending changes plus the last 10 resolved (`fetchProfileChanges`
+  returns `{ pending, resolved }`). Its header promises only what we do — daily check, mail, one-click
+  revert — never Tapstar's «lo deshacemos en minutos, sin que hagas nada». **Until 8 Oct 2026 the
+  attributes card and the social links were always empty, in production too:** `attributes.list` answers
+  400 when `parent` comes with `languageCode`, and the route swallowed it into `[]`.
+  `listAttributeMetadata()` now asks by `parent` (the list valid for *that* ficha — a service-area ficha
+  doesn't get the accessibility ones its category has) and takes Spanish names from a second call by
+  category with `es-419` + region (`AR` fallback); the response carries `attributesError` so the panel
+  can tell «Google doesn't enable attributes for this category» from «couldn't read them». A yes/no
+  attribute has **three** states — Sí, No, Sin cargar — and they are not interchangeable: «No» is
+  published on the listing («No tiene entrada accesible»), so an unset attribute is never shown as «No»
+  (Tapstar does). The card is read-only; the «Editar perfil» modal sets each one with a Sí/No/Sin cargar
+  control, and «Sin cargar» is sent as `value: null`, which the route turns into an empty `values` in
+  the mask (Google deletes it). Editing attributes and social links from the modal had never had
+  anything to show, so it is untested against Google. **Possible next step:
+  special hours (holidays)** — `specialHours` is already read by the SEO audit, but showing it in Perfil
+  needs adding it to the read mask of `routes/googleProfile.js`.
 - **Listing protection never reverts on its own.** The daily job asks `getGoogleUpdated` per linked ficha
   of a Business org; a non-empty `diffMask` is stored in `google_profile_changes` with Google's and the
   owner's values and mailed (kind `profile_changed`, same simulated-send rule as the alerts); the panel
@@ -995,8 +1029,12 @@ split below before wiring anything — the shell is finished, the data mostly is
   3. `AuthContext`'s inactivity listeners are `{ passive: true }` and the whole handler is throttled, not
      just its `localStorage` write — `mousemove` and `scroll` fire tens of times a second and the limit
      they guard is 30 minutes.
-  Adding a screen is fine; adding one that animates a blur, or moving the background back onto `body`, puts
-  the jank back. Note `transition: all` is still all over the rest of the CSS — harmless where nothing
+  4. Glass surfaces have **no entrance animation** (8 Oct 2026). Every section card used to `fadeInUp`
+     (opacity + `translateY`, ~0.6 s), and moving an element with `backdrop-filter` re-blurs it every
+     frame — 10–20 cards at once on each section change, which is what made navigation feel slow. The
+     page header (no blur) and the modals (one element, user-triggered) keep theirs.
+  Adding a screen is fine; adding one that animates a blur — or slides in a glass card — or moving the
+  background back onto `body`, puts the jank back. Note `transition: all` is still all over the rest of the CSS — harmless where nothing
   expensive changes on hover, but it is why rule 2 has to be checked per component.
 - `context/AuthContext.jsx` wraps `App` and owns all Supabase Auth state. Its `onAuthStateChange` listener
   is the single place that calls `POST /api/auth/login-event` on `SIGNED_IN` — don't duplicate that inside
@@ -1039,8 +1077,12 @@ split below before wiring anything — the shell is finished, the data mostly is
   checkbox), `components/PageSkeleton` (first-load placeholder shaped like a KPI page) and the
   `.ls-select-field` classes in `components/Select/Select.css` (`--block` for a full-width filter,
   `--icon` to leave room for a leading icon), passed as `triggerClassName` — `Select` itself has no
-  trigger style, and every page used to carry its own near-identical one. Older pages (Metrics, Reports,
-  Settings…) still have their local versions; move them over when you touch them.
+  trigger style, and every page used to carry its own near-identical one. Métricas uses them throughout since
+  8 Oct 2026 (`SelectField` for Local/Rango, `.ls-select-field` for the month, `KpiCard`, `Icon`);
+  Reports, Settings… still have their local versions — move them over when you touch them, rather than writing a new one. That
+  `PageHeader` is `position: relative; z-index: 6` is what lets anything opened from its `actions` (the
+  (i) of Devices) render over the cards below; a filter bar that opens a menu needs the same
+  (`z-index: 5`, see `.company-toolbar`).
 - **Every read takes the active `organizationId` and filters by it** — the fetchers of `dashboardApi.js`,
   `catalogApi.js` and `googleApi.js`, through `requireOrg()`, which throws without one. RLS is the
   *security* boundary and lets a user read **all** their orgs; before `0027` a member of two saw the union

@@ -50,7 +50,6 @@
   border-radius: var(--radius-card);
   padding: 1.5rem;
   box-shadow: var(--glass-shadow);
-  animation: fadeInUp 0.6s ease both;
 }
 
 .gb-card__header {
@@ -436,7 +435,6 @@
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
-  animation: fadeInUp 0.4s ease both;
 }
 
 .gb-post-card__thumb {
