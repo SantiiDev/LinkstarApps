@@ -8,7 +8,7 @@ import './Sidebar.css';
 
 const LANG_OPTIONS = [
   { value: 'es', label: 'Español' },
-  { value: 'en', label: 'English (próximamente)', disabled: true },
+  { value: 'en', label: 'English', disabled: true, soon: true },
 ];
 
 /* ─── Icons ────────────────────────────────────────────────── */

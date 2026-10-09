@@ -17,13 +17,19 @@ import ReportsSentimentScreen from './ReportsSentimentScreen';
  * Mientras se averigua el estado se muestra el modal, no la pantalla (mismo
  * criterio que GoogleMetrics).
  */
-export default function ReportsSentiment({ onNavigateSettings }) {
+export default function ReportsSentiment({ onNavigateSettings, onNavigateSection }) {
   const { org } = useOrg();
   const google = useGoogleConnection(org?.organization_id);
   const status = google.connection?.status;
 
   if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
-    return <ReportsSentimentScreen google={google} onNavigateSettings={onNavigateSettings} />;
+    return (
+      <ReportsSentimentScreen
+        google={google}
+        onNavigateSettings={onNavigateSettings}
+        onNavigateSection={onNavigateSection}
+      />
+    );
   }
 
   return (
@@ -31,8 +37,8 @@ export default function ReportsSentiment({ onNavigateSettings }) {
       description="El análisis de sentimiento se corre sobre lo que escriben tus clientes. Sin la conexión con Google no tenemos ese texto, y sin texto no hay nada que analizar."
       benefits={[
         'Qué proporción de tus reseñas son positivas, neutras o negativas.',
-        'Cómo se mueve ese ánimo mes a mes.',
-        'Los temas que más se repiten, separados por los que suman y los que restan.',
+        'Cómo se mueve ese ánimo semana a semana o mes a mes.',
+        'Las palabras que más repiten tus clientes, separadas por tono.',
         'Qué sucursal concentra las quejas.',
       ]}
       note="El análisis se calcula una sola vez, cuando la reseña entra, y se guarda. No se recalcula cada vez que abrís la pantalla."

@@ -25,7 +25,7 @@ const AR_DAY = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit',
 });
 
-function dayKeyOf(date) {
+export function dayKeyOf(date) {
   return AR_DAY.format(date instanceof Date ? date : new Date(date));
 }
 
@@ -161,7 +161,9 @@ export function positiveShare(rows) {
 /* Reseñas de 1 o 2 estrellas que siguen sin respuesta, de todo el historial: una
    queja vieja sin contestar sigue a la vista de todos en Google. */
 export function pendingNegatives(rows) {
-  return rows.filter((r) => r.stars <= 2 && !r.answered).length;
+  // `stars != null` porque en JS null <= 2 da true; la bandeja filtra con
+  // star_rating <= 2 en SQL, que deja afuera las sin estrellas.
+  return rows.filter((r) => r.stars != null && r.stars <= 2 && !r.answered).length;
 }
 
 /* ─── Distribución por estrellas ─────────────────────────────────────────── */
@@ -178,21 +180,29 @@ export function starDistribution(rows) {
 
 const MAX_HISTORY_MONTHS = 24;
 
-/* Los tramos del gráfico según el rango: días hasta 30, semanas en 90, meses en
-   12 meses y en todo el historial (los últimos 24 como máximo). Cada tramo trae
-   su etiqueta: las etiquetas y los valores salen de la misma lista y no se
-   pueden desalinear. */
-function buckets(period, rows) {
+/* Los tramos del gráfico según el rango: días hasta `maxDailyDays` (30 en Mi
+   Empresa; Sentimiento pasa 7, porque reseñas por día con tono son casi todos
+   ceros), semanas en el resto de los rangos en días, meses en 12 meses y en todo
+   el historial (los últimos 24 como máximo). Cada tramo trae su etiqueta: las
+   etiquetas y los valores salen de la misma lista y no se pueden desalinear.
+   `rows` necesita `dayKey` (sólo se usa para el comienzo de «todo»).
+
+   Las semanas se arman HACIA ATRÁS desde hoy: la última termina hoy y siempre
+   tiene sus 7 días, y la que queda incompleta (si el rango no es múltiplo de 7)
+   es la primera. Antes se armaban hacia adelante y la incompleta era la última
+   —con 30 días, una «semana» de 2 días—: el punto que más se mira, el de «cómo
+   venimos ahora», mostraba una caída que no había pasado. */
+export function periodBuckets(period, rows, { maxDailyDays = 30 } = {}) {
   const { kind, fromKey, toKey } = period;
   const out = [];
-  if (kind === 'days' && period.days <= 30) {
+  if (kind === 'days' && period.days <= maxDailyDays) {
     for (let k = fromKey; k <= toKey; k = addDays(k, 1)) out.push({ from: k, to: k, label: dayLabel(k) });
     return out;
   }
   if (kind === 'days') {
-    for (let k = fromKey; k <= toKey; k = addDays(k, 7)) {
-      const end = addDays(k, 6);
-      out.push({ from: k, to: end < toKey ? end : toKey, label: dayLabel(k) });
+    for (let end = toKey; end >= fromKey; end = addDays(end, -7)) {
+      const start = addDays(end, -6) < fromKey ? fromKey : addDays(end, -6);
+      out.unshift({ from: start, to: end, label: dayLabel(start) });
     }
     return out;
   }
@@ -212,7 +222,7 @@ function buckets(period, rows) {
    tramo; 'rating' promedia sus estrellas, y un tramo sin reseñas queda AFUERA en
    vez de dibujarse como 0 (no hubo puntaje, no fue un puntaje de cero). */
 export function reviewSeries(rows, period, mode = 'count') {
-  const points = buckets(period, rows).map((b) => {
+  const points = periodBuckets(period, rows).map((b) => {
     const own = rows.filter((r) => r.dayKey >= b.from && r.dayKey <= b.to);
     return { label: b.label, count: own.length, rating: ratingOf(own) };
   });

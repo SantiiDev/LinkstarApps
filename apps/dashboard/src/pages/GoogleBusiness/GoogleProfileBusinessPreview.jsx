@@ -1,33 +1,50 @@
 /*
  * MAQUETA DECORATIVA — fondo de BusinessLock en Perfil, no datos.
  *
- * Dibuja la tarjeta de protección de ficha con un cambio INVENTADO. Se renderiza
- * ÚNICAMENTE como `preview` de components/BusinessLock (borrosa, inerte, con un
- * velo que no se cierra). NO agregar otro importador.
+ * Dibuja la tarjeta de protección de ficha con cambios INVENTADOS, con el mismo
+ * ProtectionBlock que la tarjeta real (GoogleProfileBlocks), así la maqueta es
+ * la tarjeta de verdad con otros datos. Se renderiza ÚNICAMENTE como `preview`
+ * de components/BusinessLock (borrosa, inerte, con un velo que no se cierra).
+ * NO agregar otro importador.
  */
+import { ProtectionBlock } from './GoogleProfileBlocks';
+
+const HOURS_AGO = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+const DAYS_AGO = (d) => HOURS_AGO(d * 24);
+
+const CHANGES = {
+  pending: [{
+    id: 'preview-1',
+    status: 'pending',
+    detected_at: HOURS_AGO(2),
+    fields: ['phoneNumbers'],
+    owner_values: { phoneNumbers: { primaryPhone: '0341 555-0000' } },
+    google_values: { phoneNumbers: { primaryPhone: '0800 000-0000' } },
+  }],
+  resolved: [
+    {
+      id: 'preview-2',
+      status: 'reverted',
+      detected_at: DAYS_AGO(9),
+      resolved_at: DAYS_AGO(9),
+      fields: ['openInfo'],
+      owner_values: { openInfo: { status: 'OPEN' } },
+      google_values: { openInfo: { status: 'CLOSED_PERMANENTLY' } },
+    },
+    {
+      id: 'preview-3',
+      status: 'accepted',
+      detected_at: DAYS_AGO(21),
+      resolved_at: DAYS_AGO(20),
+      fields: ['websiteUri'],
+      owner_values: { websiteUri: 'https://tunegocio.com.ar' },
+      google_values: { websiteUri: 'https://www.tunegocio.com.ar' },
+    },
+  ],
+};
+
+const noop = () => {};
+
 export function ProtectionPreview() {
-  return (
-    <div className="gb-card gbp-card gbp-protect">
-      <div className="gbp-card__head">
-        <h3 className="gb-card__title">Protección de ficha</h3>
-      </div>
-      <p className="gbp-hint">Revisamos tu ficha todos los días y te avisamos si Google cambia algo por su cuenta.</p>
-      <div className="gbp-change">
-        <div className="gbp-change__head">
-          <strong>Google cambió: Teléfono</strong>
-          <span>hace 2 horas</span>
-        </div>
-        <div className="gbp-change__diff">
-          <span className="gbp-change__field">Teléfono</span>
-          <span>Tenías: <b>0341 555-0000</b></span>
-          <span>Google muestra: <b>0800 000-0000</b></span>
-        </div>
-        <div className="gbp-change__diff">
-          <span className="gbp-change__field">Abierto / cerrado</span>
-          <span>Tenías: <b>Abierto</b></span>
-          <span>Google muestra: <b>Cerrado permanentemente</b></span>
-        </div>
-      </div>
-    </div>
-  );
+  return <ProtectionBlock changes={CHANGES} canEdit busyId={null} error={null} onResolve={noop} />;
 }

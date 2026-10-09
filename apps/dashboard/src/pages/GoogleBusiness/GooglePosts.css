@@ -87,6 +87,7 @@
 }
 
 .gbpo-type {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -112,6 +113,67 @@
 .gbpo-type--on {
   border-color: var(--color-orange);
   background: rgba(245, 133, 41, 0.06);
+}
+
+.gbpo-type__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-bottom: 0.3rem;
+  border-radius: 0.7rem;
+}
+
+.gbpo-type__icon--blue { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
+.gbpo-type__icon--orange { background: rgba(245, 133, 41, 0.14); color: var(--color-orange); }
+.gbpo-type__icon--purple { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
+
+.gbpo-type__check {
+  position: absolute;
+  top: 0.8rem;
+  right: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: var(--color-orange);
+  color: #fff;
+}
+
+/* «Escribir con IA»: sólo el botón, Próximamente (el de Reseñas, en chico). */
+.gbpo-ai {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: -0.4rem;
+}
+
+.gbpo-ai__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-button);
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, var(--color-orange), var(--color-gold));
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.gbpo-ai__btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.gbpo-ai__btn--locked {
+  background: rgba(245, 133, 41, 0.1);
+  border-color: rgba(245, 133, 41, 0.35);
+  color: var(--color-orange);
 }
 
 .gbpo-drop {
@@ -214,6 +276,22 @@
 }
 
 /* ── Lista ── */
+.gbpo-list__header {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+}
+
+.gbpo-list__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gbpo-list__title svg {
+  color: var(--color-orange);
+}
+
 .gbpo-list {
   display: flex;
   flex-direction: column;

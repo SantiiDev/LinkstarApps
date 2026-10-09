@@ -367,7 +367,6 @@
   box-shadow: var(--glass-shadow);
   overflow: hidden;
   transition: all var(--transition-base);
-  animation: fadeInUp 0.55s ease both;
   position: relative;
   cursor: pointer;
 }
@@ -662,7 +661,6 @@
   box-shadow: var(--glass-shadow);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  animation: fadeInUp 0.5s ease both;
   position: relative;
 }
 

@@ -1,99 +1,74 @@
 /*
  * MAQUETA DECORATIVA — no es la pantalla, es el fondo.
  *
- * El JSX que la sección mostraba antes de la fase 2, recuperado del tag
- * `maquetas-pre-fase-2`. Todos los números de acá son inventados.
+ * Todos los números de acá son inventados. Se renderiza ÚNICAMENTE en los dos
+ * lugares donde una maqueta es legal: como `children` de `GoogleGate` (sin
+ * Google conectado) y como `preview` de `BusinessLock` (con Google, en el plan
+ * gratis, desde ReportsKeywordsScreen, con `showHeader={false}` porque la
+ * pantalla ya muestra el suyo). Los dos la dejan borrosa, inerte y detrás de un
+ * velo que no se cierra. NO agregar otro importador: fuera de esas puertas es
+ * una pantalla inventando datos.
  *
- * Se renderiza ÚNICAMENTE en los dos lugares donde una maqueta es legal:
- * como `children` de `GoogleGate` (sin Google conectado) y como `preview` de
- * `BusinessLock` (con Google, en el plan gratis, desde ReportsKeywordsScreen,
- * con `showHeader={false}` porque la pantalla ya muestra el suyo). Los dos la
- * dejan borrosa, inerte y detrás de un velo que no se cierra. NO agregar otro
- * importador: fuera de esas puertas es una pantalla inventando datos.
- *
- * La pantalla real es ReportsKeywordsScreen (fase 5, 0033); esto queda como la
- * invitación para quien todavía no conectó Google o no tiene Business.
+ * Dibuja con los mismos bloques que la pantalla real (KeywordsBlocks.jsx) y la
+ * misma frase de resumen (keywordSummary). Se rehízo el 9/10/2026 con la
+ * estructura de Tapstar; la anterior (StatCards + ranking) está en el historial
+ * de git.
  */
 
 import PageHeader from '../../components/PageHeader/PageHeader';
-import StatCard from '../../components/StatCard/StatCard';
-import { ALL_REVIEWS } from '../../data/reviews';
+import SelectField, { FilterField } from '../../components/Select/SelectField';
+import { RANGE_OPTIONS, keywordSummary } from '../../lib/reviewInsights';
+import { KeywordsHint, KeywordsSummary, KeywordColumns, KeywordReviewsPanel, KeywordRanking } from './KeywordsBlocks';
+import '../GoogleBusiness/GoogleBusiness.css';
+import '../GoogleBusiness/GoogleMetrics.css';
 import './Reports.css';
 
-function Icon({ name, ...rest }) {
-  const props = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', ...rest };
-  const icons = {
-    hash: <svg {...props}><line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" /><line x1="10" y1="3" x2="8" y2="21" /><line x1="16" y1="3" x2="14" y2="21" /></svg>,
-    trend: <svg {...props}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>,
-    tag: <svg {...props}><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12.01V2h10.01l8.58 8.58a2 2 0 0 1 0 2.83z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>,
-  };
-  return icons[name] || null;
-}
+// [término, elogios, neutras, quejas]
+const RAW = [
+  ['atención', 21, 1, 2], ['café', 18, 0, 0], ['amables', 15, 1, 0], ['rico', 13, 0, 1],
+  ['recomendable', 11, 0, 0], ['ambiente', 9, 1, 1], ['ubicación', 2, 6, 0], ['demora', 0, 1, 7],
+  ['caro', 1, 0, 5], ['horario', 0, 4, 1], ['ruidoso', 0, 0, 3],
+];
 
-/* Aggregate keyword frequency + dominant sentiment straight from the reviews mock data */
-function buildKeywordStats() {
-  const map = new Map();
-  ALL_REVIEWS.forEach((review) => {
-    review.keywords.forEach((keyword) => {
-      if (!map.has(keyword)) {
-        map.set(keyword, { term: keyword, count: 0, positive: 0, negative: 0, neutral: 0 });
-      }
-      const entry = map.get(keyword);
-      entry.count += 1;
-      entry[review.sentiment] += 1;
-    });
-  });
-  return [...map.values()]
-    .map((entry) => {
-      const dominant = entry.positive >= entry.negative && entry.positive >= entry.neutral
-        ? 'positive'
-        : entry.negative >= entry.neutral ? 'negative' : 'neutral';
-      return { ...entry, dominant };
-    })
-    .sort((a, b) => b.count - a.count);
-}
+const KEYWORDS = RAW.map(([term, positive, neutral, negative]) => {
+  let dominant = 'neutral';
+  if (positive > negative && positive >= neutral) dominant = 'positive';
+  else if (negative > positive && negative >= neutral) dominant = 'negative';
+  return { term, positive, neutral, negative, count: positive + neutral + negative, dominant, reviews: [] };
+}).sort((a, b) => b.count - a.count);
+
+const PRAISED = KEYWORDS.filter((k) => k.dominant === 'positive');
+const COMPLAINTS = KEYWORDS.filter((k) => k.dominant === 'negative');
+
+const noop = () => {};
 
 export default function ReportsKeywordsMockup({ showHeader = true }) {
-  const keywords = buildKeywordStats();
-  const maxCount = Math.max(...keywords.map((k) => k.count));
-  const topTerm = keywords[0];
-
   return (
     <div className="reports-page">
       {showHeader && (
         <PageHeader
           eyebrow="Reportes"
           title="Palabras Clave"
-          subtitle="Los temas y términos que más mencionan tus clientes en sus reseñas"
+          subtitle="Análisis de fortalezas y debilidades según lo que escriben tus clientes"
         />
       )}
 
-      <div className="reports-stat-grid">
-        <StatCard icon={<Icon name="hash" />} value={keywords.length} label="Palabras clave detectadas" color="orange" />
-        <StatCard icon={<Icon name="trend" />} value={topTerm?.term ?? '—'} label="Mención más frecuente" color="gold" />
-        <StatCard icon={<Icon name="tag" />} value={ALL_REVIEWS.length} label="Reseñas analizadas" color="forest" />
-        <StatCard icon={<Icon name="hash" />} value={`${Math.round((keywords.filter((k) => k.dominant === 'positive').length / keywords.length) * 100)}%`} label="Palabras con contexto positivo" color="navy" />
+      <div className="gb-card gbm-toolbar">
+        <div className="gbm-toolbar__filters">
+          <SelectField label="Local" icon="store" value="all" onChange={noop} options={[{ value: 'all', label: 'Todos los locales' }]} />
+          <SelectField label="Rango de fechas" icon="calendar" value="90" onChange={noop} options={RANGE_OPTIONS} />
+          <FilterField label="Reseñas" icon="message" className="reports-count-field">
+            <div className="ls-select-field ls-select-field--block ls-select-field--icon reports-count-field__value">126</div>
+          </FilterField>
+        </div>
       </div>
 
-      <div className="reports-card">
-        <div className="reports-card__header">
-          <div>
-            <h3 className="reports-card__title">Ranking de palabras clave</h3>
-            <span className="reports-card__subtitle">Ordenadas por frecuencia de mención</span>
-          </div>
-        </div>
-        <div className="reports-keywords-list">
-          {keywords.map((k) => (
-            <div key={k.term} className="reports-keyword-row">
-              <span className={`reports-keyword-row__dot reports-keyword-row__dot--${k.dominant}`} />
-              <span className="reports-keyword-row__term">{k.term}</span>
-              <div className="reports-keyword-row__bar">
-                <div className={`reports-keyword-row__fill reports-keyword-row__fill--${k.dominant}`} style={{ width: `${(k.count / maxCount) * 100}%` }} />
-              </div>
-              <span className="reports-keyword-row__count">{k.count} mención{k.count > 1 ? 'es' : ''}</span>
-            </div>
-          ))}
-        </div>
+      <div className="reports-stack">
+        <KeywordsHint />
+        <KeywordsSummary text={keywordSummary(PRAISED, COMPLAINTS)} />
+        <KeywordColumns praised={PRAISED} complaints={COMPLAINTS} selected={null} onSelect={noop} />
+        <KeywordReviewsPanel keyword={null} />
+        <KeywordRanking keywords={KEYWORDS} page={0} onPage={noop} selected={null} onSelect={noop} />
       </div>
     </div>
   );

@@ -299,7 +299,7 @@ function EmployeeCardGrid({ employees, hasAny, rankedIds, onSelect, onClearFilte
 
   return (
     <div className="emp-grid">
-      {employees.map((emp, index) => {
+      {employees.map((emp) => {
         const rank = rankedIds.indexOf(emp.id) + 1;
         const progress = pct(emp.reviews, emp.goal);
         const max = Math.max(...emp.weeklyReviews, 1);
@@ -309,7 +309,6 @@ function EmployeeCardGrid({ employees, hasAny, rankedIds, onSelect, onClearFilte
           <div
             key={emp.id}
             className="emp-card"
-            style={{ animationDelay: `${index * 0.07}s` }}
             onClick={() => onSelect(emp)}
           >
             {/* Colored rank stripe */}

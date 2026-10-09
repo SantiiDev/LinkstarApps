@@ -115,7 +115,8 @@ export const googleProfileUpdateSchema = z
     attributes: z
       .array(z.object({
         name: z.string().regex(/^attributes\/[a-z0-9_]+$/),
-        value: z.boolean(),
+        // null = «sin cargar»: el atributo se borra de la ficha (ni sí ni no).
+        value: z.boolean().nullable(),
       }))
       .max(100)
       .optional(),

@@ -24,3 +24,9 @@ export const SCALE_3 = [CHART_COLORS.good, CHART_COLORS.warning, CHART_COLORS.ba
 /* Partición en dos categorías sin carga de valor (ninguna es "mejor" que la
    otra). Verificado: ΔE 10.4 con daltonismo protan, ΔE 25.9 con visión normal. */
 export const SPLIT_2 = [CHART_COLORS.brand, CHART_COLORS.good];
+
+/* Las cuatro plataformas de Google (Métricas): el tono dice la superficie
+   (Búsqueda naranja, Maps verde) y el claro/oscuro el dispositivo (celular /
+   computadora), en ese orden. Verificado con el validador de la skill dataviz:
+   ΔE 15.2 con daltonismo (deutan) en el peor par vecino y 18.0 con visión normal. */
+export const PLATFORM_4 = [CHART_COLORS.brand, '#C2410C', CHART_COLORS.good, '#047857'];

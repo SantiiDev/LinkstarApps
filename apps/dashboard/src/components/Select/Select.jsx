@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import SoonBadge from '../SoonBadge/SoonBadge';
 import './Select.css';
+
+/* Una opción con `soon: true` lleva la etiqueta «Próximamente» del panel
+   (components/SoonBadge). Suele ir con `disabled: true`. */
 
 export default function Select({ value, onChange, options, triggerClassName = '', menuClassName = '', disabled = false, placeholder = 'Seleccionar' }) {
   const [open, setOpen] = useState(false);
@@ -54,6 +58,7 @@ export default function Select({ value, onChange, options, triggerClassName = ''
               }}
             >
               {opt.label}
+              {opt.soon && <SoonBadge className="ls-select__soon" />}
             </li>
           ))}
         </ul>

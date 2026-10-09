@@ -22,7 +22,6 @@
   border-radius: var(--radius-card);
   padding: 1.5rem;
   box-shadow: var(--glass-shadow);
-  animation: fadeInUp 0.5s ease both;
 }
 
 .profile-card--hero {

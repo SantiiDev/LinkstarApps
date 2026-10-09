@@ -39,7 +39,11 @@ async function apiFetch(path, options, fallbackMessage) {
   try {
     response = await fetch(`${API_URL}${path}`, options);
   } catch {
-    throw new Error('El servicio no está disponible en este momento. Probá de nuevo más tarde.');
+    // En desarrollo casi siempre es el API local apagado (`node server.js`
+    // desde services/api): decirlo ahorra buscar una caída que no existe.
+    throw new Error(import.meta.env.DEV
+      ? `No hay respuesta del API en ${API_URL}. ¿Está corriendo services/api?`
+      : 'El servicio no está disponible en este momento. Probá de nuevo más tarde.');
   }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || fallbackMessage);
@@ -138,14 +142,17 @@ export const REVIEWS_PAGE_SIZE = 50;
 export const REVIEW_RATING_OPTIONS = [
   { value: 'all', label: 'Todas' },
   ...[5, 4, 3, 2, 1].map((n) => ({ value: String(n), label: `${n} estrella${n === 1 ? '' : 's'}` })),
+  // Lo que Mi Empresa llama «negativas» (pendingNegatives en companyOverview.js):
+  // su «Responder ahora» abre la bandeja con este filtro.
+  { value: 'low', label: '1 y 2 estrellas' },
 ];
 
 export const REVIEW_STATUS_OPTIONS = [
   { value: 'all', label: 'Todas' },
   { value: 'answered', label: 'Respondidas' },
   { value: 'pending', label: 'Sin responder' },
-  { value: 'auto', label: 'Resp. automáticamente · próximamente', disabled: true },
-  { value: 'withdrawn', label: 'Retiradas · próximamente', disabled: true },
+  { value: 'auto', label: 'Resp. automáticamente', disabled: true, soon: true },
+  { value: 'withdrawn', label: 'Retiradas', disabled: true, soon: true },
 ];
 
 export const REVIEW_SORT_OPTIONS = [
@@ -235,7 +242,8 @@ function reviewsQuery(organizationId, {
     .order('id', { ascending: true })
     .range(from, from + pageSize - 1);
 
-  if (rating !== 'all') query = query.eq('star_rating', Number(rating));
+  if (rating === 'low') query = query.lte('star_rating', 2);
+  else if (rating !== 'all') query = query.eq('star_rating', Number(rating));
   if (status === 'answered') query = query.not('reply_comment', 'is', null);
   if (status === 'pending') query = query.is('reply_comment', null);
   if (sentiment !== 'all') query = query.eq('google_review_analysis.sentiment', sentiment);
@@ -261,6 +269,20 @@ export async function fetchReviewSentiments(organizationId, reviewIds) {
     .in('review_id', reviewIds);
   if (error) throw error;
   return new Map((data ?? []).map((row) => [row.review_id, row.sentiment]));
+}
+
+/* Unas reseñas puntuales, por id, de la más nueva a la más vieja: las que se
+ * ven al desplegar un aspecto en NPS (el análisis trae los ids, no el texto). */
+export async function fetchReviewsByIds(organizationId, reviewIds) {
+  if (!reviewIds.length) return [];
+  const { data, error } = await supabase
+    .from('google_reviews')
+    .select('id, reviewer_name, is_anonymous, star_rating, comment, created_time, google_locations(location_id, locations(name))')
+    .eq('organization_id', requireOrg(organizationId))
+    .in('id', reviewIds)
+    .order('created_time', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
 }
 
 /* Respondidas y sin responder, sobre todas las reseñas leídas de las fichas
@@ -375,6 +397,24 @@ export async function fetchGoogleMetrics(organizationId, from, to) {
   return data ?? [];
 }
 
+/* Los últimos 12 meses cerrados ('YYYY-MM-01'), del más nuevo al más viejo: el
+ * mes en curso Google todavía no lo publica. La primera lectura de una ficha
+ * trae 12. */
+export function closedMonthOptions(now = new Date()) {
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth() - i - 1, 1));
+    const label = d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    return { value: d.toISOString().slice(0, 10), label: label.charAt(0).toUpperCase() + label.slice(1) };
+  });
+}
+
+/* El mes anterior a 'YYYY-MM-01'. */
+export function previousMonth(month) {
+  const d = new Date(`${month}T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /* Palabras de búsqueda de un mes ('YYYY-MM-01'), de mayor a menor. Business: en
  * gratis el RLS devuelve vacío (0029). Con `locationId`, sólo esa sucursal; sin
  * él, se suman las de todas las fichas por término. */
@@ -447,18 +487,23 @@ export async function updateGoogleProfile(googleLocationId, changes) {
   );
 }
 
-/* Cambios que Google hizo por su cuenta y siguen pendientes. Business: en
- * gratis el RLS devuelve vacío. */
-export async function fetchProfileChanges(organizationId, googleLocationId) {
-  const { data, error } = await supabase
+/* Cambios que Google hizo por su cuenta: todos los pendientes y, como historial,
+ * los últimos `historySize` ya resueltos (revertidos, aceptados o que Google
+ * retiró). Business: en gratis el RLS devuelve vacío. */
+export async function fetchProfileChanges(organizationId, googleLocationId, { historySize = 10 } = {}) {
+  const base = () => supabase
     .from('google_profile_changes')
-    .select('id, google_location_id, detected_at, fields, google_values, owner_values')
+    .select('id, status, detected_at, resolved_at, fields, google_values, owner_values')
     .eq('organization_id', requireOrg(organizationId))
-    .eq('google_location_id', googleLocationId)
-    .eq('status', 'pending')
-    .order('detected_at', { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+    .eq('google_location_id', googleLocationId);
+
+  const [pending, resolved] = await Promise.all([
+    base().eq('status', 'pending').order('detected_at', { ascending: false }),
+    base().neq('status', 'pending').order('resolved_at', { ascending: false, nullsFirst: false }).limit(historySize),
+  ]);
+  if (pending.error) throw pending.error;
+  if (resolved.error) throw resolved.error;
+  return { pending: pending.data ?? [], resolved: resolved.data ?? [] };
 }
 
 export async function resolveProfileChange(changeId, action) {

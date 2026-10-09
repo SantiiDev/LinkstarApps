@@ -1,52 +1,48 @@
-import PageHeader from '../../components/PageHeader/PageHeader';
-import SectionPlaceholder from '../../components/SectionPlaceholder/SectionPlaceholder';
-import './Reports.css';
+import GoogleGate from '../../components/GoogleGate/GoogleGate';
+import { useOrg } from '../../context/OrgContext';
+import { useGoogleConnection } from '../../lib/googleApi';
+import ReportsNpsMockup from './ReportsNpsMockup';
+import ReportsNpsScreen from './ReportsNpsScreen';
 
 /*
- * variant="soon", NO "google": esta es la única sección del panel que no
- * depende de conectar nada. No existe absolutamente nada detrás — ni tabla, ni
- * encuesta, ni pregunta (fase 6 del roadmap). Ponerle un botón de "conectar
- * Google" sería mentir sobre qué la destraba: no hay nada que el cliente pueda
- * hacer para habilitarla, la tenemos que construir nosotros.
+ * NPS — como Tapstar, sale del TEXTO de las reseñas, no de una encuesta.
  *
- * La decisión difícil de esa fase, anotada acá para que no se pierda: meter una
- * encuesta entre el tap y Google le pega justo a la conversión a reseña, que es
- * para lo que el cliente compró el expositor. Las salidas razonables son
- * preguntar DESPUÉS de que la reseña se dejó, mandarlo por otro canal, o sacarlo
- * de lo que se vende.
+ * Hasta octubre de 2026 esta sección era un «todavía no disponible» que esperaba
+ * decidir dónde hacer una pregunta de 0 a 10 (la fase 6 del roadmap). No hace
+ * falta: el análisis de la fase 5 (0033) ya guarda el tono de cada reseña y de
+ * cada tema, y con eso se calcula el puntaje — sin tocar el camino del tap a
+ * Google.
+ *
+ *   sin Google conectado → GoogleGate con ReportsNpsMockup de fondo: sin la
+ *                          conexión no hay reseñas que leer.
+ *   conectado            → ReportsNpsScreen, sobre v_review_analysis. También
+ *                          en 'needs_reauth': lo ya analizado se sigue
+ *                          mostrando, con un aviso para reconectar.
+ *
+ * Mientras se averigua el estado se muestra el modal, no la pantalla (mismo
+ * criterio que Sentimiento).
  */
+export default function ReportsNps({ onNavigateSettings }) {
+  const { org } = useOrg();
+  const google = useGoogleConnection(org?.organization_id);
+  const status = google.connection?.status;
 
-/* Recuperar la maqueta ─────────────────────────────────────────
- * El JSX que había acá no se perdió: está completo —incluido el PieChart— en
- * el tag `maquetas-pre-fase-2`, y el CSS de esta pantalla sigue en el repo sin
- * tocar. Los dos juntos son el punto de partida para rehacerla.
- *
- *   git show maquetas-pre-fase-2:apps/dashboard/src/pages/Reports/ReportsNps.jsx
- *
- * Que la fuente de datos exista NO devuelve esta pantalla sola: hay que volver
- * a escribir el JSX contra el dato real. El tag es de dónde copiarlo.
- */
+  if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
+    return <ReportsNpsScreen google={google} onNavigateSettings={onNavigateSettings} />;
+  }
 
-export default function ReportsNps() {
   return (
-    <div className="reports-page">
-      <PageHeader
-        eyebrow="Reportes"
-        title="NPS"
-        subtitle="Qué tan probable es que tus clientes te recomienden"
-      />
-
-      <SectionPlaceholder
-        variant="soon"
-        title="El NPS todavía no está disponible"
-        description="A diferencia del resto del panel, esta sección no espera ninguna conexión tuya: la estamos construyendo."
-        preview={[
-          'Tu puntaje neto, con promotores, pasivos y detractores.',
-          'Cómo evoluciona mes a mes y por sucursal.',
-          'Las respuestas una por una, con el comentario de cada cliente.',
-        ]}
-        note="Lo que falta definir es dónde se hace la pregunta. Preguntar antes de mandar al cliente a Google le quita fuerza a la reseña, que es para lo que comprás el expositor — así que probablemente vaya después, o por otro canal."
-      />
-    </div>
+    <GoogleGate
+      description="El NPS se calcula sobre lo que escriben tus clientes en sus reseñas de Google. Sin la conexión no tenemos ese texto, y sin texto no hay puntaje."
+      benefits={[
+        'Tu NPS: cuántos clientes te recomiendan y cuántos te critican.',
+        'Tu fortaleza y lo que más te resta, con sus menciones.',
+        'El puntaje de cada aspecto: atención, calidad, precio, espera, ambiente y limpieza.',
+        'Las reseñas que hablan de cada uno.',
+      ]}
+      note="No es una encuesta: cada reseña se analiza una sola vez, cuando entra, y no se le pregunta nada más a tus clientes."
+    >
+      <ReportsNpsMockup />
+    </GoogleGate>
   );
 }

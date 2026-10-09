@@ -350,11 +350,14 @@ router.post('/api/google/disconnect', startLimiter, requireAuth(supabase), async
 
 // Los dos que siguen hablan con Google en nombre del cliente: el límite cuida
 // la cuota del proyecto, que es compartida entre todas las organizaciones.
+// Con `message` en JSON el panel muestra el motivo: sin él, el 429 venía en
+// texto plano y el panel sólo podía decir «No se pudo actualizar».
 const syncLimiter = rateLimit({
   windowMs: 15 * 60_000,
   limit: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  message: { error: 'Ya pediste varias actualizaciones seguidas. Probá de nuevo en unos minutos.' },
 });
 
 const replyLimiter = rateLimit({
@@ -362,6 +365,7 @@ const replyLimiter = rateLimit({
   limit: 30,
   standardHeaders: true,
   legacyHeaders: false,
+  message: { error: 'Publicaste muchas respuestas seguidas. Esperá unos minutos y volvé a intentar.' },
 });
 
 // ──────────────────────────────────────────────────────────

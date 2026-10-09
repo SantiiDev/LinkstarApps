@@ -232,7 +232,7 @@ export default function CompanyScreen({ google, onNavigate }) {
 
       <NegativeAlert
         count={view.negatives}
-        onRespond={() => onNavigate?.('reviews', { reviewFilter: 'negative' })}
+        onRespond={() => onNavigate?.('reviews', { reviewFilter: { rating: 'low', status: 'pending', locationId } })}
       />
 
       <div className="kpi-grid">

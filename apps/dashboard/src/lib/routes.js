@@ -100,6 +100,7 @@ export const GOOGLE_GATED_SECTIONS = new Set([
   'gb-profile',
   'gb-posts',
   'gb-seo',
+  'reports-nps',
   'reports-sentiment',
   'reports-keywords',
 ]);

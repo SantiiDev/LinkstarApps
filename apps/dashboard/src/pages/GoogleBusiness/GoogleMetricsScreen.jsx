@@ -1,15 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
-import StatCard from '../../components/StatCard/StatCard';
+import KpiCard, { KpiTrend } from '../../components/KpiCard/KpiCard';
 import TrendChart from '../../components/TrendChart/TrendChart';
-import Select from '../../components/Select/Select';
+import SelectField from '../../components/Select/SelectField';
+import Icon from '../../components/Icon/Icon';
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
 import BusinessLock from '../../components/BusinessLock/BusinessLock';
 import RetentionNote from '../../components/RetentionNote/RetentionNote';
 import { useOrg } from '../../context/OrgContext';
 import { periodOptionsFor, clampPeriod } from '../../lib/retention';
-import { fetchGoogleLocations, fetchGoogleMetrics, fetchSearchKeywords } from '../../lib/googleApi';
-import { SPLIT_2 } from '../../lib/chartColors';
+import { percentTrend } from '../../lib/companyOverview';
+import {
+  closedMonthOptions,
+  fetchGoogleLocations,
+  fetchGoogleMetrics,
+  fetchSearchKeywords,
+  previousMonth,
+} from '../../lib/googleApi';
+import { ConversionBlock, PlatformsBlock, PlatformsCompareBlock, KeywordsBlock } from './GoogleMetricsBlocks';
 import {
   ConversionPreview,
   PlatformsPreview,
@@ -41,9 +49,11 @@ import './GoogleMetrics.css';
  *
  * ── Gratis y Business ─────────────────────────────────────────────────────
  * Gratis: las cuatro tarjetas, los gráficos y la comparativa de sucursales.
- * Business: conversión, plataformas, búsquedas y lectura de las métricas —
- * cada una detrás de BusinessLock, con una maqueta (GoogleMetricsBusinessPreview)
- * de fondo. La conversión y las sugerencias salen de números que el plan gratis
+ * Business: conversión, plataformas (con la comparación contra el período
+ * anterior), búsquedas y lectura de las métricas — cada una detrás de
+ * BusinessLock, con una maqueta (GoogleMetricsBusinessPreview) de fondo. Las
+ * tarjetas reales y las maquetas se dibujan con los mismos bloques
+ * (GoogleMetricsBlocks), con la estructura de la pantalla de Tapstar. La conversión y las sugerencias salen de números que el plan gratis
  * ya ve; las plataformas y las búsquedas, la base no se las manda (0029).
  */
 
@@ -83,36 +93,12 @@ function dayRange(from, to) {
   return days;
 }
 
-/* Variación contra el período anterior, para StatCard. Sin base (anterior en
-   cero) no hay porcentaje que dar: «+∞%» no informa nada. */
-function trendOf(current, previous) {
-  if (!previous) return {};
-  const change = (current - previous) / previous;
-  if (Math.abs(change) < 0.005) return { trend: '0%', trendDirection: 'up' };
-  return {
-    trend: `${change > 0 ? '+' : ''}${Math.round(change * 100)}%`,
-    trendDirection: change > 0 ? 'up' : 'down',
-  };
-}
-
 const METRICS = [
-  { key: 'impressions', label: 'Impresiones', hint: 'Veces que tu ficha apareció en Google', color: 'navy', icon: 'eye' },
-  { key: 'call_clicks', label: 'Clics en Llamar', hint: 'Tocaron el botón de llamar', color: 'forest', icon: 'phone' },
-  { key: 'direction_requests', label: 'Clics en «Cómo llegar»', hint: 'Pidieron indicaciones para ir', color: 'orange', icon: 'pin' },
-  { key: 'website_clicks', label: 'Clics a la web', hint: 'Entraron a tu sitio desde la ficha', color: 'gold', icon: 'globe' },
+  { key: 'impressions', label: 'Impresiones', color: 'navy', icon: 'eye' },
+  { key: 'call_clicks', label: 'Clics en Llamar', color: 'forest', icon: 'phone' },
+  { key: 'direction_requests', label: 'Clics en «Cómo llegar»', color: 'orange', icon: 'pin' },
+  { key: 'website_clicks', label: 'Clics a la web', color: 'gold', icon: 'globe' },
 ];
-
-function Icon({ name }) {
-  const p = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
-  const icons = {
-    eye: <svg {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>,
-    phone: <svg {...p}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>,
-    pin: <svg {...p}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>,
-    globe: <svg {...p}><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>,
-    info: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>,
-  };
-  return icons[name] ?? null;
-}
 
 const interactionsOf = (r) => r.call_clicks + r.direction_requests + r.website_clicks;
 
@@ -178,69 +164,22 @@ function buildInsights(cur, prev) {
   return out.slice(0, 4);
 }
 
-function SplitBar({ title, hint, parts }) {
-  const total = parts.reduce((s, p) => s + p.value, 0);
-  return (
-    <div className="gbm-split">
-      <div className="gbm-split__head">
-        <span className="gbm-split__title">{title}</span>
-        <span className="gbm-split__hint">{hint}</span>
-      </div>
-      <div className="gb-split__bar" role="img" aria-label={parts.map((p) => `${p.label} ${total ? PCT.format(p.value / total) : '0%'}`).join(', ')}>
-        {parts.map((p) => (
-          <div
-            key={p.label}
-            className="gb-split__seg"
-            style={{ width: `calc(${total ? (p.value / total) * 100 : 50}% - 1px)`, background: p.color }}
-          />
-        ))}
-      </div>
-      <ul className="gb-split__legend">
-        {parts.map((p) => (
-          <li key={p.label} className="gb-split__legend-item">
-            <span className="gb-split__dot" style={{ background: p.color }} />
-            <span className="gb-split__label">{p.label}</span>
-            <span className="gb-split__pct">
-              {NUM.format(p.value)} · {total ? PCT.format(p.value / total) : '—'}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-const KEYWORDS_PAGE = 10;
-
-/* Últimos 3 meses cerrados, del más nuevo al más viejo: el mes en curso Google
-   todavía no lo publica. */
-function closedMonthOptions() {
-  const now = new Date();
-  const out = [];
-  for (let i = 1; i <= 3; i++) {
-    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth() - i, 1));
-    out.push({
-      value: d.toISOString().slice(0, 10),
-      label: d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
-    });
-  }
-  return out;
-}
-
+/* Pide el mes elegido y el anterior juntos: la tabla compara uno con otro. */
 function KeywordsCard({ orgId, locationId }) {
-  const months = useMemo(closedMonthOptions, []);
+  const months = useMemo(() => closedMonthOptions(), []);
   const [month, setMonth] = useState(months[0].value);
-  const [rows, setRows] = useState(null);
-  const [page, setPage] = useState(0);
+  const [data, setData] = useState({ rows: null, prevRows: null });
   const [error, setError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    setRows(null);
-    setPage(0);
+    setData({ rows: null, prevRows: null });
     setError(null);
-    fetchSearchKeywords(orgId, month, locationId)
-      .then((data) => { if (!cancelled) setRows(data); })
+    Promise.all([
+      fetchSearchKeywords(orgId, month, locationId),
+      fetchSearchKeywords(orgId, previousMonth(month), locationId),
+    ])
+      .then(([rows, prevRows]) => { if (!cancelled) setData({ rows, prevRows }); })
       .catch((err) => {
         console.error('No se pudieron cargar las búsquedas:', err);
         if (!cancelled) setError('No pudimos cargar las búsquedas.');
@@ -248,56 +187,16 @@ function KeywordsCard({ orgId, locationId }) {
     return () => { cancelled = true; };
   }, [orgId, month, locationId]);
 
-  const max = Math.max(1, ...(rows ?? []).map((r) => r.impressions ?? r.threshold ?? 0));
-  const pageRows = (rows ?? []).slice(page * KEYWORDS_PAGE, (page + 1) * KEYWORDS_PAGE);
-  const pages = Math.ceil((rows?.length ?? 0) / KEYWORDS_PAGE);
-
   return (
-    <div className="gb-card">
-      <div className="gb-card__header gbm-card__header--wrap">
-        <div>
-          <h3 className="gb-card__title">Búsquedas que mostraron tu perfil</h3>
-          <span className="gb-card__subtitle">Lo que escribió la gente en Google cuando te encontró</span>
-        </div>
-        <Select value={month} onChange={setMonth} options={months} />
-      </div>
-
-      {error && <p className="gbm-error">{error}</p>}
-      {!error && rows === null && <p className="gbm-muted">Cargando…</p>}
-      {!error && rows?.length === 0 && (
-        <p className="gbm-muted">Google todavía no publicó búsquedas para este mes, o fueron muy pocas para mostrarlas.</p>
-      )}
-
-      {pageRows.length > 0 && (
-        <div className="gb-keywords">
-          {pageRows.map((r) => {
-            const value = r.impressions ?? r.threshold ?? 0;
-            return (
-              <div key={r.keyword} className="gb-keyword-row">
-                <span className="gb-keyword-row__term" title={r.keyword}>{r.keyword}</span>
-                <div className="gb-keyword-row__bar">
-                  <div className="gb-keyword-row__fill" style={{ width: `max(3px, ${(value / max) * 100}%)` }} />
-                </div>
-                <span className="gb-keyword-row__volume">
-                  {r.impressions != null ? NUM.format(r.impressions) : `< ${NUM.format(r.threshold)}`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {pages > 1 && (
-        <div className="gbm-pager">
-          <button type="button" onClick={() => setPage((p) => p - 1)} disabled={page === 0}>Anterior</button>
-          <span>Página {page + 1} de {pages}</span>
-          <button type="button" onClick={() => setPage((p) => p + 1)} disabled={page + 1 >= pages}>Siguiente</button>
-        </div>
-      )}
-      <p className="gbm-footnote">
-        Google no da el número exacto de las búsquedas chicas: las muestra como «&lt; 15».
-      </p>
-    </div>
+    <KeywordsBlock
+      key={`${month}-${locationId}`}
+      months={months}
+      month={month}
+      onMonth={setMonth}
+      rows={data.rows}
+      prevRows={data.prevRows}
+      error={error}
+    />
   );
 }
 
@@ -470,13 +369,11 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
   }
 
   const locationOptions = [
-    { value: 'all', label: 'Todas las sucursales' },
+    { value: 'all', label: 'Todos los locales' },
     ...linked.map((f) => ({ value: f.location_id, label: nameOf(f.location_id) })),
   ];
 
   const { cur, prev } = view;
-  const convCur = cur.impressions ? cur.interactions / cur.impressions : 0;
-  const convPrev = prev?.impressions ? prev.interactions / prev.impressions : 0;
 
   return (
     <div className="gb-page">
@@ -484,20 +381,13 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
       {reauthNotice}
 
       <div className="gb-card gbm-toolbar">
+        {/* Los mismos campos que Mi Empresa (components/Select/SelectField). */}
         <div className="gbm-toolbar__filters">
-          {linked.length > 1 && (
-            <label className="gbm-field">
-              <span>Sucursal</span>
-              <Select value={locationId} onChange={setLocationId} options={locationOptions} />
-            </label>
-          )}
-          <label className="gbm-field">
-            <span>Rango de fechas</span>
-            <Select value={activeRange} onChange={setRange} options={periodOptionsFor(RANGE_OPTIONS, retentionDays)} />
-          </label>
+          <SelectField label="Local" icon="store" value={locationId} onChange={setLocationId} options={locationOptions} />
+          <SelectField label="Rango de fechas" icon="calendar" value={activeRange} onChange={setRange} options={periodOptionsFor(RANGE_OPTIONS, retentionDays)} />
         </div>
         <p className="gbm-note">
-          <Icon name="info" />
+          <Icon name="info" size={14} />
           {view.trimmed
             ? `Período: ${longDate(view.curFrom)} – ${longDate(view.end)}. Google publica con unos días de atraso, y lo anterior al ${longDate(view.curFrom)} queda fuera del historial de tu plan.`
             : `Google publica las métricas con unos días de atraso, así que el período llega hasta el ${longDate(view.end)}.`}
@@ -509,16 +399,16 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
         <RetentionNote days={retentionDays}>No hay período anterior para comparar.</RetentionNote>
       )}
 
-      <div className="gb-stat-grid">
+      {/* Las mismas tarjetas de KPI que Mi Empresa y Dispositivos. */}
+      <div className="kpi-grid">
         {METRICS.map((m) => (
-          <StatCard
-            key={m.key}
-            icon={<Icon name={m.icon} />}
-            value={NUM.format(cur[m.key])}
-            label={`${m.label} · antes ${prev ? NUM.format(prev[m.key]) : '—'}`}
-            color={m.color}
-            {...trendOf(cur[m.key], prev?.[m.key])}
-          />
+          <KpiCard key={m.key} icon={<Icon name={m.icon} size={16} />} color={m.color} label={m.label}>
+            <div className="kpi-card__value">{NUM.format(cur[m.key])}</div>
+            <KpiTrend
+              trend={percentTrend(cur[m.key], prev?.[m.key])}
+              caption={prev ? `antes ${NUM.format(prev[m.key])}` : 'Sin período anterior'}
+            />
+          </KpiCard>
         ))}
       </div>
 
@@ -548,66 +438,41 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
         </div>
       </div>
 
-      <BusinessLock
-        title="Descubrí cuánta gente hace algo después de ver tu ficha"
-        description="La tasa de conversión: de cada 100 que te ven, cuántos llaman, piden cómo llegar o entran a tu web."
-        preview={<ConversionPreview />}
-      >
-        <div className="gb-card gbm-section">
-          <div className="gb-card__header">
-            <div>
-              <h3 className="gb-card__title">Tasa de conversión</h3>
-              <span className="gb-card__subtitle">Qué porcentaje de quienes ven tu ficha hace algo</span>
-            </div>
-          </div>
-          <div className="gbm-conv">
-            <div className="gbm-conv__main">
-              <span className="gbm-conv__value">{PCT.format(convCur)}</span>
-              <span className="gbm-conv__label">{NUM.format(cur.interactions)} interacciones de {NUM.format(cur.impressions)} impresiones</span>
-              <span className="gbm-conv__prev">Período anterior: {prev ? PCT.format(convPrev) : '—'}</span>
-            </div>
-            {METRICS.slice(1).map((m) => (
-              <div key={m.key} className="gbm-conv__item">
-                <span className="gbm-conv__item-value">{cur.impressions ? PCT.format(cur[m.key] / cur.impressions) : '—'}</span>
-                <span className="gbm-conv__item-label">{m.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </BusinessLock>
-
-      <div className="gb-two-col gbm-section">
+      <div className="gbm-section">
         <BusinessLock
-          title="Dónde te buscan tus clientes"
-          description="Si te encuentran en el buscador de Google o en Google Maps, y desde qué dispositivo."
+          title="Descubrí cuánta gente hace algo después de ver tu ficha"
+          description="La tasa de conversión: de cada 100 que te ven, cuántos llaman, piden cómo llegar o entran a tu web."
+          preview={<ConversionPreview />}
+        >
+          <ConversionBlock cur={cur} prev={prev} />
+        </BusinessLock>
+      </div>
+
+      {/* Un solo candado sobre las dos tarjetas, como Tapstar. */}
+      <div className="gbm-section">
+        <BusinessLock
+          title="Descubrí dónde te buscan tus clientes"
+          description="Si te encuentran en el buscador de Google o en Google Maps, desde el celular o la computadora, y cómo cambió."
           preview={<PlatformsPreview />}
         >
-          <div className="gb-card">
-            <div className="gb-card__header">
-              <div>
-                <h3 className="gb-card__title">Dónde te ven</h3>
-                <span className="gb-card__subtitle">Impresiones de este período, por plataforma</span>
-              </div>
-            </div>
-            <SplitBar
-              title="Búsqueda o Maps"
-              hint="En qué parte de Google apareciste"
-              parts={[
-                { label: 'Búsqueda de Google', value: cur.impressions_desktop_search + cur.impressions_mobile_search, color: SPLIT_2[0] },
-                { label: 'Google Maps', value: cur.impressions_desktop_maps + cur.impressions_mobile_maps, color: SPLIT_2[1] },
-              ]}
-            />
-            <SplitBar
-              title="Celular o computadora"
-              hint="Desde qué dispositivo te vieron"
-              parts={[
-                { label: 'Celular', value: cur.impressions_mobile_search + cur.impressions_mobile_maps, color: SPLIT_2[0] },
-                { label: 'Computadora', value: cur.impressions_desktop_search + cur.impressions_desktop_maps, color: SPLIT_2[1] },
-              ]}
-            />
+          <div className="gb-two-col gbm-row">
+            <PlatformsBlock cur={cur} />
+            <PlatformsCompareBlock cur={cur} prev={prev} />
           </div>
         </BusinessLock>
+      </div>
 
+      <div className="gbm-section">
+        <BusinessLock
+          title="Descubrí qué busca la gente cuando te encuentra"
+          description="Las palabras exactas con las que te encuentran en Google, mes a mes."
+          preview={<KeywordsPreview />}
+        >
+          <KeywordsCard orgId={orgId} locationId={locationId === 'all' ? null : locationId} />
+        </BusinessLock>
+      </div>
+
+      <div className="gbm-section">
         <BusinessLock
           title="Qué tenés que hacer para que te busquen más"
           description="Una lectura de tus métricas en limpio, con lo que conviene revisar."
@@ -632,16 +497,6 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
         </BusinessLock>
       </div>
 
-      <div className="gbm-section">
-        <BusinessLock
-          title="Descubrí qué busca la gente cuando te encuentra"
-          description="Las palabras exactas con las que te encuentran en Google, mes a mes."
-          preview={<KeywordsPreview />}
-        >
-          <KeywordsCard orgId={orgId} locationId={locationId === 'all' ? null : locationId} />
-        </BusinessLock>
-      </div>
-
       {locationId === 'all' && view.byLocation.length > 1 && (
         <div className="gb-card gbm-section">
           <div className="gb-card__header">
@@ -655,9 +510,9 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
               const conv = l.cur.impressions ? l.cur.interactions / l.cur.impressions : 0;
               const convP = l.prev?.impressions ? l.prev.interactions / l.prev.impressions : 0;
               const rowsOf = [
-                ['Impresiones', NUM.format(l.cur.impressions), trendOf(l.cur.impressions, l.prev?.impressions)],
-                ['Interacciones', NUM.format(l.cur.interactions), trendOf(l.cur.interactions, l.prev?.interactions)],
-                ['Conversión', PCT.format(conv), trendOf(conv, convP)],
+                ['Impresiones', NUM.format(l.cur.impressions), percentTrend(l.cur.impressions, l.prev?.impressions)],
+                ['Interacciones', NUM.format(l.cur.interactions), percentTrend(l.cur.interactions, l.prev?.interactions)],
+                ['Conversión', PCT.format(conv), percentTrend(conv, convP)],
               ];
               return (
                 <div key={l.locationId} className="gbm-compare__item">
@@ -666,7 +521,7 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
                     <div key={label} className="gbm-compare__row">
                       <span>{label}</span>
                       <strong>{value}</strong>
-                      <em className={t.trendDirection === 'down' ? 'gbm-down' : 'gbm-up'}>{t.trend ?? '—'}</em>
+                      <em className={t?.direction === 'down' ? 'gbm-down' : 'gbm-up'}>{t?.text ?? '—'}</em>
                     </div>
                   ))}
                 </div>

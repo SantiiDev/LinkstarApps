@@ -180,3 +180,19 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* «Próximamente» dentro de una opción: la etiqueta va a la derecha del texto y
+   no se apaga con la opción (se lee igual que en el resto del panel). */
+.ls-select__soon {
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.ls-select__option--disabled:has(.ls-select__soon) {
+  opacity: 1;
+  color: var(--color-text-secondary);
+}
+
+.ls-select__option--disabled:has(.ls-select__soon):hover {
+  background: none;
+}

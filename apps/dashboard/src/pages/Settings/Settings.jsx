@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import Select from '../../components/Select/Select';
+import SoonBadge from '../../components/SoonBadge/SoonBadge';
 import EmployeesPage from '../Employees/Employees';
 import LocationsPage from '../Locations/Locations';
 import GoogleFichas from './GoogleFichas';
@@ -188,7 +189,7 @@ function TeamTab() {
           icon="userPlus"
           iconVariant="gold"
           title="Empleados"
-          badge={<span className="settings-badge settings-badge--soon">Próximamente</span>}
+          badge={<SoonBadge />}
           subtitle={
             <p className="settings-card__subtitle">
               Son el mozo y el cajero: no inician sesión, existen para saber quién consiguió cada

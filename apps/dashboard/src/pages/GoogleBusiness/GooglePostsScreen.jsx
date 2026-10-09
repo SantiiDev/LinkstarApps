@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import Select from '../../components/Select/Select';
+import SelectField from '../../components/Select/SelectField';
+import Icon from '../../components/Icon/Icon';
+import SoonBadge from '../../components/SoonBadge/SoonBadge';
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
 import { useOrg } from '../../context/OrgContext';
 import {
@@ -30,23 +33,40 @@ import './GooglePosts.css';
  * Las publicaciones se leen en vivo de Google. No se muestran vistas ni clics:
  * Google dejó de darlos por publicación en 2023, y la maqueta que había acá los
  * inventaba.
+ *
+ * Pendiente, a propósito fuera de esta versión (Tapstar tiene las dos):
+ *  - Publicar en varias fichas a la vez. Cada ficha es una publicación para
+ *    Google, así que en gratis choca con el cupo de 1 (google_post_reserve
+ *    reserva de a una); sería de Business, con el API publicando ficha por
+ *    ficha y diciendo cuál falló.
+ *  - La tarjeta «Publicaciones programadas»: va cuando exista la programación,
+ *    no antes, o sería un «sin programadas» de una función que no hay.
+ *
+ * «Escribir con IA» es sólo el botón, marcado Próximamente: la redacción con
+ * IA la arma el mismo trabajo que las respuestas de Reseñas.
  */
 
 const TYPES = [
   {
     id: 'STANDARD',
+    icon: 'megaphone',
+    tone: 'blue',
     title: 'Actualización',
     text: 'Una novedad, una noticia o un anuncio general sobre tu negocio.',
     example: 'Ej: Nuevo menú de temporada disponible',
   },
   {
     id: 'OFFER',
+    icon: 'percent',
+    tone: 'orange',
     title: 'Oferta',
     text: 'Un descuento o una promoción con fechas de validez y, si querés, un código de cupón.',
     example: 'Ej: 20% de descuento este fin de semana',
   },
   {
     id: 'EVENT',
+    icon: 'calendar',
+    tone: 'purple',
     title: 'Evento',
     text: 'Algo que va a pasar en una fecha concreta: un show, una degustación, una jornada especial.',
     example: 'Ej: Noche de jazz el viernes',
@@ -156,7 +176,7 @@ function contentProblem(draft) {
   return null;
 }
 
-function Composer({ orgId, googleLocationId, disabled, onPublished }) {
+function Composer({ orgId, googleLocationId, disabled, isBusiness, onNavigateSettings, onPublished }) {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [uploading, setUploading] = useState(false);
@@ -230,6 +250,10 @@ function Composer({ orgId, googleLocationId, disabled, onPublished }) {
                 onClick={() => set({ topicType: t.id })}
                 aria-pressed={draft.topicType === t.id}
               >
+                <span className={`gbpo-type__icon gbpo-type__icon--${t.tone}`}><Icon name={t.icon} size={18} /></span>
+                {draft.topicType === t.id && (
+                  <span className="gbpo-type__check"><Icon name="check" size={12} strokeWidth={3} /></span>
+                )}
                 <strong>{t.title}</strong>
                 <span>{t.text}</span>
                 <em>{t.example}</em>
@@ -286,6 +310,29 @@ function Composer({ orgId, googleLocationId, disabled, onPublished }) {
             <span>Texto <em>{draft.summary.length}/1500</em></span>
             <textarea rows={5} maxLength={1500} value={draft.summary} onChange={(e) => set({ summary: e.target.value })} />
           </label>
+
+          {/* Sólo el botón: la redacción con IA todavía no existe (ver arriba).
+              En Business se ve deshabilitado; en gratis lleva a Facturación. */}
+          <div className="gbpo-ai">
+            {isBusiness ? (
+              <button type="button" className="gbpo-ai__btn" disabled title="Próximamente">
+                <Icon name="sparkles" size={15} /> Escribir con IA <SoonBadge />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="gbpo-ai__btn gbpo-ai__btn--locked"
+                onClick={() => onNavigateSettings?.('facturacion')}
+              >
+                <Icon name="lock" size={14} /> Escribir con IA <SoonBadge />
+              </button>
+            )}
+            <span className="gbp-hint">
+              {isBusiness
+                ? 'Pronto la IA va a redactar el texto por vos. Por ahora, escribilo a mano.'
+                : 'Va a estar en el plan Business. Por ahora, escribilo a mano.'}
+            </span>
+          </div>
 
           {draft.topicType === 'OFFER' && (
             <div className="gbp-grid-2">
@@ -351,7 +398,7 @@ function Composer({ orgId, googleLocationId, disabled, onPublished }) {
             onClick={() => { setError(null); setStep((s) => s + 1); }}
             disabled={uploading || Boolean(problem)}
           >
-            Siguiente
+            Siguiente <Icon name="arrowRight" size={15} />
           </button>
         ) : (
           <button type="button" className="gb-btn-primary" onClick={publish} disabled={publishing || disabled}>
@@ -468,14 +515,11 @@ export default function GooglePostsScreen({ google, onNavigateSettings }) {
         </div>
       )}
 
-      {options.length > 1 && (
-        <div className="gb-card gbp-toolbar">
-          <label className="gbm-field">
-            <span>Sucursal</span>
-            <Select value={selected ?? ''} onChange={setSelected} options={options} />
-          </label>
-        </div>
-      )}
+      {/* El mismo selector de local que Perfil y Métricas, aunque haya una sola
+          ficha: deja a la vista en qué ficha se va a publicar. Sin rango de fechas. */}
+      <div className="gb-card gbp-toolbar">
+        <SelectField label="Local" icon="store" value={selected ?? ''} onChange={setSelected} options={options} />
+      </div>
 
       {notice && <p className="gbp-saved" role="status">{notice}</p>}
       {error && <p className="gbm-error" role="alert">{error}</p>}
@@ -485,6 +529,8 @@ export default function GooglePostsScreen({ google, onNavigateSettings }) {
           orgId={orgId}
           googleLocationId={selected}
           disabled={outOfQuota}
+          isBusiness={isBusiness}
+          onNavigateSettings={onNavigateSettings}
           onPublished={() => {
             setNotice('Listo, mandamos la publicación a Google. Va a aparecer en tu ficha cuando Google la apruebe.');
             load();
@@ -493,11 +539,12 @@ export default function GooglePostsScreen({ google, onNavigateSettings }) {
       )}
 
       <div className="gb-card">
-        <div className="gb-card__header">
-          <div>
-            <h3 className="gb-card__title">Publicaciones recientes {posts ? `(${posts.length})` : ''}</h3>
-            <span className="gb-card__subtitle">Lo que está publicado en tu ficha de Google</span>
-          </div>
+        <div className="gb-card__header gbpo-list__header">
+          <h3 className="gb-card__title gbpo-list__title">
+            <Icon name="history" size={18} />
+            Publicaciones recientes {posts ? `(${posts.length})` : ''}
+          </h3>
+          <span className="gb-card__subtitle">Lo que está publicado en tu ficha de Google</span>
         </div>
         {!posts && !error && <p className="gbm-muted">Leyendo tus publicaciones en Google…</p>}
         {posts?.length === 0 && <p className="gbm-muted">Todavía no hay publicaciones en esta ficha.</p>}

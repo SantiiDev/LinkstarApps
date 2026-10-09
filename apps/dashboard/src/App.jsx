@@ -180,7 +180,8 @@ function RegisterRoute() {
    traduce a path acá, así las páginas no saben nada del router. */
 /* Mi Empresa además manda a dos pestañas de Configuración ('settings-local' para
    vincular fichas, 'settings-billing' para ver planes) y puede pasar un `state`:
-   «Responder ahora» abre Reseñas con el filtro de negativas ya puesto. */
+   «Responder ahora» abre Reseñas con los filtros ya puestos (1 y 2 estrellas,
+   sin responder, el mismo local). */
 function CompanyRoute() {
   const navigate = useNavigate();
   const pathFor = (section) => {
@@ -247,9 +248,19 @@ function GoogleSeoLocalRoute() {
   );
 }
 
+function ReportsNpsRoute() {
+  const navigate = useNavigate();
+  return <ReportsNps onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
 function ReportsSentimentRoute() {
   const navigate = useNavigate();
-  return <ReportsSentiment onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+  return (
+    <ReportsSentiment
+      onNavigateSettings={(tab) => navigate(settingsTabPath(tab))}
+      onNavigateSection={(section) => navigate(pathForSection(section))}
+    />
+  );
 }
 
 function ReportsKeywordsRoute() {
@@ -382,7 +393,7 @@ export default function App() {
         <Route path={SECTION_PATHS['gb-seo']} element={<GoogleSeoLocalRoute />} />
         <Route path={SECTION_PATHS['gb-seo-map']} element={<GoogleSeoMap />} />
 
-        <Route path={SECTION_PATHS['reports-nps']} element={<ReportsNps />} />
+        <Route path={SECTION_PATHS['reports-nps']} element={<ReportsNpsRoute />} />
         <Route path={SECTION_PATHS['reports-sentiment']} element={<ReportsSentimentRoute />} />
         <Route path={SECTION_PATHS['reports-keywords']} element={<ReportsKeywordsRoute />} />
 
