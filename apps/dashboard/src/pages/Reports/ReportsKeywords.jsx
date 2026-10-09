@@ -27,10 +27,10 @@ export default function ReportsKeywords({ onNavigateSettings }) {
     <GoogleGate
       description="Para saber qué repiten tus clientes hay que leer lo que escribieron. Eso llega con la conexión a tu ficha de Google."
       benefits={[
-        'Qué términos aparecen más seguido en tus reseñas.',
-        'Cuáles vienen acompañados de elogios y cuáles de quejas.',
-        'Cómo cambia el vocabulario de tus clientes a lo largo del tiempo.',
-        'Qué palabras te conviene sumar a la descripción de tu ficha.',
+        'Lo que más gusta a tus clientes y lo que necesita mejorar, en un ranking.',
+        'Un resumen en una frase de tus fortalezas y tus puntos débiles.',
+        'Las reseñas que mencionan cada palabra, con la palabra resaltada.',
+        'Cuándo algo que gusta también recibe quejas.',
       ]}
       note="No es lo mismo que SEO Local: acá se mide lo que dicen tus clientes, allá lo que busca la gente en Google."
     >

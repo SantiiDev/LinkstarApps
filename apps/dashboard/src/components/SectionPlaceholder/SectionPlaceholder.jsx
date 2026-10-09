@@ -9,7 +9,7 @@ import './SectionPlaceholder.css';
  * antes que una que muestre un número inventado, porque el número inventado no
  * se distingue de uno real hasta que alguien toma una decisión con él.
  *
- * NO lleva botón: lo que falta depende de nosotros (NPS, informes, Mapa SEO) o
+ * NO lleva botón: lo que falta depende de nosotros (informes, Mapa SEO) o
  * es un error de carga, y un botón que no resuelve nada es peor que ninguno.
  *
  * Hasta octubre de 2026 tenía además una variante `google`, con el botón de

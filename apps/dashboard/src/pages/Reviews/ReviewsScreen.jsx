@@ -58,12 +58,17 @@ const ICONS = {
 
 const NO_COMPOSE = { id: null, text: '', editing: false, error: null };
 
-/* «Responder ahora» de Mi Empresa llega con `initialFilter = 'negative'`. En
- * Business abre las sin responder de tono negativo; en gratis no existe el
- * tono, así que abre las sin responder. */
-function initialFilters(initialFilter, isBusiness) {
-  if (initialFilter !== 'negative') return DEFAULT_REVIEW_FILTERS;
-  return { ...DEFAULT_REVIEW_FILTERS, status: 'pending', sentiment: isBusiness ? 'negative' : 'all' };
+/* `initialFilter` son filtros con los que abrir la bandeja. «Responder ahora»
+ * de Mi Empresa manda { rating: 'low', status: 'pending', locationId }: las de
+ * 1 y 2 estrellas sin responder del local que estaba mirando, que son
+ * exactamente las que cuenta su aviso. (Antes abría «Tipo: Negativas», el tono
+ * de la IA, que es otra lista y no coincidía con el número del aviso.) */
+function initialFilters(initialFilter) {
+  if (!initialFilter || typeof initialFilter !== 'object') return DEFAULT_REVIEW_FILTERS;
+  const allowed = Object.fromEntries(
+    Object.entries(initialFilter).filter(([key]) => key in DEFAULT_REVIEW_FILTERS)
+  );
+  return { ...DEFAULT_REVIEW_FILTERS, ...allowed };
 }
 
 export default function ReviewsScreen({ google, onNavigateSettings, initialFilter }) {
@@ -85,7 +90,7 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
   const [reloadKey, setReloadKey] = useState(0);
   const [sentiments, setSentiments] = useState(() => new Map());
 
-  const [filters, setFilters] = useState(() => initialFilters(initialFilter, isBusiness));
+  const [filters, setFilters] = useState(() => initialFilters(initialFilter));
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounced(search, 300);
 

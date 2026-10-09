@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon/Icon';
+import SoonBadge from '../../components/SoonBadge/SoonBadge';
 import SelectField, { FilterField } from '../../components/Select/SelectField';
 import { formatRelativeTime, initialsFor } from '../../lib/dashboardApi';
 import { settingsTabPath } from '../../lib/routes';
@@ -266,7 +267,7 @@ export function ReviewDetail({
         <span className="reviews-detail__date">{formatDate(review.created_time)}</span>
         <div className="reviews-detail__links">
           <button type="button" className="reviews-btn reviews-btn--ghost" disabled title="Próximamente">
-            <Icon name="share" size={14} /> <Icon name="instagram" size={14} /> Compartir
+            <Icon name="share" size={14} /> <Icon name="instagram" size={14} /> Compartir <SoonBadge />
           </button>
         </div>
       </div>

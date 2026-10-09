@@ -111,8 +111,9 @@ all order by it) was decided by physical row order. The test now gives the secon
 `my_org_context()` (`list_my_organizations()` already ordered by `lower(name), id`), so the functions no
 longer depend on physical row order either. 142 assertions green on the test project as of 6 Oct 2026;
 159 green on a local stack (`db reset` through `0033`) on 7 Oct 2026, and 176 on 8 Oct 2026 through
-`0034` — sections 17 (review analysis), 18 (`0032`'s free-plan fallback) and 19 (`0034`'s retention) have
-not run against the test project yet. The local stack started on the default ports on this machine.
+`0034`; and 176 on the test project on 9 Oct 2026, after `0032`–`0034` were pushed to it, so sections 17
+(review analysis), 18 (`0032`'s free-plan fallback) and 19 (`0034`'s retention) are green there too. Without
+psql or Docker, that run used `node-pg` installed in a scratch folder. The local stack started on the default ports on this machine.
 
 Test accounts in that project: `linkstar.app1@gmail.com` (free plan) and `business@linkstar.test` (org
 "Linkstar Business (prueba)", Business `active` for a year, set by hand — no Mercado Pago involved; the
@@ -298,8 +299,10 @@ taps of August (phase 0). `0000`–`0033` matched local and remote —
 local and remote matched on `npm run db:status` against `czdydtkhiqmwujadwlzf`, the ref in
 `apps/dashboard/.env.production`, on 8 Oct). `0032` and `0033` were tested on a local Docker stack
 before the push (`db reset --local` through `0033` and `rls_isolation.sql` green, 159; on that machine
-the default ports were free, no remap needed) but **not on the test project** (as of 7 Oct it had
-not received them; check with `db push --db-url … --dry-run` before relying on it). If an environment lacks them, nothing breaks — `lib/googleSync.js` catches the analysis step
+the default ports were free, no remap needed). The test project received `0032`–`0034` on 9 Oct 2026
+(`db push --db-url`, `rls_isolation.sql` 176 green there, and its Business org's 70 reviews analyzed
+with `npm run analyze-reviews`). The pooler password contains a `*`: the CLI took it both raw and as
+`%2A`. If an environment lacks them, nothing breaks — `lib/googleSync.js` catches the analysis step
 and the Reportes screens show their load error — but those screens are empty. `0028`–`0031` were built and tested on the
 test project first (`mbhuzrrjyboyimqvnrpy`, 6 Oct, `rls_isolation.sql` green after each one: sections
 13–16 are theirs).
@@ -702,7 +705,8 @@ the failure this prevents).
 
 Métricas, Perfil and Publicaciones left the gate on 6 Oct 2026, with the same recipe as Reviews: the page
 file renders `GoogleGate` + its `*Mockup.jsx` without a connection, and a `*Screen.jsx` against real data
-with it. Sentimiento and Palabras clave followed in phase 5 (see "Review analysis"), and SEO Local's
+with it. Sentimiento and Palabras clave followed in phase 5 (see "Review analysis"), NPS on 9 Oct 2026
+(same section), and SEO Local's
 Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gated section any more.
 
 - **Free vs Business is decided in SQL, like Tapstar's split.** `private.org_has_business(org)` (`0029`)
@@ -838,10 +842,46 @@ stars), `topics` from a **closed list** (`atencion`, `calidad`, `precio`, `esper
 - Analysis failures don't add to the sync's `failures` (that number is shown to the customer as "no
   pudimos leer N fichas"), and a missing `0033` or a model outage is caught and logged without failing the
   sync. 8 calls in parallel; retries on 429/5xx are the SDK's (`maxRetries` in `lib/claude.js`).
-- Screens: `pages/Reports/ReportsSentimentScreen.jsx` / `ReportsKeywordsScreen.jsx`, reading
-  `v_review_analysis` through `fetchReviewAnalysis()` (paged, filtered by org) and aggregated client-side
-  in `lib/reviewInsights.js`. Months with no reviews are left out of the trend, not drawn as 0%; "la más
-  repetida" shows "—" when no keyword repeats. Free accounts see the mock behind `BusinessLock fullPage`.
+- Screens: `pages/Reports/ReportsNpsScreen.jsx` / `ReportsSentimentScreen.jsx` / `ReportsKeywordsScreen.jsx`,
+  reading `v_review_analysis` through `fetchReviewAnalysis()` (paged, filtered by org) and aggregated
+  client-side in `lib/reviewInsights.js`. Months with no reviews are left out of the trend, not drawn as
+  0%; "la más repetida" shows "—" when no keyword repeats. Free accounts see the mock behind
+  `BusinessLock fullPage`. Since 9 Oct 2026 the three share one toolbar (`AnalysisToolbar`, built on
+  `SelectField`: "Local" + "Rango de fechas") with **Mi Empresa's day ranges** (`RANGE_OPTIONS` of
+  `lib/companyOverview.js`, default 90 days) — they used to have their own 3/6/12-month list.
+  **Sentimiento** follows Tapstar's structure since 9 Oct 2026 (blocks in `SentimentBlocks.jsx`, shared with
+  the mock): distribution (ring = % positive — not Tapstar's 0–100 index, which is NPS rescaled — plus
+  three tinted tiles) and evolution side by side, keywords grouped by dominant tone (top 8, "Ver todas" →
+  Palabras clave), and "Dónde se concentran las quejas" only with several sucursales. The evolution draws
+  three series through `TrendChart`'s `series` prop and **follows the selected range** (Tapstar's
+  doesn't): days for 7, weeks for 30/90, months for 12 months/all (`periodBuckets(…, { maxDailyDays: 7 })`
+  in `lib/companyOverview.js`, shared with Mi Empresa's chart, which keeps days up to 30). Weeks are built
+  **backwards from today**, so the last one always has 7 days and any short week is the oldest — built
+  forwards, 30 days ended in a 2-day "week" that read as a drop at the most-looked-at point. Count by
+  default, "Ver en %" switch; in % an empty bucket is dropped, not drawn as 0%. "Temas más mencionados"
+  was removed from Sentimiento: it duplicated NPS por aspecto.
+  **Palabras clave** follows Tapstar's too (9 Oct 2026, `KeywordsBlocks.jsx`): a read-only "Reseñas" field in
+  the toolbar (`AnalysisToolbar showReviewCount`), a hint, a template summary sentence
+  (`keywordSummary()`, not AI), two coloured columns (top 8 by dominant tone, numbered; a row also says
+  "· N como queja" / "· N como elogio" when the word has mentions of the opposite tone), a panel below with
+  the reviews that mention the tapped word — fetched 5 per page with `fetchReviewsByIds`, each page cached,
+  the page scrolls down to it — and the full ranking ("Todas las palabras") at the bottom, also tappable.
+  The review list is `ReviewMentions.jsx`, shared with NPS's expandable aspects. It highlights the word
+  only when it appears literally (case-insensitive, whole word, accent-sensitive): the model sometimes
+  summarizes ("demora" for "tardaron una hora"), and then nothing is marked rather than the wrong thing.
+- **NPS comes from the text of the reviews, not from a survey** (9 Oct 2026, same as Tapstar). The
+  roadmap's phase 6 assumed a 0–10 question and stalled on where to ask it without getting between the
+  tap and Google; that survey is not planned. Each analyzed review is a promoter (`positive`), passive
+  (`neutral`) or detractor (`negative`); NPS = % promoters − % detractors (−100…+100). Per aspect (the
+  same six topics): (positive − negative mentions) / mentions, only with ≥ 2 mentions; Fortaleza / Reto
+  are the highest / lowest. **One scale only** — Tapstar's "score medio +0.82" is its "+82" again, so we
+  show just the second. Under 10 reviews the score shows with a "Muestra chica" pill. The screen says
+  "calculado sólo a partir del texto de las reseñas" because that is the honest label: it is an
+  approximation, not a measured NPS. Expanding an aspect fetches its 5 latest reviews by id
+  (`fetchReviewsByIds`); "Qué dice tu NPS" is rules over those numbers, not AI. Blocks in `NpsBlocks.jsx`,
+  shared with `ReportsNpsMockup.jsx`. **Pending: "Mis temas"** (a business's own topics) — it needs a
+  per-org topics table, passing them to the model and re-analyzing history, so it touches the analysis
+  pipeline; the button is there, disabled, marked Próximamente.
 - **The privacy policy names the AI provider: Anthropic** (`pages/Legal/Privacy.jsx` §3.2 and §4, and
   the scope justification in `apps/dashboard/GOOGLE_VERIFICATION.md`). The analysis moved from Gemini to
   Claude on 8 Oct 2026, before it was ever switched on in production. A review sent to a provider the
@@ -929,11 +969,12 @@ split below before wiring anything — the shell is finished, the data mostly is
   onboarding, and the "Facturación" tab of `settings` (plan and status from `OrgContext`, history from
   `subscription_payments`), and `automations` (`notification_preferences` / `notification_log`, see
   "Alerts"). `profile` reads the logged-in user from `AuthContext`.
-  The sections with no data source do **not** print numbers: the two that depend on us (`reports-nps`,
-  `monthly-reports`) render `components/SectionPlaceholder`, and the seven that depend on
+  The sections with no data source do **not** print numbers: the one that depends on us
+  (`monthly-reports`; `reports-nps` was the other until 9 Oct 2026) renders `components/SectionPlaceholder`,
+  and the ones that depend on
   the customer's Google profile render their old mock behind `components/GoogleGate` (see below). The rule
   that replaced the hardcoded arrays: a page with no data source says so; it never prints a number that
-  can't be distinguished from a measured one. The placeholder is for what *we* haven't built — NPS, monthly
+  can't be distinguished from a measured one. The placeholder is for what *we* haven't built — monthly
   reports, Mapa SEO — or a failed load, and it gets no button, because a button that resolves nothing is
   worse than none. Each converted file keeps a header comment saying what it used to fake and which roadmap
   phase feeds it. It used to have a second variant, `google`, with the connect button; its last caller was
@@ -950,7 +991,7 @@ split below before wiring anything — the shell is finished, the data mostly is
   entering a Google section doesn't flash the gate before the real screen.
 - **`components/GoogleGate` is the only place a mock is allowed to render, and that is what makes it
   legal.** The sections that depend on the customer's Google profile — `reviews`, the four `gb-*`,
-  `reports-sentiment`, `reports-keywords`, and since Oct 2026 `company` (with a mock written for its new
+  `reports-sentiment`, `reports-keywords`, since 9 Oct 2026 `reports-nps`, and since Oct 2026 `company` (with a mock written for its new
   layout, `CompanyMockup.jsx`, instead of a recovered one) — show their mock *as the background* of a modal that
   invites you to connect: blurred, `inert` (no clicks, no tab stops, no text selection, no screen reader),
   and with no way to close the modal and no `Escape`. The page file is a thin wrapper that passes copy to
@@ -990,10 +1031,12 @@ split below before wiring anything — the shell is finished, the data mostly is
   **Tipo is the AI sentiment of `0033`, not the stars** — Business only, its options disabled on free;
   `fetchReviewPage` embeds `google_review_analysis!inner` **only** while that filter is on, and the
   detail's tone label comes from a separate `fetchReviewSentiments()` whose failure is swallowed. Don't
-  embed the analysis by default: an environment without `0033` (the test project, 7 Oct 2026) rejects
+  embed the analysis by default: an environment without `0033` (the test project until 9 Oct 2026) rejects
   the whole query, and `fetchReviews` also feeds Mi Empresa. Estado's "Resp. automáticamente" and
   "Retiradas" are disabled options — no data exists for either yet. Mi Empresa's "Responder ahora" opens
-  Sin responder, plus Tipo = Negativas on Business. With the Sin responder filter on, publishing removes
+  Rating "1 y 2 estrellas" + Sin responder + the local it was showing — exactly what its alert counts
+  (`pendingNegatives()`). Until 9 Oct 2026 it opened Tipo = Negativas (the AI tone), a different list
+  whose size didn't match the alert, and which errored outright where `0033` was missing. With the Sin responder filter on, publishing removes
   the review and the detail moves to the next one; the draft is tied to the review id it was written for.
   "Generar respuesta con IA" and the brand-tone modal (`BrandToneModal.jsx`, also opened by Configuración →
   Tonos de marca) are **frontend only**: the AI replies (rest of phase 5) are being built separately,
@@ -1004,12 +1047,12 @@ split below before wiring anything — the shell is finished, the data mostly is
   answered/unanswered split of the rows actually read). `reviews` stays in `GOOGLE_GATED_SECTIONS`, so
   the subscription banner is also hidden there when connected — accepted to keep `AppShell` from querying
   Google on every section. **`gb-metrics`, `gb-profile` and `gb-posts` followed on 6 Oct 2026** (see
-  "Google Business Profile — the screens"), and `reports-sentiment` / `reports-keywords` in phase 5 (see
-  "Review analysis"), and `gb-seo` (Análisis SEO) on 7 Oct 2026; none is behind the gate once connected.
+  "Google Business Profile — the screens"), and `reports-sentiment` / `reports-keywords` in phase 5 and
+  `reports-nps` on 9 Oct 2026 (see "Review analysis"), and `gb-seo` (Análisis SEO) on 7 Oct 2026; none is behind the gate once connected.
 - **The mock JSX is a deliverable, not discarded history.** The tag `maquetas-pre-fase-2` points at the last
   commit where those ten screens were still drawing their grids, tables and charts; seven of them now live
-  in the tree as `*Mockup.jsx`, the two "próximamente" ones (`reports-nps`, `monthly-reports`) are still
-  only in the tag, and `automations` was rewritten against `0023` (its old mock stays in the tag too), each
+  in the tree as `*Mockup.jsx`, `monthly-reports` is still only in the tag (`reports-nps` was rebuilt from
+  scratch on 9 Oct 2026, with a new `ReportsNpsMockup.jsx`, not the tag's), and `automations` was rewritten against `0023` (its old mock stays in the tag too), each
   with the `git show` line in its header. Connecting
   Google flips no switch either way: the mock is a *drawing*, not a screen wired to data, so a connected
   account does not get a working section — somebody has to rewrite each one against the real data and
@@ -1078,7 +1121,10 @@ split below before wiring anything — the shell is finished, the data mostly is
 - **Shared pieces added in Oct 2026 — use them instead of copying markup into a page:**
   `components/Icon` (one map of line icons by name — Mi Empresa, Devices and the QR scanner each had
   their own copy; add new icons there), `components/Switch` (labelled on/off toggle over a real
-  checkbox), `components/PageSkeleton` (first-load placeholder shaped like a KPI page) and the
+  checkbox), `components/SoonBadge` (the one "Próximamente" pill — navy, Devices' style — used next to
+  titles, inside disabled buttons, and in `Select` options marked `soon: true`; since 9 Oct 2026 the only
+  exceptions are the AI-reply button and `BrandToneModal`, which belong to the partner's AI work),
+  `components/PageSkeleton` (first-load placeholder shaped like a KPI page) and the
   `.ls-select-field` classes in `components/Select/Select.css` (`--block` for a full-width filter,
   `--icon` to leave room for a leading icon), passed as `triggerClassName` — `Select` itself has no
   trigger style, and every page used to carry its own near-identical one. Métricas uses them throughout since
@@ -1216,7 +1262,7 @@ split below before wiring anything — the shell is finished, the data mostly is
   `CompanyMockup.jsx` without a connection (so `company` is in `GOOGLE_GATED_SECTIONS`, and the
   subscription banner no longer shows on the landing) and `CompanyScreen.jsx` with it. Filters by
   sucursal and range (7/30/90 days, 12 months, all), then: unanswered-negatives alert (1–2★ with no reply,
-  all history; "Responder ahora" opens Reviews with the `negative` filter through `location.state`),
+  all history; "Responder ahora" opens Reviews with those same filters through `location.state.reviewFilter`),
   four KPIs (reviews + answered, positive sentiment, period rating, SEO score), "Tu media de estrellas",
   reviews over time, star distribution, per-sucursal summary (with **scans**, the only scan number left on
   this screen) and the latest reviews. The blocks live in `CompanyBlocks.jsx`, shared by the screen and

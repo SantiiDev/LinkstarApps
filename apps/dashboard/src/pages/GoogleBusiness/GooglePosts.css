@@ -176,20 +176,6 @@
   color: var(--color-orange);
 }
 
-.gbpo-ai__soon {
-  padding: 0.05rem 0.4rem;
-  border-radius: var(--radius-badge);
-  background: rgba(255, 255, 255, 0.3);
-  font-size: 0.6rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.gbpo-ai__btn--locked .gbpo-ai__soon {
-  background: rgba(245, 133, 41, 0.14);
-}
-
 .gbpo-drop {
   display: flex;
   align-items: center;

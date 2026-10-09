@@ -142,14 +142,17 @@ export const REVIEWS_PAGE_SIZE = 50;
 export const REVIEW_RATING_OPTIONS = [
   { value: 'all', label: 'Todas' },
   ...[5, 4, 3, 2, 1].map((n) => ({ value: String(n), label: `${n} estrella${n === 1 ? '' : 's'}` })),
+  // Lo que Mi Empresa llama «negativas» (pendingNegatives en companyOverview.js):
+  // su «Responder ahora» abre la bandeja con este filtro.
+  { value: 'low', label: '1 y 2 estrellas' },
 ];
 
 export const REVIEW_STATUS_OPTIONS = [
   { value: 'all', label: 'Todas' },
   { value: 'answered', label: 'Respondidas' },
   { value: 'pending', label: 'Sin responder' },
-  { value: 'auto', label: 'Resp. automáticamente · próximamente', disabled: true },
-  { value: 'withdrawn', label: 'Retiradas · próximamente', disabled: true },
+  { value: 'auto', label: 'Resp. automáticamente', disabled: true, soon: true },
+  { value: 'withdrawn', label: 'Retiradas', disabled: true, soon: true },
 ];
 
 export const REVIEW_SORT_OPTIONS = [
@@ -239,7 +242,8 @@ function reviewsQuery(organizationId, {
     .order('id', { ascending: true })
     .range(from, from + pageSize - 1);
 
-  if (rating !== 'all') query = query.eq('star_rating', Number(rating));
+  if (rating === 'low') query = query.lte('star_rating', 2);
+  else if (rating !== 'all') query = query.eq('star_rating', Number(rating));
   if (status === 'answered') query = query.not('reply_comment', 'is', null);
   if (status === 'pending') query = query.is('reply_comment', null);
   if (sentiment !== 'all') query = query.eq('google_review_analysis.sentiment', sentiment);
@@ -265,6 +269,20 @@ export async function fetchReviewSentiments(organizationId, reviewIds) {
     .in('review_id', reviewIds);
   if (error) throw error;
   return new Map((data ?? []).map((row) => [row.review_id, row.sentiment]));
+}
+
+/* Unas reseñas puntuales, por id, de la más nueva a la más vieja: las que se
+ * ven al desplegar un aspecto en NPS (el análisis trae los ids, no el texto). */
+export async function fetchReviewsByIds(organizationId, reviewIds) {
+  if (!reviewIds.length) return [];
+  const { data, error } = await supabase
+    .from('google_reviews')
+    .select('id, reviewer_name, is_anonymous, star_rating, comment, created_time, google_locations(location_id, locations(name))')
+    .eq('organization_id', requireOrg(organizationId))
+    .in('id', reviewIds)
+    .order('created_time', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
 }
 
 /* Respondidas y sin responder, sobre todas las reseñas leídas de las fichas

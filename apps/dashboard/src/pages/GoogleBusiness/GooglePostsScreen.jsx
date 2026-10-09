@@ -3,6 +3,7 @@ import PageHeader from '../../components/PageHeader/PageHeader';
 import Select from '../../components/Select/Select';
 import SelectField from '../../components/Select/SelectField';
 import Icon from '../../components/Icon/Icon';
+import SoonBadge from '../../components/SoonBadge/SoonBadge';
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
 import { useOrg } from '../../context/OrgContext';
 import {
@@ -315,7 +316,7 @@ function Composer({ orgId, googleLocationId, disabled, isBusiness, onNavigateSet
           <div className="gbpo-ai">
             {isBusiness ? (
               <button type="button" className="gbpo-ai__btn" disabled title="Próximamente">
-                <Icon name="sparkles" size={15} /> Escribir con IA <span className="gbpo-ai__soon">Próximamente</span>
+                <Icon name="sparkles" size={15} /> Escribir con IA <SoonBadge />
               </button>
             ) : (
               <button
@@ -323,7 +324,7 @@ function Composer({ orgId, googleLocationId, disabled, isBusiness, onNavigateSet
                 className="gbpo-ai__btn gbpo-ai__btn--locked"
                 onClick={() => onNavigateSettings?.('facturacion')}
               >
-                <Icon name="lock" size={14} /> Escribir con IA <span className="gbpo-ai__soon">Próximamente</span>
+                <Icon name="lock" size={14} /> Escribir con IA <SoonBadge />
               </button>
             )}
             <span className="gbp-hint">

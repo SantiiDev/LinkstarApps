@@ -167,17 +167,6 @@
   color: var(--color-navy);
 }
 
-.devices-teaser__badge {
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  padding: 0.18rem 0.55rem;
-  border-radius: var(--radius-badge);
-  background: var(--color-navy);
-  color: white;
-}
-
 .devices-teaser__text {
   font-size: 0.8rem;
   color: var(--color-text-secondary);

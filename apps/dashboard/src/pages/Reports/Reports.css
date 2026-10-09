@@ -9,13 +9,6 @@
   margin: 0 auto;
 }
 
-.reports-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.25rem;
-  margin-bottom: 1.75rem;
-}
-
 /* Default: wide-first (1.3fr/1fr), matching the chart-first convention
    used by .company-two-col / .gb-two-col elsewhere in the app.
    align-items left at its default (stretch) so both columns match
@@ -25,6 +18,24 @@
   grid-template-columns: 1.3fr 1fr;
   gap: 1.25rem;
   margin-bottom: 1.75rem;
+}
+
+/* Mitad y mitad (Sentimiento: distribución | evolución, como Tapstar). Las dos
+   tarjetas quedan a la misma altura: la grilla estira la más baja, y la de
+   evolución lleva `.chart-card` para que el gráfico crezca hasta llenarla. */
+.reports-two-col--even {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+/* Una columna de tarjetas con el mismo aire entre todas. */
+.reports-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.reports-stack > .reports-two-col {
+  margin-bottom: 0;
 }
 
 .reports-card {
@@ -56,20 +67,499 @@
   color: var(--color-text-secondary);
 }
 
-/* ── NPS ──
-   La composición promotores/pasivos/detractores la dibuja PieChart, y el
-   puntaje vive en el hueco del anillo. Acá sólo queda la insignia de nivel. */
-.reports-nps-level {
-  align-self: flex-start;
-  padding: 0.3rem 0.7rem;
-  border-radius: var(--radius-badge);
-  background: rgba(16, 185, 129, 0.12);
-  color: var(--color-forest);
-  font-size: 0.7rem;
+.reports-card__title--icon {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.reports-card__title--icon svg {
+  color: var(--color-orange);
+}
+
+.reports-card__link {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
   font-weight: 700;
+  color: var(--color-orange);
+  cursor: pointer;
+}
+
+.reports-card__link:hover {
+  text-decoration: underline;
+}
+
+/* ── Sentimiento (SentimentBlocks.jsx) ──
+   Verde positivo, dorado neutro, rojo negativo: la escala de tres de
+   lib/chartColors.js. Nada se anima: son tarjetas de vidrio. */
+.reports-ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.25rem 0 1.25rem;
+}
+
+.reports-ring__chart {
+  position: relative;
+  width: 132px;
+  height: 132px;
+}
+
+.reports-ring__track {
+  fill: none;
+  stroke: rgba(26, 38, 57, 0.08);
+  stroke-width: 12;
+}
+
+.reports-ring__arc {
+  fill: none;
+  stroke: var(--color-forest);
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+
+.reports-ring__value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-navy);
+}
+
+.reports-ring__value small {
+  margin-left: 0.1rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.reports-ring__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-forest);
+}
+
+.reports-tone-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.reports-tone-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.9rem 0.5rem;
+  border: 1px solid;
+  border-radius: 14px;
+  text-align: center;
+}
+
+.reports-tone-tile__value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.reports-tone-tile__value small {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.reports-tone-tile__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.reports-tone-tile--positive {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: var(--color-forest);
+}
+
+.reports-tone-tile--neutral {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #b45309;
+}
+
+.reports-tone-tile--negative {
+  background: rgba(239, 68, 68, 0.07);
+  border-color: rgba(239, 68, 68, 0.28);
+  color: var(--color-danger);
+}
+
+/* Palabras clave por sentimiento: etiquetas agrupadas por tono. */
+.reports-kw-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.reports-kw-group__title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.reports-kw-group__title--positive { color: var(--color-forest); }
+.reports-kw-group__title--neutral { color: #b45309; }
+.reports-kw-group__title--negative { color: var(--color-danger); }
+
+.reports-kw-group__empty {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+
+.reports-kw-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  list-style: none;
+}
+
+.reports-kw-chip {
+  padding: 0.28rem 0.7rem;
+  border: 1px solid;
+  border-radius: var(--radius-badge);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.reports-kw-chip::first-letter {
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+}
+
+.reports-kw-chip span {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.reports-kw-chip--positive { background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); }
+.reports-kw-chip--neutral { background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.3); }
+.reports-kw-chip--negative { background: rgba(239, 68, 68, 0.07); border-color: rgba(239, 68, 68, 0.28); }
+
+/* ── NPS (NpsBlocks.jsx) ──
+   Las tres tarjetas son KpiCard (.kpi-grid--3); acá sólo los colores del
+   puntaje y el resto de la sección. Nada se anima: son tarjetas de vidrio
+   (regla 4 de rendimiento en CLAUDE.md). */
+.reports-nps-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.reports-nps-score--good { color: var(--color-forest); }
+.reports-nps-score--bad { color: var(--color-danger); }
+
+.reports-nps-aspect {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--color-navy);
+}
+
+.reports-nps-aspect--good { color: var(--color-forest); }
+.reports-nps-aspect--bad { color: var(--color-danger); }
+.reports-nps-aspect--mid { color: #b45309; }
+
+/* Promotores / pasivos / detractores: una barra apilada con leyenda de texto
+   y número (los tres colores no llegan a 3:1 contra el fondo, así que el color
+   nunca va solo — lib/chartColors.js). */
+.reports-nps-stack {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: rgba(26, 38, 57, 0.07);
+}
+
+.reports-nps-stack__seg {
+  min-width: 4px;
+}
+
+.reports-nps-stack__seg--promoters,
+.reports-nps-dot--promoters { background: var(--color-forest); }
+.reports-nps-stack__seg--passives,
+.reports-nps-dot--passives { background: var(--color-gold); }
+.reports-nps-stack__seg--detractors,
+.reports-nps-dot--detractors { background: var(--color-danger); }
+
+.reports-nps-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 2rem;
+  margin-top: 1rem;
+  list-style: none;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.reports-nps-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.reports-nps-legend strong {
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.reports-nps-legend__value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-navy);
+}
+
+.reports-nps-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.reports-nps-footnote {
+  margin-top: 0.9rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* «Mis temas», deshabilitado hasta que exista (ver NpsBlocks.jsx). */
+.reports-nps-soon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+/* NPS por aspecto: barras que salen de un eje central, verdes a la derecha y
+   rojas a la izquierda; el largo es |puntaje| sobre la mitad. */
+.reports-aspects {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.reports-aspect + .reports-aspect {
+  border-top: 1px solid rgba(26, 38, 57, 0.06);
+}
+
+.reports-aspect__row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr) 3.5rem 6.5rem;
+  grid-template-areas: "name bar score mentions";
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0.4rem;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reports-aspect__row:hover {
+  background: rgba(26, 38, 57, 0.03);
+}
+
+.reports-aspect__row:focus-visible {
+  outline: 2px solid var(--color-orange);
+  outline-offset: 2px;
+}
+
+.reports-aspect__name {
+  grid-area: name;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.reports-aspect__chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--color-text-secondary);
+  transition: transform 0.15s ease;
+}
+
+.reports-aspect__row[aria-expanded="true"] .reports-aspect__chevron {
+  transform: rotate(90deg);
+}
+
+.reports-aspect__bar {
+  grid-area: bar;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 10px;
+}
+
+/* El eje, un poco más alto que la barra. */
+.reports-aspect__bar::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -5px;
+  bottom: -5px;
+  width: 1px;
+  background: rgba(26, 38, 57, 0.2);
+}
+
+.reports-aspect__half {
+  display: flex;
+}
+
+.reports-aspect__half--neg {
+  justify-content: flex-end;
+}
+
+.reports-aspect__fill {
+  height: 100%;
+  min-width: 3px;
+}
+
+.reports-aspect__fill--pos {
+  border-radius: 0 5px 5px 0;
+  background: linear-gradient(90deg, var(--color-forest), #34d399);
+}
+
+.reports-aspect__fill--neg {
+  border-radius: 5px 0 0 5px;
+  background: linear-gradient(270deg, var(--color-danger), #f87171);
+}
+
+.reports-aspect__score {
+  grid-area: score;
+  text-align: right;
+  font-size: 0.88rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.reports-aspect__score--good { color: var(--color-forest); }
+.reports-aspect__score--bad { color: var(--color-danger); }
+.reports-aspect__score--mid { color: var(--color-text-secondary); }
+
+.reports-aspect__mentions {
+  grid-area: mentions;
+  text-align: right;
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
   white-space: nowrap;
+}
+
+/* Lo de adentro de una fila: las últimas reseñas que mencionan el aspecto. */
+.reports-aspect__detail {
+  padding: 0.25rem 0.4rem 1rem 1.9rem;
+}
+
+/* La lista de reseñas que nombran algo (ReviewMentions.jsx): un aspecto en NPS,
+   una palabra en Palabras clave. */
+.reports-mentions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  list-style: none;
+}
+
+/* La página anterior mientras llega la nueva (ver ReviewMentions.jsx). Son
+   cajas sin vidrio: atenuarlas no cuesta nada al pintar. */
+.reports-mentions--stale {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.reports-mention {
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  background: rgba(26, 38, 57, 0.035);
+}
+
+.reports-mention__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.74rem;
+  color: var(--color-text-secondary);
+}
+
+.reports-mention__author {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.reports-mention__stars {
+  color: var(--color-gold);
+  letter-spacing: 1px;
+}
+
+.reports-mention__stars-off {
+  color: rgba(26, 38, 57, 0.18);
+}
+
+.reports-mention__mark {
+  padding: 0 0.15em;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.28);
+  color: inherit;
+  font-weight: 700;
+}
+
+.reports-mention__text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 0.4rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+.reports-aspect__more {
+  margin-top: 0.65rem;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
 }
 
 /* ── Themes ── */
@@ -115,6 +605,214 @@
   font-size: 0.7rem;
   font-weight: 600;
   color: var(--color-text-secondary);
+}
+
+/* ── Palabras clave (KeywordsBlocks.jsx) ── */
+
+/* El campo «Reseñas» de la barra de filtros: el mismo aspecto que los
+   selectores, pero no se toca. */
+.gbm-toolbar .ls-field.reports-count-field {
+  width: 160px;
+}
+
+.reports-count-field__value,
+.reports-count-field__value:hover {
+  border-color: rgba(26, 38, 57, 0.1);
+  box-shadow: none;
+  cursor: default;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Aviso y resumen: franjas finas, sin vidrio. */
+.reports-hint,
+.reports-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: var(--radius-card);
+  font-size: 0.83rem;
+  line-height: 1.5;
+}
+
+.reports-hint svg,
+.reports-summary svg {
+  flex-shrink: 0;
+}
+
+.reports-hint {
+  background: rgba(26, 38, 57, 0.05);
+  border: 1px solid rgba(26, 38, 57, 0.12);
+  color: var(--color-navy);
+}
+
+.reports-hint svg {
+  color: var(--color-orange);
+}
+
+.reports-summary {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--glass-border);
+  color: var(--color-text-primary);
+}
+
+.reports-summary svg {
+  color: var(--color-text-secondary);
+}
+
+/* Las dos columnas: encabezado de color y ranking numerado. */
+.reports-kw-col {
+  overflow: hidden;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--glass-shadow);
+}
+
+.reports-kw-col__head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  color: #fff;
+}
+
+.reports-kw-col--positive .reports-kw-col__head { background: linear-gradient(120deg, var(--color-forest), #059669); }
+.reports-kw-col--negative .reports-kw-col__head { background: linear-gradient(120deg, var(--color-danger), #dc2626); }
+
+.reports-kw-col__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.reports-kw-col__title {
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+.reports-kw-col__total {
+  font-size: 0.72rem;
+  opacity: 0.9;
+}
+
+.reports-kw-col__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.9rem;
+  list-style: none;
+}
+
+.reports-kw-col__empty {
+  padding: 1.1rem 1.25rem;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.reports-kw-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid;
+  border-radius: 12px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reports-kw-col--positive .reports-kw-item { background: rgba(16, 185, 129, 0.06); border-color: rgba(16, 185, 129, 0.22); }
+.reports-kw-col--negative .reports-kw-item { background: rgba(239, 68, 68, 0.05); border-color: rgba(239, 68, 68, 0.2); }
+
+.reports-kw-col--positive .reports-kw-item:hover,
+.reports-kw-col--positive .reports-kw-item--selected { border-color: var(--color-forest); }
+.reports-kw-col--negative .reports-kw-item:hover,
+.reports-kw-col--negative .reports-kw-item--selected { border-color: var(--color-danger); }
+
+.reports-kw-item--selected {
+  box-shadow: 0 0 0 2px rgba(26, 38, 57, 0.08);
+}
+
+.reports-kw-item:focus-visible {
+  outline: 2px solid var(--color-orange);
+  outline-offset: 2px;
+}
+
+.reports-kw-item__rank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.reports-kw-col--positive .reports-kw-item__rank { background: var(--color-forest); }
+.reports-kw-col--negative .reports-kw-item__rank { background: var(--color-danger); }
+
+.reports-kw-item__term {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.reports-kw-item__term::first-letter {
+  text-transform: uppercase;
+}
+
+.reports-kw-item__term small {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.reports-kw-item__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  padding: 0.18rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.reports-kw-col--positive .reports-kw-item__count { background: rgba(16, 185, 129, 0.14); color: var(--color-forest); }
+.reports-kw-col--negative .reports-kw-item__count { background: rgba(239, 68, 68, 0.12); color: var(--color-danger); }
+
+/* El panel de reseñas de la palabra elegida. `scroll-margin-top` deja aire
+   bajo la barra superior cuando la página baja sola hasta él. */
+.reports-kw-panel {
+  scroll-margin-top: 80px;
+}
+
+.reports-kw-panel--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 110px;
+  font-size: 0.83rem;
+  color: var(--color-text-secondary);
+  text-align: center;
 }
 
 /* ── Keywords ranking ── */
@@ -163,6 +861,33 @@
   border-radius: 5px;
 }
 
+/* Las filas de «Todas las palabras» son botones (abren el panel de reseñas). */
+.reports-keyword-row--button {
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reports-keyword-row--button:hover,
+.reports-keyword-row--selected {
+  background: rgba(26, 38, 57, 0.04);
+}
+
+.reports-keyword-row--button:focus-visible {
+  outline: 2px solid var(--color-orange);
+  outline-offset: 2px;
+}
+
+.reports-keyword-row--button .reports-keyword-row__bar,
+.reports-keyword-row--button .reports-keyword-row__fill {
+  display: block;
+}
+
 .reports-keyword-row__fill--positive { background: linear-gradient(90deg, var(--color-forest), #34d399); }
 .reports-keyword-row__fill--negative { background: linear-gradient(90deg, var(--color-danger), #f87171); }
 .reports-keyword-row__fill--neutral { background: linear-gradient(90deg, var(--color-gold), #fbbf24); }
@@ -176,12 +901,6 @@
 }
 
 /* ── Responsive ── */
-@media (max-width: 1200px) {
-  .reports-stat-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 @media (max-width: 1024px) {
   .reports-two-col {
     grid-template-columns: 1fr;
@@ -202,8 +921,28 @@
   }
 }
 
+/* Aspectos en celular: nombre, puntaje y menciones arriba; la barra abajo, a
+   todo el ancho. */
+@media (max-width: 640px) {
+  .reports-aspect__row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "name score mentions"
+      "bar bar bar";
+    gap: 0.6rem 0.75rem;
+  }
+
+  .reports-aspect__detail {
+    padding-left: 0.4rem;
+  }
+
+  .reports-card__header:has(.reports-nps-soon) {
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 480px) {
-  .reports-stat-grid {
+  .reports-tone-tiles {
     grid-template-columns: 1fr;
   }
 
