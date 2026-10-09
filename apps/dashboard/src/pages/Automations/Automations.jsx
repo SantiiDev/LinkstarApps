@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
+import SoonBadge from '../../components/SoonBadge/SoonBadge';
 import { useOrg } from '../../context/OrgContext';
 import {
   DEFAULT_PREFERENCES,
@@ -349,7 +350,7 @@ export default function Automations() {
               <div className="automation-card__body">
                 <div className="automation-card__title">
                   {a.title}
-                  <span className="automation-card__badge">Próximamente</span>
+                  <SoonBadge />
                 </div>
                 <p className="automation-card__text">{a.text}</p>
               </div>

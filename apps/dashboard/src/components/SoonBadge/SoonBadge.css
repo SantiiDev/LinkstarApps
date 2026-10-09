@@ -1,0 +1,17 @@
+/* El estilo del «Próximamente» de Dispositivos (ranking de empleados), que es
+   el que quedó para todo el panel. */
+.ls-soon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0.18rem 0.55rem;
+  border-radius: var(--radius-badge);
+  background: var(--color-navy);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}

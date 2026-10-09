@@ -100,6 +100,37 @@
   margin-left: 0.4rem;
 }
 
+/* ── Leyenda (sólo con `series`) ── */
+.trend-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem 1.1rem;
+  margin-top: 0.6rem;
+  list-style: none;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.trend-chart__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Un trazo corto del color de la serie (currentColor), punteado si la línea lo
+   es: la leyenda repite cómo se ve cada línea, no sólo su color. */
+.trend-chart__legend-swatch {
+  width: 16px;
+  height: 0;
+  border-top: 2px solid currentColor;
+}
+
+.trend-chart__legend-swatch--dashed {
+  border-top-style: dashed;
+}
+
 /* Opt-in para tarjetas de gráfico que conviven con una hermana más alta en una
    grilla de dos columnas (la grilla estira la más baja, y si no el gráfico
    queda flotando con aire muerto abajo) — el gráfico crece hasta llenarla. */

@@ -7,71 +7,74 @@
  * velo que no se cierra. NO agregar otro importador: fuera de esa puerta son una
  * pantalla inventando datos (CLAUDE.md).
  *
+ * Usan los mismos bloques que la pantalla real (GoogleMetricsBlocks), así la
+ * maqueta es la tarjeta de verdad con otros números. Los números son coherentes
+ * entre sí (las plataformas suman las impresiones, los canales las
+ * interacciones), para que nada se lea raro debajo del desenfoque.
+ *
  * Nunca se arman con los datos del cliente: lo Business de una cuenta gratis ni
  * siquiera llega al navegador (0029).
  */
-import { SPLIT_2 } from '../../lib/chartColors';
+import { closedMonthOptions } from '../../lib/googleApi';
+import { ConversionBlock, PlatformsBlock, PlatformsCompareBlock, KeywordsBlock } from './GoogleMetricsBlocks';
+
+const CUR = {
+  impressions: 30568, interactions: 3692,
+  direction_requests: 941, website_clicks: 2257, call_clicks: 494,
+  impressions_mobile_search: 8420, impressions_desktop_search: 3120,
+  impressions_mobile_maps: 16310, impressions_desktop_maps: 2718,
+};
+
+const PREV = {
+  impressions: 28400, interactions: 3690,
+  direction_requests: 905, website_clicks: 2265, call_clicks: 520,
+  impressions_mobile_search: 7900, impressions_desktop_search: 3300,
+  impressions_mobile_maps: 14600, impressions_desktop_maps: 2600,
+};
+
+const keyword = (term, impressions) => ({ keyword: term, impressions, threshold: null });
+const smallKeyword = (term) => ({ keyword: term, impressions: null, threshold: 15 });
+
+const KEYWORDS = [
+  keyword('cafetería', 1240), keyword('cafetería cerca de mí', 486), keyword('desayunos', 318),
+  keyword('café de especialidad', 204), keyword('brunch', 152), keyword('café para llevar', 97),
+  keyword('medialunas', 64), keyword('cafetería con patio', 41), keyword('desayunos palermo', 29),
+  keyword('café de especialidad palermo', 18), smallKeyword('merienda'), smallKeyword('tostado de jamón y queso'),
+];
+
+const PREV_KEYWORDS = [
+  keyword('cafetería', 1105), keyword('cafetería cerca de mí', 402), keyword('desayunos', 342),
+  keyword('café de especialidad', 150), keyword('brunch', 118), keyword('café para llevar', 101),
+  keyword('cafetería con patio', 38), keyword('desayunos palermo', 22), keyword('café de especialidad palermo', 16),
+  smallKeyword('merienda'),
+];
+
+const MONTHS = closedMonthOptions();
+const noop = () => {};
 
 export function ConversionPreview() {
-  return (
-    <div className="gb-card gbm-section">
-      <div className="gb-card__header">
-        <div>
-          <h3 className="gb-card__title">Tasa de conversión</h3>
-          <span className="gb-card__subtitle">Qué porcentaje de quienes ven tu ficha hace algo</span>
-        </div>
-      </div>
-      <div className="gbm-conv">
-        <div className="gbm-conv__main">
-          <span className="gbm-conv__value">12,1%</span>
-          <span className="gbm-conv__label">412 interacciones de 3.400 impresiones</span>
-          <span className="gbm-conv__prev">Período anterior: 10,4%</span>
-        </div>
-        {[['3,1%', 'Clics en Llamar'], ['7,4%', 'Clics en «Cómo llegar»'], ['1,6%', 'Clics a la web']].map(([v, l]) => (
-          <div key={l} className="gbm-conv__item">
-            <span className="gbm-conv__item-value">{v}</span>
-            <span className="gbm-conv__item-label">{l}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FakeSplit({ title, parts }) {
-  return (
-    <div className="gbm-split">
-      <div className="gbm-split__head"><span className="gbm-split__title">{title}</span></div>
-      <div className="gb-split__bar">
-        {parts.map(([label, pct], i) => (
-          <div key={label} className="gb-split__seg" style={{ width: `calc(${pct}% - 1px)`, background: SPLIT_2[i] }} />
-        ))}
-      </div>
-      <ul className="gb-split__legend">
-        {parts.map(([label, pct], i) => (
-          <li key={label} className="gb-split__legend-item">
-            <span className="gb-split__dot" style={{ background: SPLIT_2[i] }} />
-            <span className="gb-split__label">{label}</span>
-            <span className="gb-split__pct">{pct}%</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+  return <ConversionBlock cur={CUR} prev={PREV} />;
 }
 
 export function PlatformsPreview() {
   return (
-    <div className="gb-card">
-      <div className="gb-card__header">
-        <div>
-          <h3 className="gb-card__title">Dónde te ven</h3>
-          <span className="gb-card__subtitle">Impresiones de este período, por plataforma</span>
-        </div>
-      </div>
-      <FakeSplit title="Búsqueda o Maps" parts={[['Búsqueda de Google', 38], ['Google Maps', 62]]} />
-      <FakeSplit title="Celular o computadora" parts={[['Celular', 81], ['Computadora', 19]]} />
+    <div className="gb-two-col gbm-row">
+      <PlatformsBlock cur={CUR} />
+      <PlatformsCompareBlock cur={CUR} prev={PREV} />
     </div>
+  );
+}
+
+export function KeywordsPreview() {
+  return (
+    <KeywordsBlock
+      months={MONTHS}
+      month={MONTHS[0].value}
+      onMonth={noop}
+      rows={KEYWORDS}
+      prevRows={PREV_KEYWORDS}
+      error={null}
+    />
   );
 }
 
@@ -85,33 +88,10 @@ export function InsightsPreview() {
         </div>
       </div>
       <ul className="gbm-insights">
-        <li><strong>Te encuentran más que antes</strong><span>Tu ficha apareció 3.400 veces, 18% más que el período anterior.</span></li>
+        <li><strong>Te encuentran más que antes</strong><span>Tu ficha apareció 30.568 veces, 8% más que el período anterior.</span></li>
         <li><strong>Te buscan desde el celular</strong><span>81% de las veces fue en un celular: el botón de llamar pesa más.</span></li>
         <li><strong>Revisá tu web</strong><span>Pocos entran a tu sitio desde la ficha.</span></li>
       </ul>
-    </div>
-  );
-}
-
-export function KeywordsPreview() {
-  const rows = [['cafetería', 1240], ['cafetería cerca de mí', 860], ['desayunos', 520], ['café de especialidad', 310], ['brunch', 150]];
-  return (
-    <div className="gb-card">
-      <div className="gb-card__header">
-        <div>
-          <h3 className="gb-card__title">Búsquedas que mostraron tu perfil</h3>
-          <span className="gb-card__subtitle">Lo que escribió la gente en Google cuando te encontró</span>
-        </div>
-      </div>
-      <div className="gb-keywords">
-        {rows.map(([term, v]) => (
-          <div key={term} className="gb-keyword-row">
-            <span className="gb-keyword-row__term">{term}</span>
-            <div className="gb-keyword-row__bar"><div className="gb-keyword-row__fill" style={{ width: `${(v / 1240) * 100}%` }} /></div>
-            <span className="gb-keyword-row__volume">{v}</span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

@@ -7,6 +7,18 @@ const TRANSLATIONS = [
   [/rate limit/i, 'Demasiados intentos. Probá de nuevo en unos minutos.'],
 ];
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/* Login y Registro validan acá, con `noValidate` en el <form>: el globo nativo
+   del navegador sale con su idioma y su estilo, no en el cuadro de error de la
+   tarjeta donde aparece todo lo demás. Devuelve '' si está todo bien. */
+export function credentialsError(email, password) {
+  if (!email.trim()) return 'Ingresá tu email.';
+  if (!EMAIL_RE.test(email.trim())) return 'El email no es válido.';
+  if (!password) return 'Ingresá tu contraseña.';
+  return '';
+}
+
 export function translateAuthError(message) {
   if (!message) return 'Ocurrió un error inesperado. Intentá de nuevo.';
   const match = TRANSLATIONS.find(([pattern]) => pattern.test(message));

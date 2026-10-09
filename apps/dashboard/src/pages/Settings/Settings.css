@@ -58,7 +58,6 @@
   border-radius: var(--radius-card);
   padding: 1.5rem;
   box-shadow: var(--glass-shadow);
-  animation: fadeInUp 0.5s ease both;
 }
 
 /* ── Card header: icon box + title/subtitle + action ── */
@@ -488,7 +487,6 @@
 .settings-badge--orange { background: rgba(245, 133, 41, 0.12); color: var(--color-orange); }
 .settings-badge--blue { background: rgba(59, 130, 246, 0.12); color: #3B82F6; }
 .settings-badge--gray { background: var(--color-light); color: var(--color-text-secondary); }
-.settings-badge--soon { background: rgba(245, 158, 11, 0.12); color: var(--color-gold); }
 .settings-badge--green { background: rgba(16, 185, 129, 0.12); color: var(--color-forest); }
 
 /* Errores de una acción de esta pantalla (cancelar la suscripción, por

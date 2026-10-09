@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
-import Select from '../../components/Select/Select';
+import SelectField from '../../components/Select/SelectField';
+import Icon from '../../components/Icon/Icon';
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
 import BusinessLock from '../../components/BusinessLock/BusinessLock';
 import { useOrg } from '../../context/OrgContext';
-import { formatRelativeTime } from '../../lib/dashboardApi';
 import {
   fetchGoogleLocations,
   fetchGoogleProfile,
@@ -12,7 +12,21 @@ import {
   resolveProfileChange,
   updateGoogleProfile,
 } from '../../lib/googleApi';
+import {
+  ATTRIBUTE_HINTS,
+  ATTRIBUTE_STATES,
+  DAYS,
+  OPEN_STATUS,
+  SOCIAL,
+  WHATSAPP_ATTRIBUTE,
+  attributeGroupIcon,
+  attributeState,
+  hhmm,
+  hoursLabel,
+} from '../../lib/googleProfile';
+import { ProtectionBlock } from './GoogleProfileBlocks';
 import { ProtectionPreview } from './GoogleProfileBusinessPreview';
+import '../../components/FormModal/FormModal.css';
 import './GoogleBusiness.css';
 import './GoogleProfile.css';
 
@@ -31,45 +45,16 @@ import './GoogleProfile.css';
  *     día, y guardar uno cortado lo aplastaría. Se avisa y se edita en Google.
  *
  * La protección de ficha (Business, 0030) lee google_profile_changes con RLS; en
- * gratis va detrás de BusinessLock.
+ * gratis va detrás de BusinessLock. La tarjeta se dibuja con ProtectionBlock
+ * (GoogleProfileBlocks), el mismo que usa su maqueta.
+ *
+ * La estructura sigue a la pantalla de Tapstar, salvo lo que Tapstar promete y
+ * nosotros no hacemos (revertir solo) y su lista fija de atributos: acá se
+ * muestran sólo los que Google habilita para el rubro de la ficha.
  */
 
-const DAYS = [
-  ['MONDAY', 'Lunes'], ['TUESDAY', 'Martes'], ['WEDNESDAY', 'Miércoles'], ['THURSDAY', 'Jueves'],
-  ['FRIDAY', 'Viernes'], ['SATURDAY', 'Sábado'], ['SUNDAY', 'Domingo'],
-];
 const DAY_INDEX = Object.fromEntries(DAYS.map(([d], i) => [d, i]));
 
-const OPEN_STATUS = {
-  OPEN: 'Abierto',
-  CLOSED_TEMPORARILY: 'Cerrado temporalmente',
-  CLOSED_PERMANENTLY: 'Cerrado permanentemente',
-};
-
-const FIELD_LABELS = {
-  title: 'Nombre',
-  phoneNumbers: 'Teléfono',
-  categories: 'Categoría',
-  storefrontAddress: 'Dirección',
-  websiteUri: 'Sitio web',
-  regularHours: 'Horario',
-  profile: 'Descripción',
-  openInfo: 'Abierto / cerrado',
-};
-
-const SOCIAL_LABELS = {
-  'attributes/url_facebook': 'Facebook',
-  'attributes/url_instagram': 'Instagram',
-  'attributes/url_twitter': 'Twitter / X',
-  'attributes/url_youtube': 'YouTube',
-  'attributes/url_linkedin': 'LinkedIn',
-  'attributes/url_tiktok': 'TikTok',
-  'attributes/url_pinterest': 'Pinterest',
-  'attributes/url_whatsapp': 'WhatsApp',
-};
-
-const pad = (n) => String(n ?? 0).padStart(2, '0');
-const hhmm = (t) => (t ? `${pad(t.hours)}:${pad(t.minutes)}` : '');
 const toTime = (s) => {
   const [hours, minutes] = s.split(':').map(Number);
   return { hours, minutes };
@@ -100,67 +85,37 @@ function formToHours(form) {
   };
 }
 
-function hoursLabel(regularHours, day) {
-  const periods = (regularHours?.periods ?? []).filter((p) => p.openDay === day);
-  if (!periods.length) return null;
-  return periods.map((p) => `${hhmm(p.openTime)}–${hhmm(p.closeTime) || '24:00'}`).join(', ');
-}
-
-/* Un valor de la ficha, en una línea legible, para mostrar un cambio de Google. */
-function describeValue(field, value) {
-  if (value == null) return '—';
-  switch (field) {
-    case 'phoneNumbers':
-      return [value.primaryPhone, ...(value.additionalPhones ?? [])].filter(Boolean).join(', ') || '—';
-    case 'websiteUri':
-      return value || '—';
-    case 'title':
-      return value || '—';
-    case 'profile':
-      return value.description || '—';
-    case 'openInfo':
-      return OPEN_STATUS[value.status] ?? value.status ?? '—';
-    case 'categories':
-      return value.primaryCategory?.displayName ?? '—';
-    case 'regularHours':
-      return DAYS.map(([d, label]) => `${label.slice(0, 3)} ${hoursLabel(value, d) ?? 'cerrado'}`).join(' · ');
-    case 'storefrontAddress':
-      return [...(value.addressLines ?? []), value.locality].filter(Boolean).join(', ') || '—';
-    default:
-      return JSON.stringify(value);
-  }
-}
-
-const svg = { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true };
-const ICONS = {
-  shield: <svg {...svg}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
-  pin: <svg {...svg}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>,
-  phone: <svg {...svg}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>,
-  clock: <svg {...svg}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>,
-  tag: <svg {...svg}><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>,
-  check: <svg {...svg}><polyline points="20 6 9 17 4 12" /></svg>,
-};
-
-function Card({ icon, title, children, action }) {
+function Card({ icon, title, children }) {
   return (
     <div className="gb-card gbp-card">
       <div className="gbp-card__head">
-        <h3 className="gb-card__title"><span className="gbp-card__icon">{icon}</span>{title}</h3>
-        {action}
+        <h3 className="gb-card__title"><span className="gbp-card__icon"><Icon name={icon} size={17} /></span>{title}</h3>
       </div>
       {children}
     </div>
   );
 }
 
-function Field({ label, children }) {
+/* Un dato de la ficha: etiqueta arriba, valor abajo, con ícono opcional. Vacío,
+   «No especificado» en gris. */
+function Field({ label, icon, children }) {
+  const empty = children == null || children === '';
   return (
     <div className="gbp-field">
-      <span className="gbp-field__label">{label}</span>
-      <span className="gbp-field__value">{children}</span>
+      <span className="gbp-field__label">
+        {icon && <Icon name={icon} size={13} />}
+        {label}
+      </span>
+      <span className={`gbp-field__value${empty ? ' gbp-field__value--empty' : ''}`}>
+        {empty ? 'No especificado' : children}
+      </span>
     </div>
   );
 }
+
+const ExternalLink = ({ href }) => (
+  <a className="gbp-link" href={href} target="_blank" rel="noopener noreferrer">{href}</a>
+);
 
 /* ─── Edición ──────────────────────────────────────────────────────────────── */
 
@@ -205,8 +160,9 @@ function EditProfileModal({ data, onClose, onSaved, googleLocationId }) {
       .map((l) => ({ name: l.name, uri: form.links[l.name].trim() }));
     if (changedLinks.length) changes.links = changedLinks;
 
+    // Incluye volver a «sin cargar» (null), que en Google borra el atributo.
     const changedBools = bools
-      .filter((b) => form.bools[b.name] !== null && form.bools[b.name] !== b.value)
+      .filter((b) => form.bools[b.name] !== b.value)
       .map((b) => ({ name: b.name, value: form.bools[b.name] }));
     if (changedBools.length) changes.attributes = changedBools;
 
@@ -232,7 +188,10 @@ function EditProfileModal({ data, onClose, onSaved, googleLocationId }) {
       <form className="gbp-modal" onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit}>
         <div className="gbp-modal__head">
           <h2>Editar perfil</h2>
-          <button type="button" className="gbp-modal__close" onClick={onClose} aria-label="Cerrar">×</button>
+          {/* La misma cruz que el resto de los modales del panel (FormModal.css). */}
+          <button type="button" className="fmodal__close" onClick={onClose} aria-label="Cerrar">
+            <Icon name="close" size={18} strokeWidth={2.5} />
+          </button>
         </div>
 
         <div className="gbp-modal__body">
@@ -297,7 +256,7 @@ function EditProfileModal({ data, onClose, onSaved, googleLocationId }) {
               <div className="gbp-grid-2">
                 {links.map((l) => (
                   <label key={l.name} className="gbp-input">
-                    <span>{SOCIAL_LABELS[l.name] ?? l.displayName}</span>
+                    <span>{SOCIAL[l.name]?.label ?? l.displayName}</span>
                     <input type="url" placeholder="https://" value={form.links[l.name]}
                       onChange={(e) => setForm((f) => ({ ...f, links: { ...f.links, [l.name]: e.target.value } }))} />
                   </label>
@@ -309,15 +268,32 @@ function EditProfileModal({ data, onClose, onSaved, googleLocationId }) {
           {bools.length > 0 && (
             <fieldset className="gbp-fieldset">
               <legend>Accesibilidad y comodidades</legend>
-              <div className="gbp-grid-2">
-                {bools.map((b) => (
-                  <label key={b.name} className="gbp-check gbp-check--row">
-                    <input type="checkbox" checked={form.bools[b.name] === true}
-                      onChange={(e) => setForm((f) => ({ ...f, bools: { ...f.bools, [b.name]: e.target.checked } }))} />
-                    {b.displayName}
-                  </label>
-                ))}
-              </div>
+              <p className="gbp-hint">
+                «No» se publica en tu ficha (por ejemplo, «No tiene entrada accesible»). Si no aplica o no sabés,
+                dejalo sin cargar.
+              </p>
+              {bools.map((b) => (
+                <div key={b.name} className="gbp-attr gbp-attr--edit">
+                  <span className="gbp-attr__text">
+                    <span className="gbp-attr__name">{b.displayName}</span>
+                    {ATTRIBUTE_HINTS[b.name] && <span className="gbp-attr__hint">{ATTRIBUTE_HINTS[b.name]}</span>}
+                  </span>
+                  <div className="gbp-tri" role="radiogroup" aria-label={b.displayName}>
+                    {ATTRIBUTE_STATES.map((s) => (
+                      <button
+                        key={s.label}
+                        type="button"
+                        role="radio"
+                        aria-checked={form.bools[b.name] === s.value}
+                        className={`gbp-tri__opt${form.bools[b.name] === s.value ? ` gbp-tri__opt--on gbp-tri__opt--${s.tone}` : ''}`}
+                        onClick={() => setForm((f) => ({ ...f, bools: { ...f.bools, [b.name]: s.value } }))}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </fieldset>
           )}
 
@@ -367,44 +343,7 @@ function ProtectionCard({ orgId, googleLocationId, canEdit, onResolved }) {
     }
   }
 
-  return (
-    <div className="gb-card gbp-card gbp-protect">
-      <div className="gbp-card__head">
-        <h3 className="gb-card__title"><span className="gbp-card__icon">{ICONS.shield}</span>Protección de ficha</h3>
-      </div>
-      <p className="gbp-hint">
-        Revisamos tu ficha todos los días. Si Google cambia tu teléfono, tu horario o te marca como cerrado por su
-        cuenta, te avisamos por mail y lo podés deshacer desde acá.
-      </p>
-      {error && <p className="gbm-error">{error}</p>}
-      {changes?.length === 0 && <p className="gbp-ok">No hay cambios de Google sin revisar.</p>}
-      {changes?.map((c) => (
-        <div key={c.id} className="gbp-change">
-          <div className="gbp-change__head">
-            <strong>Google cambió: {c.fields.map((f) => FIELD_LABELS[f] ?? f).join(', ')}</strong>
-            <span>{formatRelativeTime(c.detected_at)}</span>
-          </div>
-          {c.fields.map((f) => (
-            <div key={f} className="gbp-change__diff">
-              <span className="gbp-change__field">{FIELD_LABELS[f] ?? f}</span>
-              <span>Tenías: <b>{describeValue(f, c.owner_values?.[f])}</b></span>
-              <span>Google muestra: <b>{describeValue(f, c.google_values?.[f])}</b></span>
-            </div>
-          ))}
-          {canEdit && (
-            <div className="gbp-change__actions">
-              <button type="button" className="gbp-btn-ghost" disabled={busyId === c.id} onClick={() => resolve(c, 'accept')}>
-                Está bien
-              </button>
-              <button type="button" className="gb-btn-primary" disabled={busyId === c.id} onClick={() => resolve(c, 'revert')}>
-                {busyId === c.id ? 'Deshaciendo…' : 'Revertir'}
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
+  return <ProtectionBlock changes={changes} canEdit={canEdit} busyId={busyId} error={error} onResolve={resolve} />;
 }
 
 /* ─── Pantalla ─────────────────────────────────────────────────────────────── */
@@ -475,6 +414,8 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
   const options = (fichas ?? []).map((f) => ({ value: f.id, label: f.locations?.name ?? f.title ?? 'Ficha' }));
   const p = data?.profile;
   const links = (data?.attributes ?? []).filter((a) => a.valueType === 'URL');
+  const whatsapp = links.find((l) => l.name === WHATSAPP_ATTRIBUTE);
+  const socials = links.filter((l) => l.name !== WHATSAPP_ATTRIBUTE);
   const groups = (data?.attributes ?? [])
     .filter((a) => a.valueType === 'BOOL')
     .reduce((acc, a) => {
@@ -487,17 +428,14 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
       {header}
       {reauthNotice}
 
+      {/* El mismo selector de local que Mi Empresa y Métricas, aunque haya una sola ficha. */}
       <div className="gb-card gbp-toolbar">
-        {options.length > 1 ? (
-          <label className="gbm-field">
-            <span>Sucursal</span>
-            <Select value={selected ?? ''} onChange={setSelected} options={options} />
-          </label>
-        ) : (
-          <span className="gbp-toolbar__name">{options[0]?.label}</span>
-        )}
+        <SelectField label="Local" icon="store" value={selected ?? ''} onChange={setSelected} options={options} />
         {data?.canEdit && (
-          <button type="button" className="gb-btn-primary" onClick={() => setEditing(true)}>Editar perfil</button>
+          <button type="button" className="gb-btn-primary gbp-edit-btn" onClick={() => setEditing(true)}>
+            <Icon name="pen" size={15} />
+            Editar perfil
+          </button>
         )}
       </div>
 
@@ -508,13 +446,15 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
       )}
 
       {selected && (
-        <BusinessLock
-          title="Que nadie cambie tu ficha sin que lo sepas"
-          description="Si alguien cambia tu teléfono, tu dirección o te marca como cerrado, te avisamos y lo deshacés en un toque."
-          preview={<ProtectionPreview />}
-        >
-          <ProtectionCard orgId={orgId} googleLocationId={selected} canEdit={Boolean(data?.canEdit)} onResolved={loadProfile} />
-        </BusinessLock>
+        <div className="gbp-card">
+          <BusinessLock
+            title="Que nadie cambie tu ficha sin que lo sepas"
+            description="Si Google cambia tu teléfono, tu horario o te marca como cerrado, te avisamos y lo deshacés con un botón."
+            preview={<ProtectionPreview />}
+          >
+            <ProtectionCard orgId={orgId} googleLocationId={selected} canEdit={Boolean(data?.canEdit)} onResolved={loadProfile} />
+          </BusinessLock>
+        </div>
       )}
 
       {error && <p className="gbm-error" role="alert">{error}</p>}
@@ -522,7 +462,7 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
 
       {p && (
         <>
-          <Card icon={ICONS.pin} title="Información del negocio">
+          <Card icon="pin" title="Información del negocio">
             <div className="gbp-fields">
               <Field label="Nombre">{p.title || '—'}</Field>
               <Field label="Dirección">
@@ -533,29 +473,29 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
             </div>
             <Field label="Descripción">{p.description || 'Sin descripción'}</Field>
             {p.mapsUri && (
-              <a className="gbp-link" href={p.mapsUri} target="_blank" rel="noopener noreferrer">Ver en Google Maps</a>
+              <a className="gbp-link gbp-link--icon" href={p.mapsUri} target="_blank" rel="noopener noreferrer">
+                <Icon name="externalLink" size={13} />
+                Ver en Google Maps
+              </a>
             )}
           </Card>
 
-          <Card icon={ICONS.phone} title="Información de contacto">
+          <Card icon="phone" title="Información de contacto">
             <div className="gbp-fields">
-              <Field label="Teléfono principal">{p.primaryPhone || 'No especificado'}</Field>
-              <Field label="Teléfonos adicionales">{p.additionalPhones.length ? p.additionalPhones.join(', ') : 'No especificado'}</Field>
-              <Field label="Sitio web">
-                {p.websiteUri
-                  ? <a className="gbp-link" href={p.websiteUri} target="_blank" rel="noopener noreferrer">{p.websiteUri}</a>
-                  : 'No especificado'}
-              </Field>
+              <Field label="Teléfono principal" icon="phone">{p.primaryPhone}</Field>
+              <Field label="Teléfono secundario" icon="phone">{p.additionalPhones.join(', ')}</Field>
+              <Field label="Sitio web" icon="globe">{p.websiteUri && <ExternalLink href={p.websiteUri} />}</Field>
+              {whatsapp && (
+                <Field label="WhatsApp" icon="whatsapp">{whatsapp.uri && <ExternalLink href={whatsapp.uri} />}</Field>
+              )}
             </div>
-            {links.length > 0 && (
+            {socials.length > 0 && (
               <>
-                <span className="gbp-subtitle">Redes sociales</span>
+                <span className="gbp-subtitle gbp-subtitle--rule">Redes sociales</span>
                 <div className="gbp-fields">
-                  {links.map((l) => (
-                    <Field key={l.name} label={SOCIAL_LABELS[l.name] ?? l.displayName}>
-                      {l.uri
-                        ? <a className="gbp-link" href={l.uri} target="_blank" rel="noopener noreferrer">{l.uri}</a>
-                        : 'No especificado'}
+                  {socials.map((l) => (
+                    <Field key={l.name} label={SOCIAL[l.name]?.label ?? l.displayName} icon={SOCIAL[l.name]?.icon ?? 'globe'}>
+                      {l.uri && <ExternalLink href={l.uri} />}
                     </Field>
                   ))}
                 </div>
@@ -563,7 +503,7 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
             )}
           </Card>
 
-          <Card icon={ICONS.clock} title="Horario de apertura">
+          <Card icon="clock" title="Horario de apertura">
             {p.regularHours?.periods?.length ? (
               <div className="gbp-hours">
                 {DAYS.map(([d, label]) => {
@@ -581,7 +521,7 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
             )}
           </Card>
 
-          <Card icon={ICONS.tag} title="Categorías del negocio">
+          <Card icon="tag" title="Categorías del negocio">
             <div className="gbp-tags">
               {p.primaryCategory && <span className="gbp-tag gbp-tag--main">★ {p.primaryCategory}</span>}
               {p.additionalCategories.map((c) => <span key={c} className="gbp-tag">{c}</span>)}
@@ -590,23 +530,34 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
             <small className="gbp-field__note">★ categoría principal. Por ahora las categorías se cambian desde Google.</small>
           </Card>
 
-          {Object.keys(groups).length > 0 && (
-            <Card icon={ICONS.check} title="Accesibilidad y comodidades">
-              {Object.entries(groups).map(([group, attrs]) => (
-                <div key={group} className="gbp-attr-group">
-                  <span className="gbp-subtitle">{group}</span>
-                  {attrs.map((a) => (
-                    <div key={a.name} className="gbp-attr">
-                      <span>{a.displayName}</span>
-                      <span className={`gbp-pill ${a.value === true ? 'gbp-pill--yes' : ''}`}>
-                        {a.value === true ? 'Sí' : a.value === false ? 'No' : '—'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </Card>
-          )}
+          {/* Siempre se ve: vacía dice por qué (Google no habilita atributos para el
+              rubro, o no pudimos leerlos) en vez de desaparecer. */}
+          <Card icon="accessibility" title="Accesibilidad y comodidades">
+            {data.attributesError && (
+              <p className="gbp-hint">No pudimos leer los atributos de tu ficha en Google. Probá recargar la página.</p>
+            )}
+            {!data.attributesError && !Object.keys(groups).length && (
+              <p className="gbp-hint">Google no habilita atributos de este tipo para el rubro de tu ficha.</p>
+            )}
+            {Object.entries(groups).map(([group, attrs]) => (
+              <div key={group} className="gbp-attr-group">
+                <span className="gbp-subtitle">{group}</span>
+                {attrs.map((a) => (
+                  <div key={a.name} className="gbp-attr">
+                    <span className="gbp-attr__icon"><Icon name={attributeGroupIcon(group)} size={15} /></span>
+                    <span className="gbp-attr__text">
+                      <span className="gbp-attr__name">{a.displayName}</span>
+                      {ATTRIBUTE_HINTS[a.name] && <span className="gbp-attr__hint">{ATTRIBUTE_HINTS[a.name]}</span>}
+                    </span>
+                    {/* Sólo lectura: se cambia desde «Editar perfil». */}
+                    <span className={`gbp-pill gbp-pill--${attributeState(a.value).tone}`}>
+                      {attributeState(a.value).label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </Card>
         </>
       )}
 

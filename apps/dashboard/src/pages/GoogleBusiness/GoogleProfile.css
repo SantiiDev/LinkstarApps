@@ -10,12 +10,21 @@
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1.5rem;
+  /* Por encima de las tarjetas: el menú del Select se despliega sobre ellas. */
+  position: relative;
+  z-index: 5;
 }
 
-.gbp-toolbar__name {
-  font-size: 1rem;
-  font-weight: 800;
-  color: var(--color-navy);
+/* El selector de local (components/Select/SelectField), como en Mi Empresa. */
+.gbp-toolbar .ls-field {
+  flex: 1;
+  max-width: 420px;
+}
+
+.gbp-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 .gbp-saved {
@@ -78,10 +87,31 @@
   margin: 0.5rem 0 0.6rem;
 }
 
+/* «Redes sociales»: separado de los datos de contacto por una línea. */
+.gbp-subtitle--rule {
+  margin-top: 0.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(26, 38, 57, 0.07);
+}
+
+.gbp-field__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.gbp-field__label svg {
+  color: var(--color-orange);
+}
+
 .gbp-field__value {
   font-size: 0.88rem;
   color: var(--color-navy);
   overflow-wrap: anywhere;
+}
+
+.gbp-field__value--empty {
+  color: var(--color-text-secondary);
 }
 
 .gbp-field__note {
@@ -98,6 +128,13 @@
   overflow-wrap: anywhere;
 }
 
+.gbp-link--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+}
+
 .gbp-hint {
   margin-bottom: 0.75rem;
   font-size: 0.8rem;
@@ -106,6 +143,9 @@
 }
 
 .gbp-ok {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--color-forest);
@@ -151,17 +191,45 @@
   color: var(--color-orange);
 }
 
+.gbp-attr-group + .gbp-attr-group {
+  margin-top: 0.75rem;
+}
+
+/* Un renglón por atributo: ícono del grupo, nombre (y una línea de
+   explicación para los comunes) y la pastilla Sí/No a la derecha. */
 .gbp-attr {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.55rem 0.75rem;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
   margin-bottom: 0.4rem;
   border-radius: 0.7rem;
   background: rgba(26, 38, 57, 0.03);
   font-size: 0.82rem;
   color: var(--color-navy);
+}
+
+.gbp-attr__icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.gbp-attr__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.gbp-attr__name {
+  font-weight: 600;
+}
+
+.gbp-attr__hint {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
 }
 
 .gbp-pill {
@@ -178,35 +246,198 @@
   color: var(--color-forest);
 }
 
-/* ── Protección ── */
-.gbp-change {
-  margin-top: 0.75rem;
-  padding: 1rem;
+.gbp-pill--no {
+  background: rgba(26, 38, 57, 0.09);
+  color: var(--color-navy);
+}
+
+/* Sin cargar: no es un dato, así que no se ve como uno. */
+.gbp-pill--unset {
+  background: transparent;
+  border: 1px dashed rgba(26, 38, 57, 0.22);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* ── Sí / No / Sin cargar, en el modal de edición ── */
+.gbp-attr--edit {
+  flex-wrap: wrap;
+  background: rgba(26, 38, 57, 0.025);
+}
+
+.gbp-tri {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 3px;
+  border-radius: var(--radius-button);
+  background: rgba(26, 38, 57, 0.06);
+}
+
+.gbp-tri__opt {
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-button);
+  background: transparent;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  transition: background var(--transition-base), color var(--transition-base);
+}
+
+.gbp-tri__opt:hover {
+  color: var(--color-navy);
+}
+
+.gbp-tri__opt--on {
+  background: var(--color-white);
+  box-shadow: 0 1px 4px rgba(26, 38, 57, 0.14);
+}
+
+.gbp-tri__opt--yes { color: var(--color-forest); }
+.gbp-tri__opt--no { color: var(--color-navy); }
+.gbp-tri__opt--unset { color: var(--color-text-secondary); }
+
+/* ── Protección (GoogleProfileBlocks) ── */
+.gbp-hero {
+  display: flex;
+  gap: 1rem;
+  padding: 1.25rem 1.35rem;
+  margin-bottom: 1.35rem;
   border-radius: 0.9rem;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: linear-gradient(120deg, rgba(245, 133, 41, 0.1), rgba(245, 158, 11, 0.05));
+}
+
+.gbp-hero__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-orange);
+  color: var(--color-white);
+}
+
+.gbp-hero__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.gbp-hero__eyebrow {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-orange);
+}
+
+.gbp-hero__title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--color-navy);
+}
+
+.gbp-hero__text {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.gbp-hero__points {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.55rem;
+  list-style: none;
+}
+
+.gbp-hero__points li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.gbp-hero__points svg {
+  flex-shrink: 0;
+  color: var(--color-orange);
+}
+
+.gbp-section-title {
+  margin-bottom: 0.25rem;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--color-navy);
+}
+
+.gbp-change {
+  padding: 0.9rem 0;
+  border-top: 1px solid rgba(26, 38, 57, 0.07);
+}
+
+.gbp-section-title + .gbp-change {
+  border-top: none;
+}
+
+/* Un pendiente se ve como algo a resolver, no como un renglón del historial. */
+.gbp-change--pending {
+  margin: 0.5rem 0;
+  padding: 1rem;
   border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 0.9rem;
   background: rgba(245, 158, 11, 0.06);
+}
+
+.gbp-change--pending + .gbp-change {
+  border-top: none;
 }
 
 .gbp-change__head {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
+  align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.45rem;
   font-size: 0.85rem;
   color: var(--color-navy);
 }
 
-.gbp-change__head span {
+.gbp-change__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.72rem;
   color: var(--color-text-secondary);
 }
 
+.gbp-badge {
+  padding: 0.12rem 0.55rem;
+  border-radius: var(--radius-badge);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gbp-badge--warn { background: rgba(245, 158, 11, 0.16); color: #b45309; }
+.gbp-badge--good { background: rgba(16, 185, 129, 0.12); color: var(--color-forest); }
+.gbp-badge--neutral { background: rgba(26, 38, 57, 0.07); color: var(--color-navy); }
+.gbp-badge--muted { background: rgba(26, 38, 57, 0.05); color: var(--color-text-secondary); }
+
 .gbp-change__diff {
-  display: grid;
-  grid-template-columns: 8rem 1fr 1fr;
-  gap: 0.75rem;
-  padding: 0.4rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+  padding: 0.15rem 0;
   font-size: 0.78rem;
   color: var(--color-text-secondary);
 }
@@ -216,6 +447,7 @@
 }
 
 .gbp-change__field {
+  min-width: 8rem;
   font-weight: 700;
   color: var(--color-navy);
 }
@@ -289,12 +521,6 @@
   color: var(--color-navy);
 }
 
-.gbp-modal__close {
-  font-size: 1.5rem;
-  line-height: 1;
-  color: var(--color-text-secondary);
-}
-
 .gbp-modal__body {
   display: flex;
   flex-direction: column;
@@ -323,16 +549,39 @@
   color: var(--color-text-secondary);
 }
 
+/* El borde era var(--color-border), que es blanco translúcido: sobre el fondo
+   blanco del modal los campos no se veían y no se notaba dónde escribir. Mismo
+   borde y foco que FormModal. */
 .gbp-input input,
 .gbp-input textarea,
 .gbp-hours-row input[type='time'] {
   padding: 0.6rem 0.8rem;
   border-radius: 0.7rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(26, 38, 57, 0.15);
   background: #fff;
   font: inherit;
   font-weight: 400;
   color: var(--color-navy);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.gbp-input input:hover,
+.gbp-input textarea:hover,
+.gbp-hours-row input[type='time']:not(:disabled):hover {
+  border-color: rgba(26, 38, 57, 0.3);
+}
+
+.gbp-input input:focus,
+.gbp-input textarea:focus,
+.gbp-hours-row input[type='time']:focus {
+  outline: none;
+  border-color: var(--color-orange);
+  box-shadow: 0 0 0 3px rgba(245, 133, 41, 0.15);
+}
+
+.gbp-hours-row input[type='time']:disabled {
+  background: rgba(26, 38, 57, 0.03);
+  color: var(--color-text-secondary);
 }
 
 .gbp-input textarea {
@@ -376,9 +625,6 @@
   color: var(--color-navy);
 }
 
-.gbp-check--row {
-  padding: 0.3rem 0;
-}
 
 @media (max-width: 768px) {
   .gbp-fields,
@@ -387,8 +633,20 @@
   }
 
   .gbp-change__diff {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     gap: 0.2rem;
+  }
+
+  .gbp-hero {
+    flex-direction: column;
+  }
+
+  .gbp-hero__points {
+    grid-template-columns: 1fr;
+  }
+
+  .gbp-toolbar .ls-field {
+    max-width: none;
   }
 
   .gbp-hours-row {

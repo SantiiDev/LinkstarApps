@@ -8,6 +8,7 @@ import TrendChart from '../../components/TrendChart/TrendChart';
 import Select from '../../components/Select/Select';
 import Icon from '../../components/Icon/Icon';
 import Switch from '../../components/Switch/Switch';
+import SoonBadge from '../../components/SoonBadge/SoonBadge';
 import PageSkeleton from '../../components/PageSkeleton/PageSkeleton';
 import RetentionNote from '../../components/RetentionNote/RetentionNote';
 import { periodOptionsFor, clampPeriod, canComparePrevious } from '../../lib/retention';
@@ -587,7 +588,7 @@ function EmployeeRankingTeaser() {
       <div className="devices-teaser__body">
         <p className="devices-teaser__title">
           Ranking de Empleados
-          <span className="devices-teaser__badge">Próximamente</span>
+          <SoonBadge />
         </p>
         <p className="devices-teaser__text">
           Asigná una tarjeta personal a cada empleado y descubrí quién consigue más reseñas.

@@ -6,7 +6,13 @@ const COLOR_VARS = {
   gold: 'var(--color-gold)',
   forest: 'var(--color-forest)',
   navy: 'var(--color-navy)',
+  danger: 'var(--color-danger)',
 };
+
+const toNumbers = (arr, length = arr?.length ?? 0) => Array.from({ length }, (_, i) => {
+  const v = Number(arr?.[i]);
+  return Number.isFinite(v) ? v : 0;
+});
 
 /* Escalones "redondos" (1, 2 o 5 × 10ⁿ) para que el eje diga 0 / 10 / 20 / 30
    y no 0 / 8,4 / 16,8. Devuelve el dominio ya estirado hasta el tick de cada
@@ -75,6 +81,12 @@ const COMPACT_FORMAT = new Intl.NumberFormat('es-AR', { notation: 'compact', max
  *        punto a punto con `data`. Se dibuja punteada, sin relleno, y entra en
  *        la escala: si no, un período anterior más alto se saldría del gráfico.
  * @param {string}   [compareName] Nombre de esa serie en el tooltip.
+ * @param {{name: string, data: number[], color?: string, dashed?: boolean}[]} [series]
+ *        Varias series del mismo peso (Sentimiento: positivas / neutras /
+ *        negativas). Reemplaza a `data` / `compareData`: comparten escala, no se
+ *        rellena el área (se taparían entre sí) y abajo va una leyenda con texto,
+ *        porque los colores de serie no llegan a 3:1 contra el fondo
+ *        (lib/chartColors.js) y el color no puede ser la única pista.
  */
 export default function TrendChart({
   data,
@@ -87,6 +99,7 @@ export default function TrendChart({
   formatValue,
   compareData,
   compareName = 'Período anterior',
+  series,
 }) {
   const plotRef = useRef(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -105,8 +118,30 @@ export default function TrendChart({
     return () => ro.disconnect();
   }, []);
 
+  /* Todas las líneas que se dibujan, en una sola lista. Sin `series` son la de
+     siempre más, si hay, la del período anterior (punteada y tenue): el mismo
+     dibujo que antes de que existiera `series`. */
+  const lines = useMemo(() => {
+    if (series?.length) {
+      const length = series[0].data?.length ?? 0;
+      return series.map((s) => ({
+        name: s.name,
+        values: toNumbers(s.data, length),
+        color: COLOR_VARS[s.color] || COLOR_VARS.orange,
+        dashed: Boolean(s.dashed),
+        faded: false,
+      }));
+    }
+    const values = toNumbers(data);
+    const out = [{ name: seriesName, values, color: strokeColor, dashed: false, faded: false }];
+    if (compareData?.length) {
+      out.push({ name: compareName, values: toNumbers(compareData, values.length), color: strokeColor, dashed: true, faded: true });
+    }
+    return out;
+  }, [series, data, compareData, seriesName, compareName, strokeColor]);
+
   const chart = useMemo(() => {
-    const values = (data ?? []).map((v) => (Number.isFinite(Number(v)) ? Number(v) : 0));
+    const values = lines[0].values;
     if (values.length === 0 || size.w < 80 || size.h < 80) return null;
 
     const pad = {
@@ -116,10 +151,7 @@ export default function TrendChart({
       left: 10,
     };
 
-    const compare = compareData?.length
-      ? values.map((_, i) => (Number.isFinite(Number(compareData[i])) ? Number(compareData[i]) : 0))
-      : null;
-    const all = compare ? [...values, ...compare] : values;
+    const all = lines.flatMap((l) => l.values);
 
     const isInteger = all.every((v) => Number.isInteger(v));
     const dataMin = Math.min(...all);
@@ -136,16 +168,20 @@ export default function TrendChart({
     const xAt = (i) => (values.length > 1 ? pad.left + i * stepX : pad.left + innerW / 2);
     const yAt = (v) => pad.top + innerH - ((v - scale.min) / span) * innerH;
 
-    const points = values.map((v, i) => [xAt(i), yAt(v)]);
     const toPath = (pts) => pts
       .map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(2)},${p[1].toFixed(2)}`)
       .join(' ');
-    const linePath = toPath(points);
-    const comparePath = compare ? toPath(compare.map((v, i) => [xAt(i), yAt(v)])) : null;
+    const drawn = lines.map((l) => {
+      const pts = l.values.map((v, i) => [xAt(i), yAt(v)]);
+      return { ...l, points: pts, path: toPath(pts) };
+    });
+    const points = drawn[0].points;
+    const linePath = drawn[0].path;
 
     // El área sólo cierra contra el 0. Rellenar hasta una base que no es cero
     // exagera la variación: la altura pintada deja de ser proporcional al valor.
-    const areaPath = baseline === 'zero'
+    // Con varias series no hay área: se taparían unas a otras.
+    const areaPath = baseline === 'zero' && !series?.length
       ? `${linePath} L${points[points.length - 1][0].toFixed(2)},${yAt(0).toFixed(2)} `
         + `L${points[0][0].toFixed(2)},${yAt(0).toFixed(2)} Z`
       : null;
@@ -168,8 +204,8 @@ export default function TrendChart({
     const tickFormat = scale.max >= 100000 ? COMPACT_FORMAT : DEFAULT_FORMAT;
 
     return {
-      values, compare, pad, scale, innerW, innerH, stepX, xAt, yAt,
-      points, linePath, comparePath, areaPath, labelIdx, tickFormat,
+      values, drawn, pad, scale, innerW, innerH, stepX, xAt, yAt,
+      points, areaPath, labelIdx, tickFormat,
       showDots: values.length <= 12,
       indexAt(clientX) {
         const rel = clientX - pad.left;
@@ -177,9 +213,9 @@ export default function TrendChart({
         return Math.max(0, Math.min(values.length - 1, Math.round(rel / stepX)));
       },
     };
-  }, [data, compareData, size, baseline, xLabel, yLabel]);
+  }, [lines, series, size, baseline, xLabel, yLabel]);
 
-  const isEmpty = !data || data.length === 0;
+  const isEmpty = lines[0].values.length === 0;
   const fmt = formatValue || ((v) => DEFAULT_FORMAT.format(v));
   const gradientId = `trendFill-${color}`;
 
@@ -215,11 +251,13 @@ export default function TrendChart({
             viewBox={`0 0 ${size.w} ${size.h}`}
             className="trend-chart__svg"
             role="img"
-            aria-label={
-              `${seriesName} por ${(xLabel || 'período').toLowerCase()}: `
-              + `${chart.values.length} puntos, mínimo ${fmt(Math.min(...chart.values))}, `
-              + `máximo ${fmt(Math.max(...chart.values))}.`
-            }
+            aria-label={series?.length
+              ? `${series.map((s) => s.name).join(', ')} por ${(xLabel || 'período').toLowerCase()}: `
+                + chart.drawn.map((l) => `${l.name} entre ${fmt(Math.min(...l.values))} y ${fmt(Math.max(...l.values))}`).join('; ')
+                + '.'
+              : `${seriesName} por ${(xLabel || 'período').toLowerCase()}: `
+                + `${chart.values.length} puntos, mínimo ${fmt(Math.min(...chart.values))}, `
+                + `máximo ${fmt(Math.max(...chart.values))}.`}
           >
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -260,29 +298,25 @@ export default function TrendChart({
             )}
 
             {chart.areaPath && <path d={chart.areaPath} fill={`url(#${gradientId})`} />}
-            {chart.comparePath && (
+            {/* Las tenues (el período anterior) primero, para que la principal
+                quede encima. */}
+            {[...chart.drawn].sort((a, b) => Number(b.faded) - Number(a.faded)).map((l) => (
               <path
-                d={chart.comparePath}
+                key={l.name}
+                d={l.path}
                 fill="none"
-                stroke={strokeColor}
-                strokeOpacity="0.45"
-                strokeWidth="1.5"
-                strokeDasharray="4 4"
+                stroke={l.color}
+                strokeOpacity={l.faded ? 0.45 : 1}
+                strokeWidth={l.faded ? 1.5 : 2}
+                strokeDasharray={l.dashed ? '4 4' : undefined}
                 strokeLinecap="round"
+                strokeLinejoin="round"
               />
-            )}
-            <path
-              d={chart.linePath}
-              fill="none"
-              stroke={strokeColor}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-
-            {chart.showDots && chart.points.map((p, i) => (
-              <circle key={i} cx={p[0]} cy={p[1]} r="3" fill="var(--color-white)" stroke={strokeColor} strokeWidth="2" />
             ))}
+
+            {chart.showDots && chart.drawn.filter((l) => !l.faded).map((l) => l.points.map((p, i) => (
+              <circle key={`${l.name}-${i}`} cx={p[0]} cy={p[1]} r="3" fill="var(--color-white)" stroke={l.color} strokeWidth="2" />
+            )))}
 
             {/* Etiquetas del eje X, cada una bajo su punto */}
             {labels && chart.labelIdx.map((i) => (
@@ -317,14 +351,17 @@ export default function TrendChart({
                   y1={chart.pad.top}
                   y2={size.h - chart.pad.bottom}
                 />
-                <circle
-                  cx={chart.xAt(hovered)}
-                  cy={chart.yAt(chart.values[hovered])}
-                  r="4.5"
-                  fill={strokeColor}
-                  stroke="var(--color-white)"
-                  strokeWidth="2"
-                />
+                {chart.drawn.filter((l) => !l.faded).map((l) => (
+                  <circle
+                    key={l.name}
+                    cx={chart.xAt(hovered)}
+                    cy={chart.yAt(l.values[hovered])}
+                    r="4.5"
+                    fill={l.color}
+                    stroke="var(--color-white)"
+                    strokeWidth="2"
+                  />
+                ))}
               </g>
             )}
           </svg>
@@ -335,25 +372,35 @@ export default function TrendChart({
             className="trend-chart__tooltip"
             style={{
               left: Math.min(Math.max(chart.xAt(hovered), 70), Math.max(size.w - 70, 70)),
-              top: Math.max(chart.yAt(chart.values[hovered]) - 14, 8),
+              top: Math.max(Math.min(...chart.drawn.map((l) => chart.yAt(l.values[hovered]))) - 14, 8),
             }}
           >
             {labels?.[hovered] && <div className="trend-chart__tooltip-label">{labels[hovered]}</div>}
-            <div className="trend-chart__tooltip-row">
-              <span className="trend-chart__tooltip-dot" style={{ background: strokeColor }} />
-              <span className="trend-chart__tooltip-name">{seriesName}</span>
-              <strong className="trend-chart__tooltip-value">{fmt(chart.values[hovered])}</strong>
-            </div>
-            {chart.compare && (
-              <div className="trend-chart__tooltip-row">
-                <span className="trend-chart__tooltip-dot" style={{ background: strokeColor, opacity: 0.45 }} />
-                <span className="trend-chart__tooltip-name">{compareName}</span>
-                <strong className="trend-chart__tooltip-value">{fmt(chart.compare[hovered])}</strong>
+            {chart.drawn.map((l) => (
+              <div key={l.name} className="trend-chart__tooltip-row">
+                <span className="trend-chart__tooltip-dot" style={{ background: l.color, opacity: l.faded ? 0.45 : 1 }} />
+                <span className="trend-chart__tooltip-name">{l.name}</span>
+                <strong className="trend-chart__tooltip-value">{fmt(l.values[hovered])}</strong>
               </div>
-            )}
+            ))}
           </div>
         )}
       </div>
+
+      {series?.length > 0 && (
+        <ul className="trend-chart__legend">
+          {lines.map((l) => (
+            <li key={l.name}>
+              <span
+                className={`trend-chart__legend-swatch${l.dashed ? ' trend-chart__legend-swatch--dashed' : ''}`}
+                style={{ color: l.color }}
+                aria-hidden="true"
+              />
+              {l.name}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

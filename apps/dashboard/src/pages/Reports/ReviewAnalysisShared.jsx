@@ -1,10 +1,11 @@
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
-import Select from '../../components/Select/Select';
+import SelectField, { FilterField } from '../../components/Select/SelectField';
+import Icon from '../../components/Icon/Icon';
 import { RANGE_OPTIONS } from '../../lib/reviewInsights';
 
-/* Lo que comparten Sentimiento y Palabras clave (fase 5, 0033): los filtros, el
- * aviso de reconexión y los estados en los que todavía no hay nada que mostrar.
- * La carga está en useReviewAnalysis.js.
+/* Lo que comparten NPS, Sentimiento y Palabras clave (fase 5, 0033): los
+ * filtros, el aviso de reconexión y los estados en los que todavía no hay nada
+ * que mostrar. La carga está en useReviewAnalysis.js.
  *
  * Los estados vacíos distinguen cuatro cosas que no son lo mismo y que un
  * «sin datos» genérico mezclaría:
@@ -73,9 +74,13 @@ export function AnalysisEmptyState({ data, onNavigateSettings }) {
   );
 }
 
-export function AnalysisToolbar({ data, locationId, setLocationId, range, setRange, analyzedCount }) {
+/* Los mismos campos que Mi Empresa y Métricas (components/Select/SelectField):
+   «Local» siempre visible, aunque haya una sola sucursal, y los rangos de días
+   de Mi Empresa. `showReviewCount` suma un tercer campo, de sólo lectura, con las
+   reseñas analizadas del período (Palabras clave, como Tapstar). */
+export function AnalysisToolbar({ data, locationId, setLocationId, range, setRange, analyzedCount, showReviewCount = false }) {
   const options = [
-    { value: 'all', label: 'Todas las sucursales' },
+    { value: 'all', label: 'Todos los locales' },
     ...data.linked.map((f) => ({ value: f.location_id, label: data.nameOf(f.location_id) })),
   ];
   const { total, withText } = data.counts;
@@ -86,24 +91,26 @@ export function AnalysisToolbar({ data, locationId, setLocationId, range, setRan
   return (
     <div className="gb-card gbm-toolbar">
       <div className="gbm-toolbar__filters">
-        {data.linked.length > 1 && (
-          <label className="gbm-field">
-            <span>Sucursal</span>
-            <Select value={locationId} onChange={setLocationId} options={options} />
-          </label>
+        <SelectField label="Local" icon="store" value={locationId} onChange={setLocationId} options={options} />
+        <SelectField label="Rango de fechas" icon="calendar" value={range} onChange={setRange} options={RANGE_OPTIONS} />
+        {showReviewCount && (
+          <FilterField label="Reseñas" icon="message" className="reports-count-field">
+            <div className="ls-select-field ls-select-field--block ls-select-field--icon reports-count-field__value">
+              {analyzedCount}
+            </div>
+          </FilterField>
         )}
-        <label className="gbm-field">
-          <span>Período</span>
-          <Select value={range} onChange={setRange} options={RANGE_OPTIONS} />
-        </label>
       </div>
       <p className="gbm-note">
-        {analyzedCount} reseña{analyzedCount === 1 ? '' : 's'} analizada{analyzedCount === 1 ? '' : 's'} en este período.
-        {pending > 0 && ` Quedan ${pending} por analizar: se completan en las próximas lecturas diarias.`}
-        {withoutText > 0 && (withoutText === 1
-          ? ' Una de tus reseñas es sólo de estrellas y no se analiza: no tiene texto.'
-          : ` ${withoutText} de tus reseñas son sólo de estrellas y no se analizan: no tienen texto.`)}
-        {' '}El análisis lo hace una IA sobre lo que escribió cada cliente, una sola vez por reseña.
+        <Icon name="info" size={14} />
+        <span>
+          {analyzedCount} reseña{analyzedCount === 1 ? '' : 's'} analizada{analyzedCount === 1 ? '' : 's'} en este período.
+          {pending > 0 && ` Quedan ${pending} por analizar: se completan en las próximas lecturas diarias.`}
+          {withoutText > 0 && (withoutText === 1
+            ? ' Una de tus reseñas es sólo de estrellas y no se analiza: no tiene texto.'
+            : ` ${withoutText} de tus reseñas son sólo de estrellas y no se analizan: no tienen texto.`)}
+          {' '}El análisis lo hace una IA sobre lo que escribió cada cliente, una sola vez por reseña.
+        </span>
       </p>
     </div>
   );
