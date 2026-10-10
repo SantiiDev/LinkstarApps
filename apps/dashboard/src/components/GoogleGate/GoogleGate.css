@@ -1,5 +1,8 @@
 /* ============================================
    GOOGLE GATE (maqueta borrosa + modal bloqueante)
+
+   components/BusinessPitch (el modal de ventas de Business) reusa .ggate,
+   __backdrop, __veil y __layer: un cambio acá cambia los dos.
    ============================================ */
 
 /* La sección scrollea normal: la maqueta entera está acá abajo y pasa por

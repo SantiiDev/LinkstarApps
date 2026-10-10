@@ -11,8 +11,8 @@ import './BusinessLock.css';
  * pasarse de plan. Es el patrón de Tapstar: la sección se ve entera, y lo que es
  * de Business se ve borroso con su CTA encima, tarjeta por tarjeta.
  *
- * ES EL SEGUNDO LUGAR DONDE UNA MAQUETA PUEDE RENDERIZARSE (el primero es
- * GoogleGate), y vale por las mismas condiciones: desenfocada, `inert` (sin
+ * ES UNO DE LOS TRES LUGARES DONDE UNA MAQUETA PUEDE RENDERIZARSE (los otros son
+ * GoogleGate y BusinessPitch), y vale por las mismas condiciones: desenfocada, `inert` (sin
  * clicks, sin foco, sin lector de pantalla, sin selección), y con un velo que no
  * se puede cerrar. Si `preview` se renderiza fuera de este componente, o si el
  * velo se puede sacar, se rompe la regla de CLAUDE.md: nunca imprimir un número
@@ -22,18 +22,18 @@ import './BusinessLock.css';
  *
  * El corte de verdad lo hace la base (private.org_has_business): esto sólo
  * decide qué se dibuja.
+ *
+ * Es por tarjeta. Una sección que es entera de Business (NPS, Sentimiento,
+ * Palabras clave) no usa esto sino components/BusinessPitch, el modal de ventas.
  */
-/* `fullPage`: cuando el candado cubre la sección entera (Sentimiento, Palabras
- * clave) y no una tarjeta. La maqueta es alta, y centrado el llamado quedaba a
- * mitad de página, fuera de la vista: así va arriba. */
-export default function BusinessLock({ children, preview, title, description, fullPage = false }) {
+export default function BusinessLock({ children, preview, title, description }) {
   const { isBusiness } = useOrg();
   const navigate = useNavigate();
 
   if (isBusiness) return children;
 
   return (
-    <div className={`block${fullPage ? ' block--page' : ''}`}>
+    <div className="block">
       <div className="block__preview" inert>
         {preview}
       </div>

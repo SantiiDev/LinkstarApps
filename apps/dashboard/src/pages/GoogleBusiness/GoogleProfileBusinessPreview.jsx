@@ -4,8 +4,9 @@
  * Dibuja la tarjeta de protección de ficha con cambios INVENTADOS, con el mismo
  * ProtectionBlock que la tarjeta real (GoogleProfileBlocks), así la maqueta es
  * la tarjeta de verdad con otros datos. Se renderiza ÚNICAMENTE como `preview`
- * de components/BusinessLock (borrosa, inerte, con un velo que no se cierra).
- * NO agregar otro importador.
+ * de components/BusinessLock o dentro de GoogleProfileMockup (detrás de
+ * GoogleGate): las dos puertas la dejan borrosa, inerte y bajo un velo que no se
+ * cierra. NO agregar otro importador.
  */
 import { ProtectionBlock } from './GoogleProfileBlocks';
 

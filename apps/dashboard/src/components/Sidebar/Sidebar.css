@@ -47,6 +47,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Lo justo para que el recuadro del ítem activo no toque la barra de scroll. */
+  padding-right: 0.3rem;
 }
 
 .sidebar__group-label {
@@ -483,6 +485,11 @@
     justify-content: center;
     padding: 0.25rem 0 1.25rem;
     font-size: 0;
+  }
+
+  /* En el riel los íconos van centrados: sin el margen de la barra. */
+  .sidebar__nav {
+    padding-right: 0;
   }
 
   .sidebar__logo-dot {

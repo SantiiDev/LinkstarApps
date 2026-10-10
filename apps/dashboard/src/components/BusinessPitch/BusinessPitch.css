@@ -1,0 +1,502 @@
+/* ============================================
+   BUSINESS PITCH (modal de ventas de una sección Business)
+
+   El fondo (maqueta borrosa), el velo y la capa fija corrida lo que mide el
+   sidebar son los de GoogleGate (GoogleGate.css): mismas reglas, un solo lugar.
+   Acá sólo va el diálogo.
+   ============================================ */
+
+/* EL MISMO TAMAÑO EN LAS TRES SECCIONES Y EN CADA PASO: al tocar Siguiente o
+   Atrás sólo cambia lo de adentro de la columna naranja, y el botón del precio
+   no se mueve. El modal está centrado, así que un solo píxel de alto de más lo
+   corre entero. Lo sostienen estas cosas, y cualquiera que falte lo rompe:
+     - ALTO FIJO (`height`), no el que dé el contenido. La ilustración es la que
+       cede (`flex: 1`): si un texto ocupa un renglón más, ella se achica y el
+       modal no cambia;
+     - columnas `minmax(0, …)`: con `1.5fr` a secas el mínimo de la columna es
+       su contenido, y la ilustración (dibujada al 150% y achicada) la
+       ensanchaba distinto en cada paso;
+     - ancho fijo (`width`), no sólo `max-width`;
+     - «Atrás» y «Siguiente» con el mismo borde: sin él, «Siguiente» medía 2px
+       menos, y el primer paso (que no tiene «Atrás») era más bajo que el resto;
+     - un alto mínimo para cada texto que cambia (título, descripción, paso),
+       para que la ilustración tampoco salte de tamaño entre pasos. */
+.bpitch {
+  width: min(980px, 100%);
+  /* 44px de la barra de arriba y 2rem del padding de la capa (GoogleGate.css). */
+  height: min(640px, calc(100vh - 44px - 2rem));
+  height: min(640px, calc(100dvh - 44px - 2rem));
+  margin: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  /* La fila mide exactamente el alto del modal. Con la fila `auto` de siempre,
+     la grilla la estiraba al alto de la ilustración SIN achicar (el `transform`
+     la achica a la vista, no para el cálculo), la fila quedaba más alta que el
+     modal y el `overflow: hidden` de abajo cortaba los botones. */
+  grid-template-rows: minmax(0, 1fr);
+  border-radius: 1.25rem;
+  overflow: hidden;
+  /* Casi opaco y SIN backdrop-filter: el diálogo está fijo sobre una sección
+     que scrollea (ver GoogleGate.css y la nota de rendimiento de CLAUDE.md). */
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 30px 80px rgba(26, 38, 57, 0.22);
+  animation: scaleIn var(--transition-bounce) both;
+}
+
+/* ── Izquierda: los pasos ─────────────────────────────────── */
+
+.bpitch__story {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 1.6rem 1.75rem 1.4rem;
+  background: linear-gradient(160deg, #fff8ef 0%, #ffe6c7 45%, #ffc77d 85%, #f9a94b 100%);
+}
+
+.bpitch__badge {
+  align-self: flex-start;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius-badge);
+  background: rgba(26, 38, 57, 0.08);
+  color: #7a4a12;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bpitch__title {
+  margin-top: 0.7rem;
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.2;
+  /* Dos renglones, aunque el título entre en uno (ver arriba). */
+  min-height: 2.4em;
+  color: var(--color-navy);
+}
+
+.bpitch__desc {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  min-height: 3em;
+  color: rgba(26, 38, 57, 0.78);
+}
+
+.bpitch__progress {
+  display: flex;
+  gap: 0.4rem;
+  margin: 1.1rem 0 1rem;
+}
+
+.bpitch__bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(26, 38, 57, 0.15);
+  transition: background var(--transition-base);
+}
+
+.bpitch__bar--on {
+  background: var(--color-navy);
+}
+
+/* El marco de la ilustración. Los bloques adentro son los de la pantalla a
+   tamaño real, dibujados al 150% del ancho y achicados con `transform` a dos
+   tercios: así entran enteros sin rediseñarlos. Alto fijo, para que el modal
+   no salte de tamaño al cambiar de paso. */
+.bpitch__art {
+  position: relative;
+  /* Ocupa lo que sobra en la columna (ver el alto fijo de .bpitch). La base es
+     0 y no `auto`: con `auto` partiría del alto de la ilustración sin achicar
+     y empujaría todo lo de abajo. */
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  user-select: none;
+}
+
+.bpitch__art-inner {
+  width: 150%;
+  transform: scale(0.6667);
+  transform-origin: top left;
+}
+
+/* Las tarjetas de los bloques son de vidrio (backdrop-filter). Adentro de un
+   diálogo fijo sobre una sección que scrollea, cada una recalcularía su blur en
+   cada frame: acá van opacas y sin blur. */
+.bpitch__art-inner * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  animation: none !important;
+}
+
+.bpitch__art-inner .reports-card,
+.bpitch__art-inner .gb-card,
+.bpitch__art-inner .kpi-card {
+  background: var(--color-white);
+}
+
+.bpitch__step {
+  margin-top: 1rem;
+}
+
+.bpitch__step-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--color-navy);
+}
+
+.bpitch__step-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-navy);
+  color: var(--color-white);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.bpitch__step-text {
+  margin-top: 0.35rem;
+  font-size: 0.83rem;
+  line-height: 1.5;
+  /* Tres renglones: el texto más largo (NPS, paso 1) los ocupa (ver arriba). */
+  min-height: 4.5em;
+  color: rgba(26, 38, 57, 0.82);
+}
+
+.bpitch__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: auto;
+  padding-top: 1.1rem;
+}
+
+.bpitch__count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(26, 38, 57, 0.7);
+}
+
+.bpitch__nav-btns {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Los dos con el mismo borde (ver arriba): mismo alto con uno, otro o ambos. */
+.bpitch__back,
+.bpitch__next {
+  padding: 0.55rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.2;
+  transition: transform var(--transition-base), background var(--transition-base);
+}
+
+.bpitch__back {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(26, 38, 57, 0.25);
+  color: var(--color-navy);
+}
+
+.bpitch__next {
+  background: var(--color-navy);
+  border-color: var(--color-navy);
+  color: var(--color-white);
+}
+
+.bpitch__back:hover,
+.bpitch__next:hover {
+  transform: translateY(-1px);
+}
+
+/* ── Derecha: el plan ─────────────────────────────────────── */
+
+.bpitch__offer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  padding: 1.75rem 1.6rem 1.4rem;
+  text-align: center;
+}
+
+.bpitch__plan {
+  font-size: 1.1rem;
+  color: var(--color-navy);
+}
+
+.bpitch__plan strong {
+  font-weight: 800;
+}
+
+.bpitch__plan-desc {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.bpitch__trial {
+  align-self: center;
+  margin-top: 1rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: var(--radius-badge);
+  background: rgba(245, 158, 11, 0.14);
+  color: #7a4a12;
+  font-size: 0.74rem;
+}
+
+.bpitch__price {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: 1.1rem;
+}
+
+.bpitch__amount {
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.bpitch__period {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.bpitch__price-skeleton {
+  align-self: center;
+  width: 150px;
+  height: 2.4rem;
+  margin-top: 1.1rem;
+  border-radius: 0.6rem;
+  background: rgba(26, 38, 57, 0.07);
+}
+
+.bpitch__billing {
+  margin-top: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.bpitch__features {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  /* El margen de abajo separa la lista del botón, que con `margin-top: auto`
+     se va al fondo de la columna. */
+  margin: 1.1rem 0 1.25rem;
+  padding: 0.9rem 0 0;
+  border-top: 1px solid rgba(26, 38, 57, 0.08);
+  text-align: left;
+}
+
+.bpitch__features li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.bpitch__features svg {
+  flex-shrink: 0;
+  color: var(--color-forest);
+}
+
+.bpitch__cta {
+  margin-top: auto;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-button);
+  background: linear-gradient(135deg, var(--color-orange), var(--color-gold));
+  color: var(--color-white);
+  font-size: 0.92rem;
+  font-weight: 800;
+  box-shadow: 0 8px 20px rgba(245, 133, 41, 0.3);
+  /* `transform` y `box-shadow`, nada de blur: regla 2 de rendimiento. */
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.bpitch__cta:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(245, 133, 41, 0.38);
+}
+
+.bpitch__cta:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bpitch__fine {
+  margin-top: 0.7rem;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* ── Que entre entero, sin scroll propio ──────────────────────
+   El alto del modal sigue al de la ventana (ver .bpitch) y la ilustración se
+   achica sola. Con poca altura, además, se van soltando partes en orden de
+   importancia, igual que en GoogleGate. Nunca se tocan los pasos, el precio ni
+   el botón. Cada consulta depende sólo de la ventana, nunca del paso: así el
+   modal sigue midiendo lo mismo al pasar de uno a otro. */
+@media (max-height: 720px) {
+  .bpitch__desc,
+  .bpitch__plan-desc {
+    display: none;
+  }
+}
+
+@media (max-height: 620px) {
+  .bpitch__art,
+  .bpitch__features {
+    display: none;
+  }
+}
+
+@media (max-height: 500px) {
+  .bpitch__billing,
+  .bpitch__fine {
+    display: none;
+  }
+}
+
+@media (max-height: 440px) {
+  .bpitch__badge {
+    display: none;
+  }
+
+  .bpitch__title {
+    margin-top: 0;
+  }
+
+  .bpitch__progress {
+    margin: 0.6rem 0;
+  }
+}
+
+/* Angosto: una columna, sin ilustración (achicada a ese ancho no se lee). Sin
+   ilustración no hay nada que ceda, así que el alto vuelve a ser el del
+   contenido; lo que lo mantiene fijo entre pasos son los altos mínimos de los
+   textos y los botones con el mismo borde. */
+@media (max-width: 900px) {
+  .bpitch {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    max-width: 520px;
+    height: auto;
+  }
+
+  /* Red de seguridad, sólo en una columna: si en una pantalla muy baja el modal
+     igual no entra, la capa deja scrollear antes que dejar los botones fuera de
+     alcance. Con las alturas de un celular común no llega a hacer falta (ver
+     las reglas de 640 de abajo). */
+  .ggate__layer.bpitch-layer {
+    overflow-y: auto;
+  }
+
+  .bpitch__art {
+    display: none;
+  }
+
+  .bpitch__step {
+    margin-top: 0;
+  }
+
+  .bpitch__offer {
+    padding: 1.25rem 1.5rem 1.25rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .bpitch__story {
+    padding: 1.25rem 1.25rem 1rem;
+  }
+
+  .bpitch__badge {
+    display: none;
+  }
+
+  .bpitch__title {
+    margin-top: 0;
+    font-size: 1.2rem;
+  }
+
+  .bpitch__progress {
+    margin: 0.8rem 0;
+  }
+
+  /* En un celular el texto más largo (NPS, paso 1) ocupa cuatro renglones. */
+  .bpitch__step-text {
+    min-height: 6em;
+  }
+
+  .bpitch__desc,
+  .bpitch__plan-desc,
+  .bpitch__features,
+  .bpitch__billing {
+    display: none;
+  }
+
+  .bpitch__trial,
+  .bpitch__price {
+    margin-top: 0.6rem;
+  }
+
+  .bpitch__amount {
+    font-size: 1.7rem;
+  }
+
+  .bpitch__cta {
+    margin-top: 0.9rem;
+  }
+}
+
+@media (max-width: 640px) and (max-height: 700px) {
+  .bpitch__fine {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bpitch {
+    animation: none;
+  }
+
+  .bpitch__cta,
+  .bpitch__back,
+  .bpitch__next {
+    transition: none;
+  }
+
+  .bpitch__cta:hover:not(:disabled),
+  .bpitch__back:hover,
+  .bpitch__next:hover {
+    transform: none;
+  }
+}

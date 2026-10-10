@@ -1,24 +1,153 @@
 import { useMemo, useState } from 'react';
 import Select from '../../components/Select/Select';
+import SelectField from '../../components/Select/SelectField';
 import PieChart from '../../components/PieChart/PieChart';
 import Icon from '../../components/Icon/Icon';
-import { KpiTrend } from '../../components/KpiCard/KpiCard';
+import KpiCard, { KpiTrend } from '../../components/KpiCard/KpiCard';
+import TrendChart from '../../components/TrendChart/TrendChart';
 import { PLATFORM_4 } from '../../lib/chartColors';
 import { percentTrend, pointsTrend } from '../../lib/companyOverview';
+import { METRICS } from './googleMetricsModel';
 
 /*
- * Las tarjetas Business de Métricas, sólo presentación: reciben los totales ya
- * sumados (`cur`, `prev` con la forma de sumRows() de GoogleMetricsScreen) y los
- * dibujan. Las usan la pantalla real y la maqueta de BusinessLock
- * (GoogleMetricsBusinessPreview), así las dos se ven idénticas y un cambio de
- * diseño se hace una sola vez — el mismo patrón que CompanyBlocks.
+ * Las tarjetas de Métricas, sólo presentación: reciben los totales ya sumados
+ * (`cur`, `prev` con la forma de sumRows() de GoogleMetricsScreen) y los
+ * dibujan. Las usan la pantalla real, la maqueta de GoogleGate
+ * (GoogleMetricsMockup) y las de BusinessLock (GoogleMetricsBusinessPreview),
+ * así las tres se ven idénticas y un cambio de diseño se hace una sola vez — el
+ * mismo patrón que CompanyBlocks.
  *
  * Ningún bloque inventa un valor: sin período anterior dicen «—» o explican qué
- * falta. Los números inventados viven sólo en la maqueta.
+ * falta. Los números inventados viven sólo en las maquetas.
  */
 
 const NUM = new Intl.NumberFormat('es-AR');
 const PCT = new Intl.NumberFormat('es-AR', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const PCT_SHORT = new Intl.NumberFormat('es-AR', { style: 'percent', maximumFractionDigits: 1 });
+
+/* Local + rango, los mismos campos que Mi Empresa (components/Select/SelectField),
+   y debajo la nota del atraso de Google. */
+export function MetricsToolbar({ locationId, onLocation, locationOptions, range, onRange, rangeOptions, note }) {
+  return (
+    <div className="gb-card gbm-toolbar">
+      <div className="gbm-toolbar__filters">
+        <SelectField label="Local" icon="store" value={locationId} onChange={onLocation} options={locationOptions} />
+        <SelectField label="Rango de fechas" icon="calendar" value={range} onChange={onRange} options={rangeOptions} />
+      </div>
+      <p className="gbm-note">
+        <Icon name="info" size={14} />
+        {note}
+      </p>
+    </div>
+  );
+}
+
+/* Las mismas tarjetas de KPI que Mi Empresa y Dispositivos. */
+export function MetricsKpis({ cur, prev }) {
+  return (
+    <div className="kpi-grid">
+      {METRICS.map((m) => (
+        <KpiCard key={m.key} icon={<Icon name={m.icon} size={16} />} color={m.color} label={m.label}>
+          <div className="kpi-card__value">{NUM.format(cur[m.key])}</div>
+          <KpiTrend
+            trend={percentTrend(cur[m.key], prev?.[m.key])}
+            caption={prev ? `antes ${NUM.format(prev[m.key])}` : 'Sin período anterior'}
+          />
+        </KpiCard>
+      ))}
+    </div>
+  );
+}
+
+/* `series[key]`: { cur: number[], prev?: number[] }, día por día. */
+export function MetricsTrends({ series, labels, hasPrevious }) {
+  return (
+    <div className="gb-card gbm-trends">
+      <div className="gb-card__header">
+        <div>
+          <h3 className="gb-card__title">Tendencia de interacciones</h3>
+          <span className="gb-card__subtitle">
+            {hasPrevious ? 'Línea llena: este período · punteada: el anterior' : 'Este período'}
+          </span>
+        </div>
+      </div>
+      <div className="gbm-trends__grid">
+        {METRICS.map((m) => (
+          <div key={m.key} className="gbm-trend">
+            <span className="gbm-trend__title">{m.label}</span>
+            <TrendChart
+              data={series[m.key].cur}
+              compareData={series[m.key].prev}
+              labels={labels}
+              color={m.color}
+              seriesName="Este período"
+              compareName="Período anterior"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function MetricsInsights({ items }) {
+  return (
+    <div className="gb-card">
+      <div className="gb-card__header">
+        <div>
+          <h3 className="gb-card__title">Qué dicen tus métricas</h3>
+          <span className="gb-card__subtitle">Sugerencias a partir de los números de arriba</span>
+        </div>
+      </div>
+      <ul className="gbm-insights">
+        {items.map((i) => (
+          <li key={i.title}>
+            <strong>{i.title}</strong>
+            <span>{i.text}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* `byLocation`: [{ locationId, name, cur, prev }], con `prev` en null si no hay
+   período anterior (cada fila dice «—»). */
+export function LocationCompare({ byLocation }) {
+  return (
+    <div className="gb-card gbm-section">
+      <div className="gb-card__header">
+        <div>
+          <h3 className="gb-card__title">Comparativa de sucursales</h3>
+          <span className="gb-card__subtitle">Las {byLocation.length} con más impresiones del período</span>
+        </div>
+      </div>
+      <div className="gbm-compare">
+        {byLocation.map((l) => {
+          const conv = l.cur.impressions ? l.cur.interactions / l.cur.impressions : 0;
+          const convP = l.prev?.impressions ? l.prev.interactions / l.prev.impressions : 0;
+          const rowsOf = [
+            ['Impresiones', NUM.format(l.cur.impressions), percentTrend(l.cur.impressions, l.prev?.impressions)],
+            ['Interacciones', NUM.format(l.cur.interactions), percentTrend(l.cur.interactions, l.prev?.interactions)],
+            ['Conversión', PCT_SHORT.format(conv), percentTrend(conv, convP)],
+          ];
+          return (
+            <div key={l.locationId} className="gbm-compare__item">
+              <span className="gbm-compare__name">{l.name}</span>
+              {rowsOf.map(([label, value, t]) => (
+                <div key={label} className="gbm-compare__row">
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                  <em className={t?.direction === 'down' ? 'gbm-down' : 'gbm-up'}>{t?.text ?? '—'}</em>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const rateOf = (part, total) => (total ? part / total : null);
 const formatRate = (rate) => (rate == null ? '—' : PCT.format(rate));

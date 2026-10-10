@@ -3,10 +3,12 @@ import { useOrg } from '../../context/OrgContext';
 import { useGoogleConnection } from '../../lib/googleApi';
 import ReportsKeywordsMockup from './ReportsKeywordsMockup';
 import ReportsKeywordsScreen from './ReportsKeywordsScreen';
+import { KeywordsPitch } from './ReportsPitches';
 
 /*
  * Palabras clave — sale del modal junto con Sentimiento (fase 5, 0033). Mismo
- * recorrido: sin Google, GoogleGate con la maqueta; conectado (o en
+ * recorrido: en gratis, KeywordsPitch (el modal de ventas de Business) con la
+ * maqueta; en Business sin Google, GoogleGate con la maqueta; conectado (o en
  * 'needs_reauth'), ReportsKeywordsScreen sobre v_review_analysis.
  *
  * Ojo con no confundir esta pantalla con la de SEO Local ni con «Búsquedas que
@@ -15,9 +17,17 @@ import ReportsKeywordsScreen from './ReportsKeywordsScreen';
  * distintas.
  */
 export default function ReportsKeywords({ onNavigateSettings }) {
-  const { org } = useOrg();
+  const { org, isBusiness } = useOrg();
   const google = useGoogleConnection(org?.organization_id);
   const status = google.connection?.status;
+
+  if (!isBusiness) {
+    return (
+      <KeywordsPitch>
+        <ReportsKeywordsMockup />
+      </KeywordsPitch>
+    );
+  }
 
   if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
     return <ReportsKeywordsScreen google={google} onNavigateSettings={onNavigateSettings} />;

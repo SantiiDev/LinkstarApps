@@ -719,9 +719,31 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
   the same conditions: blurred, `inert`, behind a veil that can't be closed, and with **invented** numbers
   (`*BusinessPreview.jsx` files), never the customer's own Business data — which a free account doesn't
   even receive. It is per card (absolute overlay), and its button goes to Facturación. `useOrg().isBusiness`
-  decides what it draws; the database decides what exists. `fullPage` puts the call to action at the top
-  instead of the middle, for the two Reportes screens where the lock covers the whole section; there the
-  preview is the section's existing `*Mockup.jsx` with `showHeader={false}`.
+  decides what it draws; the database decides what exists. Its lock copy lives in
+  `pages/GoogleBusiness/businessLocks.js`. The `*Mockup.jsx` behind `GoogleGate` don't use it: they show
+  the Business cards open, on every plan. It used to have a `fullPage`
+  variant for the Reportes sections; since 10 Oct 2026 those use `BusinessPitch` instead (next bullet).
+- **`components/BusinessPitch` is the third place a mock may render**: the sales modal of a section that is
+  Business as a whole — `reports-nps`, `reports-sentiment`, `reports-keywords` — following Tapstar's (steps
+  carousel on the left, plan on the right; 3, 3 and 2 steps, in `pages/Reports/ReportsPitches.jsx`). A free
+  account sees it **whether or not Google is connected**; Business without Google gets `GoogleGate`, Business
+  connected gets the screen. It reuses `GoogleGate`'s background, veil and fixed layer (`GoogleGate.css`) and
+  its rules: blurred, `inert`, can't be closed. The step illustrations are the screens' real blocks with
+  invented data (`pages/Reports/reportsSample.js`, shared with the `*Mockup.jsx` behind), shrunk with
+  `transform` and with their `backdrop-filter` forced off (rule 2 of scroll performance). The price, trial and
+  checkout mode come from `plans` (`useBusinessPlan()` in `lib/plans.js`): there is **no** per-location
+  pricing or annual plan, so none of Tapstar's location slider or monthly/annual toggle. The button follows
+  `effectiveCheckoutMode()`: «Probar N días gratis» → `/alta/pago?plan=business` (disabled for
+  manager/viewer), or «Contactar con ventas» → `/panel/contacto` while `VITE_BUSINESS_CHECKOUT=off`. Step 3 of
+  Sentimiento deliberately does not copy Tapstar's AI-summarized themes, which we don't have. **The modal
+  has the same size in the three sections and on every step** — Siguiente/Atrás only change the orange
+  column, the price never moves. The dialog is centered, so one pixel of height moves everything: it has a
+  **fixed `height`** (tied to the window, never to the step) and the illustration is what gives
+  (`flex: 1 1 0`, with the grid row at `minmax(0, 1fr)` — an `auto` row grew to the unshrunk illustration
+  and the dialog's `overflow: hidden` cut the buttons off, 10 Oct 2026),
+  plus `minmax(0, …)` columns, a fixed `width`, «Atrás» and «Siguiente» with the same border (without it the
+  first step, which has no «Atrás», was 2px shorter) and a `min-height` per changing text. All in
+  `BusinessPitch.css`, explained at the top.
 - **Metrics** (`google_daily_metrics`, `google_search_keywords`): stored for every org, read through the
   RPC. Google publishes with ~4 days of lag and revises recent days, so each run re-reads the last 10 days
   and upserts; a ficha with no rows gets an 18-month backfill. Keywords are monthly and Google sums
@@ -747,8 +769,9 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
   editor holds one range per day and would flatten a second shift — it says so and sends you to Google).
   Since 8 Oct 2026 the screen follows Tapstar's Perfil: protection first, then business info, contact
   (WhatsApp and the second phone as their own fields, one icon per social network), hours, categories
-  and attributes as rows with a group icon and, for ~15 common ones, a one-line hint (`ATTRIBUTE_HINTS`
-  in `lib/googleProfile.js`, keyed by attribute name — a name that doesn't match just shows no hint).
+  and attributes as rows with a group icon and a one-line hint each (`attributeHint()` in
+  `lib/googleProfile.js`: `ATTRIBUTE_HINTS` by attribute name for ~70 common ones, and for any other a line
+  chosen by the Spanish group name Google sends, so no attribute is left without one).
   Attributes are still **only the ones Google enables for the ficha's category**: Tapstar shows a fixed
   list («Se admiten perros» to a software company), and Google rejects attributes outside the category.
   The protection card is `ProtectionBlock` (`GoogleProfileBlocks.jsx`), shared by the real card and its
@@ -788,7 +811,16 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
   (noted at the top of `GooglePostsScreen.jsx`): publishing to several fichas at once (each ficha is one
   post for Google, so it collides with the free quota — it would be Business, publishing ficha by ficha
   and reporting which failed) and a "Publicaciones programadas" card, which waits for scheduling itself.
-  "Escribir con IA" in the composer is a button only, marked Próximamente — same rule as Reviews' AI reply.
+  The composer (`GooglePostComposer.jsx`, since 10 Oct 2026) follows Tapstar's steps: Tipo → Foto →
+  **Detalles** (Oferta and Evento only: title, dates, and coupon/link/terms for an offer or optional times
+  for an event — an offer is sent without times) → Qué contar → Revisar (`stepsFor()` in
+  `googlePostsModel.js`). «Qué contar» is a choice: the AI-suggestions card (UI only, Próximamente — same
+  rule as Reviews' AI reply; locked with «Ver plan Business» on free) or «Escribir yo mismo», which jumps
+  straight to Revisar. Revisar has the text, «Insertar variable» (inserts at the cursor the ficha's real
+  name, city, address, phone or website, read live with `fetchGoogleProfile()` — the profile route returns
+  `city` for this), the AI quick tweaks (UI only, Próximamente), the action button, and «Programar» /
+  «Programar para» disabled with Próximamente (decision #16), next to a Google-style preview with a
+  phone/desktop toggle. Unlike Tapstar, photos are allowed on every plan.
 - `googleRequest()` retries 429/5xx for GET/PUT/PATCH/DELETE but **never for POST**: retrying a create
   after a slow answer would publish the post twice.
 - **SEO Local → Análisis SEO** (7 Oct 2026, structure copied from Tapstar's redesign, screenshots in the
@@ -845,8 +877,8 @@ stars), `topics` from a **closed list** (`atencion`, `calidad`, `precio`, `esper
 - Screens: `pages/Reports/ReportsNpsScreen.jsx` / `ReportsSentimentScreen.jsx` / `ReportsKeywordsScreen.jsx`,
   reading `v_review_analysis` through `fetchReviewAnalysis()` (paged, filtered by org) and aggregated
   client-side in `lib/reviewInsights.js`. Months with no reviews are left out of the trend, not drawn as
-  0%; "la más repetida" shows "—" when no keyword repeats. Free accounts see the mock behind
-  `BusinessLock fullPage`. Since 9 Oct 2026 the three share one toolbar (`AnalysisToolbar`, built on
+  0%; "la más repetida" shows "—" when no keyword repeats. Free accounts see the sales modal
+  (`BusinessPitch`) over the mock, connected or not. Since 9 Oct 2026 the three share one toolbar (`AnalysisToolbar`, built on
   `SelectField`: "Local" + "Rango de fechas") with **Mi Empresa's day ranges** (`RANGE_OPTIONS` of
   `lib/companyOverview.js`, default 90 days) — they used to have their own 3/6/12-month list.
   **Sentimiento** follows Tapstar's structure since 9 Oct 2026 (blocks in `SentimentBlocks.jsx`, shared with
@@ -989,8 +1021,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   `useGoogleConnection()` (`lib/googleApi.js`). Since Oct 2026 it lives in two places: `GoogleGate` and
   `GoogleConnectBanner` (Devices, Company's settings card). `useGoogleConnection()` remembers the last status per org for the tab's lifetime, so
   entering a Google section doesn't flash the gate before the real screen.
-- **`components/GoogleGate` is the only place a mock is allowed to render, and that is what makes it
-  legal.** The sections that depend on the customer's Google profile — `reviews`, the four `gb-*`,
+- **`components/GoogleGate` is where a mock is allowed to render, and that is what makes it legal** (the
+  other two, under the same conditions, are `BusinessLock` and `BusinessPitch`). The sections that depend on the customer's Google profile — `reviews`, the four `gb-*`,
   `reports-sentiment`, `reports-keywords`, since 9 Oct 2026 `reports-nps`, and since Oct 2026 `company` (with a mock written for its new
   layout, `CompanyMockup.jsx`, instead of a recovered one) — show their mock *as the background* of a modal that
   invites you to connect: blurred, `inert` (no clicks, no tab stops, no text selection, no screen reader),
@@ -1053,7 +1085,14 @@ split below before wiring anything — the shell is finished, the data mostly is
   commit where those ten screens were still drawing their grids, tables and charts; seven of them now live
   in the tree as `*Mockup.jsx`, `monthly-reports` is still only in the tag (`reports-nps` was rebuilt from
   scratch on 9 Oct 2026, with a new `ReportsNpsMockup.jsx`, not the tag's), and `automations` was rewritten against `0023` (its old mock stays in the tag too), each
-  with the `git show` line in its header. Connecting
+  with the `git show` line in its header. The mocks of `gb-metrics`, `gb-profile`, `gb-posts` and `gb-seo`
+  stopped being the tag's JSX on 10 Oct 2026: they are drawn with the same `*Blocks.jsx` as their real
+  screen (`GoogleMetricsBlocks`, `GoogleProfileBlocks`, `GooglePostsBlocks`, `GoogleSeoBlocks`) with invented
+  data, so what sits behind the gate is what the customer gets after connecting. They are drawn **as a
+  Business account sees them, on every plan**: no `BusinessLock`, no quota banner, nothing blurred asking
+  to upgrade — behind the Google modal the section is a showcase, and the locks appear only on the real
+  screen (`MetricsBusinessCards locked={false}` for Métricas). The old `gb-stat-grid`,
+  `gb-profile-preview`, `gb-checklist`, `gb-post-card`, `gb-score-*` CSS went with them. Connecting
   Google flips no switch either way: the mock is a *drawing*, not a screen wired to data, so a connected
   account does not get a working section — somebody has to rewrite each one against the real data and
   delete the `*Mockup.jsx`. Budget that front-end work into phase 4 alongside the API work. What looks like

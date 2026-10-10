@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
-import SelectField from '../../components/Select/SelectField';
 import Icon from '../../components/Icon/Icon';
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
 import BusinessLock from '../../components/BusinessLock/BusinessLock';
@@ -12,19 +11,9 @@ import {
   resolveProfileChange,
   updateGoogleProfile,
 } from '../../lib/googleApi';
-import {
-  ATTRIBUTE_HINTS,
-  ATTRIBUTE_STATES,
-  DAYS,
-  OPEN_STATUS,
-  SOCIAL,
-  WHATSAPP_ATTRIBUTE,
-  attributeGroupIcon,
-  attributeState,
-  hhmm,
-  hoursLabel,
-} from '../../lib/googleProfile';
-import { ProtectionBlock } from './GoogleProfileBlocks';
+import { ATTRIBUTE_STATES, DAYS, SOCIAL, attributeHint, hhmm } from '../../lib/googleProfile';
+import { ProfileDetails, ProfileToolbar, ProtectionBlock } from './GoogleProfileBlocks';
+import { PROTECTION_LOCK } from './businessLocks';
 import { ProtectionPreview } from './GoogleProfileBusinessPreview';
 import '../../components/FormModal/FormModal.css';
 import './GoogleBusiness.css';
@@ -45,8 +34,8 @@ import './GoogleProfile.css';
  *     día, y guardar uno cortado lo aplastaría. Se avisa y se edita en Google.
  *
  * La protección de ficha (Business, 0030) lee google_profile_changes con RLS; en
- * gratis va detrás de BusinessLock. La tarjeta se dibuja con ProtectionBlock
- * (GoogleProfileBlocks), el mismo que usa su maqueta.
+ * gratis va detrás de BusinessLock. La ficha y la protección se dibujan con
+ * GoogleProfileBlocks, los mismos bloques que usan sus maquetas.
  *
  * La estructura sigue a la pantalla de Tapstar, salvo lo que Tapstar promete y
  * nosotros no hacemos (revertir solo) y su lista fija de atributos: acá se
@@ -84,38 +73,6 @@ function formToHours(form) {
     }),
   };
 }
-
-function Card({ icon, title, children }) {
-  return (
-    <div className="gb-card gbp-card">
-      <div className="gbp-card__head">
-        <h3 className="gb-card__title"><span className="gbp-card__icon"><Icon name={icon} size={17} /></span>{title}</h3>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-/* Un dato de la ficha: etiqueta arriba, valor abajo, con ícono opcional. Vacío,
-   «No especificado» en gris. */
-function Field({ label, icon, children }) {
-  const empty = children == null || children === '';
-  return (
-    <div className="gbp-field">
-      <span className="gbp-field__label">
-        {icon && <Icon name={icon} size={13} />}
-        {label}
-      </span>
-      <span className={`gbp-field__value${empty ? ' gbp-field__value--empty' : ''}`}>
-        {empty ? 'No especificado' : children}
-      </span>
-    </div>
-  );
-}
-
-const ExternalLink = ({ href }) => (
-  <a className="gbp-link" href={href} target="_blank" rel="noopener noreferrer">{href}</a>
-);
 
 /* ─── Edición ──────────────────────────────────────────────────────────────── */
 
@@ -276,7 +233,7 @@ function EditProfileModal({ data, onClose, onSaved, googleLocationId }) {
                 <div key={b.name} className="gbp-attr gbp-attr--edit">
                   <span className="gbp-attr__text">
                     <span className="gbp-attr__name">{b.displayName}</span>
-                    {ATTRIBUTE_HINTS[b.name] && <span className="gbp-attr__hint">{ATTRIBUTE_HINTS[b.name]}</span>}
+                    <span className="gbp-attr__hint">{attributeHint(b)}</span>
                   </span>
                   <div className="gbp-tri" role="radiogroup" aria-label={b.displayName}>
                     {ATTRIBUTE_STATES.map((s) => (
@@ -412,32 +369,18 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
   }
 
   const options = (fichas ?? []).map((f) => ({ value: f.id, label: f.locations?.name ?? f.title ?? 'Ficha' }));
-  const p = data?.profile;
-  const links = (data?.attributes ?? []).filter((a) => a.valueType === 'URL');
-  const whatsapp = links.find((l) => l.name === WHATSAPP_ATTRIBUTE);
-  const socials = links.filter((l) => l.name !== WHATSAPP_ATTRIBUTE);
-  const groups = (data?.attributes ?? [])
-    .filter((a) => a.valueType === 'BOOL')
-    .reduce((acc, a) => {
-      (acc[a.group] ??= []).push(a);
-      return acc;
-    }, {});
 
   return (
     <div className="gb-page">
       {header}
       {reauthNotice}
 
-      {/* El mismo selector de local que Mi Empresa y Métricas, aunque haya una sola ficha. */}
-      <div className="gb-card gbp-toolbar">
-        <SelectField label="Local" icon="store" value={selected ?? ''} onChange={setSelected} options={options} />
-        {data?.canEdit && (
-          <button type="button" className="gb-btn-primary gbp-edit-btn" onClick={() => setEditing(true)}>
-            <Icon name="pen" size={15} />
-            Editar perfil
-          </button>
-        )}
-      </div>
+      <ProfileToolbar
+        options={options}
+        selected={selected}
+        onSelect={setSelected}
+        onEdit={data?.canEdit ? () => setEditing(true) : null}
+      />
 
       {savedNotice && (
         <p className="gbp-saved" role="status">
@@ -447,11 +390,7 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
 
       {selected && (
         <div className="gbp-card">
-          <BusinessLock
-            title="Que nadie cambie tu ficha sin que lo sepas"
-            description="Si Google cambia tu teléfono, tu horario o te marca como cerrado, te avisamos y lo deshacés con un botón."
-            preview={<ProtectionPreview />}
-          >
+          <BusinessLock {...PROTECTION_LOCK} preview={<ProtectionPreview />}>
             <ProtectionCard orgId={orgId} googleLocationId={selected} canEdit={Boolean(data?.canEdit)} onResolved={loadProfile} />
           </BusinessLock>
         </div>
@@ -460,106 +399,7 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
       {error && <p className="gbm-error" role="alert">{error}</p>}
       {!error && !data && <p className="gbm-muted">Leyendo tu ficha en Google…</p>}
 
-      {p && (
-        <>
-          <Card icon="pin" title="Información del negocio">
-            <div className="gbp-fields">
-              <Field label="Nombre">{p.title || '—'}</Field>
-              <Field label="Dirección">
-                {p.address || '—'}
-                <small className="gbp-field__note">Para cambiarla, hacelo en Google: dispara una nueva verificación.</small>
-              </Field>
-              <Field label="Estado">{OPEN_STATUS[p.openStatus] ?? '—'}</Field>
-            </div>
-            <Field label="Descripción">{p.description || 'Sin descripción'}</Field>
-            {p.mapsUri && (
-              <a className="gbp-link gbp-link--icon" href={p.mapsUri} target="_blank" rel="noopener noreferrer">
-                <Icon name="externalLink" size={13} />
-                Ver en Google Maps
-              </a>
-            )}
-          </Card>
-
-          <Card icon="phone" title="Información de contacto">
-            <div className="gbp-fields">
-              <Field label="Teléfono principal" icon="phone">{p.primaryPhone}</Field>
-              <Field label="Teléfono secundario" icon="phone">{p.additionalPhones.join(', ')}</Field>
-              <Field label="Sitio web" icon="globe">{p.websiteUri && <ExternalLink href={p.websiteUri} />}</Field>
-              {whatsapp && (
-                <Field label="WhatsApp" icon="whatsapp">{whatsapp.uri && <ExternalLink href={whatsapp.uri} />}</Field>
-              )}
-            </div>
-            {socials.length > 0 && (
-              <>
-                <span className="gbp-subtitle gbp-subtitle--rule">Redes sociales</span>
-                <div className="gbp-fields">
-                  {socials.map((l) => (
-                    <Field key={l.name} label={SOCIAL[l.name]?.label ?? l.displayName} icon={SOCIAL[l.name]?.icon ?? 'globe'}>
-                      {l.uri && <ExternalLink href={l.uri} />}
-                    </Field>
-                  ))}
-                </div>
-              </>
-            )}
-          </Card>
-
-          <Card icon="clock" title="Horario de apertura">
-            {p.regularHours?.periods?.length ? (
-              <div className="gbp-hours">
-                {DAYS.map(([d, label]) => {
-                  const value = hoursLabel(p.regularHours, d);
-                  return (
-                    <div key={d} className="gbp-hours__row">
-                      <span>{label}</span>
-                      <span className={value ? '' : 'gbp-closed'}>{value ?? 'Cerrado'}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="gbp-hint">Tu ficha no tiene horario cargado. Agregarlo ayuda a que Google te muestre más.</p>
-            )}
-          </Card>
-
-          <Card icon="tag" title="Categorías del negocio">
-            <div className="gbp-tags">
-              {p.primaryCategory && <span className="gbp-tag gbp-tag--main">★ {p.primaryCategory}</span>}
-              {p.additionalCategories.map((c) => <span key={c} className="gbp-tag">{c}</span>)}
-              {!p.primaryCategory && <span className="gbp-hint">Sin categoría.</span>}
-            </div>
-            <small className="gbp-field__note">★ categoría principal. Por ahora las categorías se cambian desde Google.</small>
-          </Card>
-
-          {/* Siempre se ve: vacía dice por qué (Google no habilita atributos para el
-              rubro, o no pudimos leerlos) en vez de desaparecer. */}
-          <Card icon="accessibility" title="Accesibilidad y comodidades">
-            {data.attributesError && (
-              <p className="gbp-hint">No pudimos leer los atributos de tu ficha en Google. Probá recargar la página.</p>
-            )}
-            {!data.attributesError && !Object.keys(groups).length && (
-              <p className="gbp-hint">Google no habilita atributos de este tipo para el rubro de tu ficha.</p>
-            )}
-            {Object.entries(groups).map(([group, attrs]) => (
-              <div key={group} className="gbp-attr-group">
-                <span className="gbp-subtitle">{group}</span>
-                {attrs.map((a) => (
-                  <div key={a.name} className="gbp-attr">
-                    <span className="gbp-attr__icon"><Icon name={attributeGroupIcon(group)} size={15} /></span>
-                    <span className="gbp-attr__text">
-                      <span className="gbp-attr__name">{a.displayName}</span>
-                      {ATTRIBUTE_HINTS[a.name] && <span className="gbp-attr__hint">{ATTRIBUTE_HINTS[a.name]}</span>}
-                    </span>
-                    {/* Sólo lectura: se cambia desde «Editar perfil». */}
-                    <span className={`gbp-pill gbp-pill--${attributeState(a.value).tone}`}>
-                      {attributeState(a.value).label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </Card>
-        </>
-      )}
+      {data?.profile && <ProfileDetails data={data} />}
 
       {editing && data && (
         <EditProfileModal
