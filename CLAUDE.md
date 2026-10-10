@@ -724,8 +724,9 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
   the Business cards open, on every plan. It used to have a `fullPage`
   variant for the Reportes sections; since 10 Oct 2026 those use `BusinessPitch` instead (next bullet).
 - **`components/BusinessPitch` is the third place a mock may render**: the sales modal of a section that is
-  Business as a whole — `reports-nps`, `reports-sentiment`, `reports-keywords` — following Tapstar's (steps
-  carousel on the left, plan on the right; 3, 3 and 2 steps, in `pages/Reports/ReportsPitches.jsx`). A free
+  Business as a whole — `reports-nps`, `reports-sentiment`, `reports-keywords` and, since 10 Oct 2026,
+  `monthly-reports` — following Tapstar's (steps carousel on the left, plan on the right; 3, 3 and 2 steps
+  in `pages/Reports/ReportsPitches.jsx`, 3 in `pages/MonthlyReports/MonthlyReportsPitch.jsx`). A free
   account sees it **whether or not Google is connected**; Business without Google gets `GoogleGate`, Business
   connected gets the screen. It reuses `GoogleGate`'s background, veil and fixed layer (`GoogleGate.css`) and
   its rules: blurred, `inert`, can't be closed. The step illustrations are the screens' real blocks with
@@ -837,7 +838,36 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
   `BusinessLock` in free. In a tie, the "A mejorar" category is the one with most points to gain, and the
   screen opens on it. **Not yet verified against real Google** (on 7 Oct no machine but Railway could
   decrypt the production token): the first real run is the check that `media` and `serviceItems` come back
-  as expected. **Mapa SEO** (`gb-seo-map`, `pages/GoogleBusiness/GoogleSeoMap.jsx`) is a `soon` placeholder:
+  as expected. **Second pass on 10 Oct 2026**, after a closer comparison with Tapstar:
+  - **Activity counts posts.** It looked only at the date of the last post, so one post yesterday after
+    months of nothing got full marks. It now counts posts: 4 in 30 days (6 pts) and 12 in 90 (4 pts).
+  - **Reply speed moved to Reputación**, which now scores rating 6, count 4, reply rate 5, speed 3 and
+    reviews this month 2.
+  - **The reply rate covers the last 90 days**, falling back to the whole history when there are fewer
+    than 5 reviews in that window, so an old backlog doesn't sink it forever.
+  - **NAP gained a `name` check** (2 pts; address 4, phone 3, web 3, hours 6, special hours 2). It flags
+    keyword stuffing, which can get a listing suspended. It is conservative on purpose: it only flags
+    when a segment *after a separator* names the city or a word of the category, so "Café del Parque -
+    Centro" passes.
+  - **`auditLocation()` returns `next`** (the next level and how many points are missing). The level
+    cut-offs live in `LEVELS`, and `seoLevelOf()` in `lib/companyOverview.js` copies them.
+  - **The screen** reads, top to bottom: the toolbar (`SelectField` Local, always shown, plus "Volver a
+    analizar"), the score with "te faltan N puntos para…", the **next mission**, the tabs (category
+    icon in each ring), the Business card and the ranking. The next mission comes from
+    `nextMission()` in `googleSeoModel.js`: the pending check with the most points to gain. Checks
+    whose action is `devices` (rating, count, review pace) are excluded, because they are results, not
+    tasks. Ties go to what is solved inside the panel, and the gain is shown on the 0–100 scale.
+  - **Deliberately not copied from Tapstar:**
+    - the "reseñas sin responder" / "tasa de respuesta" KPI tiles (they repeat the checks);
+    - the blurred AI "Análisis de tu posicionamiento", which is empty even unlocked;
+    - one generic "Mejorar" button for everything;
+    - a Reputación without rating and count;
+    - penalizing service-area listings for having no address.
+  - **Possible next step: score evolution** ("+N este mes"). It needs the daily score stored per ficha
+    (a table written by the daily job, ~4 Google requests per ficha); today the analysis is computed
+    live and nothing is kept.
+
+  **Mapa SEO** (`gb-seo-map`, `pages/GoogleBusiness/GoogleSeoMap.jsx`) is a `soon` placeholder:
   the geogrid needs the Places API (separate key, billing, every grid point is a paid request, Business
   only with a monthly quota), and Maps Platform terms allow storing our own rank, not other businesses' data.
 
@@ -1001,13 +1031,13 @@ split below before wiring anything — the shell is finished, the data mostly is
   onboarding, and the "Facturación" tab of `settings` (plan and status from `OrgContext`, history from
   `subscription_payments`), and `automations` (`notification_preferences` / `notification_log`, see
   "Alerts"). `profile` reads the logged-in user from `AuthContext`.
-  The sections with no data source do **not** print numbers: the one that depends on us
-  (`monthly-reports`; `reports-nps` was the other until 9 Oct 2026) renders `components/SectionPlaceholder`,
+  The sections with no data source do **not** print numbers: `monthly-reports` (see "Informes
+  mensuales" below) shows the real locations with "0 informes" and everything marked Próximamente,
   and the ones that depend on
   the customer's Google profile render their old mock behind `components/GoogleGate` (see below). The rule
   that replaced the hardcoded arrays: a page with no data source says so; it never prints a number that
-  can't be distinguished from a measured one. The placeholder is for what *we* haven't built — monthly
-  reports, Mapa SEO — or a failed load, and it gets no button, because a button that resolves nothing is
+  can't be distinguished from a measured one. The placeholder is for what *we* haven't built — Mapa
+  SEO — or a failed load, and it gets no button, because a button that resolves nothing is
   worse than none. Each converted file keeps a header comment saying what it used to fake and which roadmap
   phase feeds it. It used to have a second variant, `google`, with the connect button; its last caller was
   the old Mi Empresa, and it was deleted in Oct 2026 — what depends on Google goes behind `GoogleGate`.
@@ -1083,7 +1113,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   `reports-nps` on 9 Oct 2026 (see "Review analysis"), and `gb-seo` (Análisis SEO) on 7 Oct 2026; none is behind the gate once connected.
 - **The mock JSX is a deliverable, not discarded history.** The tag `maquetas-pre-fase-2` points at the last
   commit where those ten screens were still drawing their grids, tables and charts; seven of them now live
-  in the tree as `*Mockup.jsx`, `monthly-reports` is still only in the tag (`reports-nps` was rebuilt from
+  in the tree as `*Mockup.jsx`, `monthly-reports` was rebuilt on 10 Oct 2026 with a different structure
+  (its tag JSX is only historical now) (`reports-nps` was rebuilt from
   scratch on 9 Oct 2026, with a new `ReportsNpsMockup.jsx`, not the tag's), and `automations` was rewritten against `0023` (its old mock stays in the tag too), each
   with the `git show` line in its header. The mocks of `gb-metrics`, `gb-profile`, `gb-posts` and `gb-seo`
   stopped being the tag's JSX on 10 Oct 2026: they are drawn with the same `*Blocks.jsx` as their real
@@ -1096,7 +1127,7 @@ split below before wiring anything — the shell is finished, the data mostly is
   Google flips no switch either way: the mock is a *drawing*, not a screen wired to data, so a connected
   account does not get a working section — somebody has to rewrite each one against the real data and
   delete the `*Mockup.jsx`. Budget that front-end work into phase 4 alongside the API work. What looks like
-  dead code and is not: the now-unused CSS in `Automations.css` and `MonthlyReports.css` (the design target
+  dead code and is not: the now-unused CSS in `Automations.css` (the design target
   for when the data arrives), and `components/DateField/`, a working date picker with no caller yet — the
   date-range filters of the reports screens are what it was built for. Neither gets swept in a dead-code
   pass. (`components/PieChart/`, `lib/shares.js` and `lib/chartColors.js` used to be on this list; the
@@ -1320,6 +1351,24 @@ split below before wiring anything — the shell is finished, the data mostly is
     `services/api/lib/seoAudit.js` for the multi-sucursal average.
   - Still no fallback to a mock when the base query fails, and still `'—'` (never `0`) for anything not
     measured: a sucursal without a linked ficha shows `—` in every Google column.
+- **Informes mensuales** (`pages/MonthlyReports/`, 10 Oct 2026, structure copied from Tapstar's «Informes
+  de Reputación»: one accordion item per location, plus "toda tu marca" with 2+ locations). It is Business
+  and **not functional yet**: no report or PDF is generated, and its content is still to be defined with
+  the partner.
+  - **Who sees what:** free gets `MonthlyReportsPitch` (3 steps) over `MonthlyReportsMockup`. Business
+    gets `MonthlyReportsScreen`: its real locations (`fetchLocationRows`) with "0 informes disponibles",
+    and "Generar informe", "Descargar PDF" and the email card disabled with `SoonBadge`. No invented
+    report ever shows outside the pitch.
+  - **Shared blocks:** `MonthlyReportsBlocks.jsx` serves the screen, the mock and the pitch, with
+    `soon` = how Business sees it today. `ReportPreview` (the PDF page in step 2) is only an
+    illustration, not a screen.
+  - **`Switch` gained `disabled`** for this card.
+  - **Pending, written at the top of `MonthlyReportsScreen.jsx`:**
+    - generate on **day 5** (Google's ~4-day lag), from the daily job;
+    - store the PDF in a private bucket with signed links;
+    - a small metadata table (one row per location and month; the PDF itself is the frozen month, no
+      JSON snapshot needed);
+    - send by Resend with a link and a new `notification_log` kind.
 - `pages/Settings/TeamMembers.jsx` + `lib/teamApi.js` are the members UI (invite by link, change role,
   remove, revoke a pending invitation); `pages/Settings/ActivityLog.jsx` reads `audit_log`. Both live under
   the "Equipo" tab, above the employees screen. See "Team" under Architecture before changing either — the

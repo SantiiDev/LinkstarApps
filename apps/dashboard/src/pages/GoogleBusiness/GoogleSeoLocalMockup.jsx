@@ -17,7 +17,15 @@
  */
 
 import PageHeader from '../../components/PageHeader/PageHeader';
-import { MissingTermsCard, Ranking, SeoCategories, SeoSummary } from './GoogleSeoBlocks';
+import {
+  MissingTermsCard,
+  NextMission,
+  Ranking,
+  SeoCategories,
+  SeoSummary,
+  SeoToolbar,
+} from './GoogleSeoBlocks';
+import { nextMission } from './googleSeoModel';
 import './GoogleBusiness.css';
 import './GoogleMetrics.css';
 import './GoogleSeoLocal.css';
@@ -43,8 +51,8 @@ function buildCategories(s) {
       check('services', 'Servicios o productos cargados', 4, s.services, 'google', 'Cargá al menos 5 productos o servicios: aparecen en tu ficha y suman palabras con las que te encuentran.', '2 cargados', 'Objetivo: 5'),
     ]],
     ['activity', 'Actividad', [
-      check('posts', 'Publicación reciente', 5, s.posts, 'posts', 'No publicaste nada en los últimos 30 días. Una novedad por semana mantiene la ficha activa.', 'Hace 45 días', 'Objetivo: una cada 30 días'),
-      check('reply_speed', 'Respondés rápido', 5, s.speed, 'reviews', 'Respondés en promedio a los 6 días. Contestar en menos de 2 le muestra a Google y a tus clientes que estás.', '6 días', 'Objetivo: menos de 2 días'),
+      check('posts_30d', 'Publicaciones (30 días)', 6, s.posts30, 'posts', 'Lo que cuenta es la constancia, no el volumen: una publicación por semana rinde más que cuatro juntas el día 30.', '1 en 30 días', 'Objetivo: 4 en 30 días'),
+      check('posts_90d', 'Constancia de publicación (90 días)', 4, s.posts90, 'posts', 'Google valora que la ficha lleve meses publicando. Un mes bueno seguido de dos en blanco suma menos que una por semana.', '3 en 90 días', 'Objetivo: 12 en 90 días'),
     ]],
     ['category', 'Relevancia de categoría', [
       check('primary_category', 'Categoría principal', 10, 10, 'google', 'Tu categoría principal es «Cafetería»: es la que más pesa en qué búsquedas aparecés.', 'Cafetería'),
@@ -52,17 +60,19 @@ function buildCategories(s) {
       check('attributes', 'Atributos completos', 5, s.attributes, 'profile', 'Completá los atributos que Google habilita para tu rubro: accesibilidad, pagos, servicios.', '6 de 9', 'Objetivo: todos'),
     ]],
     ['nap', 'Ficha NAP', [
-      check('address', 'Dirección o zona de servicio', 5, 5, 'google', 'Tu dirección está cargada y verificada.'),
-      check('phone', 'Teléfono', 4, 4, 'profile', 'Tu teléfono está cargado: es uno de los botones que más se tocan.', '0341 555-0000'),
-      check('website', 'Sitio web', 4, 4, 'profile', 'Tu web está cargada.', 'cafedelparque.com.ar'),
-      check('hours', 'Horario', 5, 5, 'profile', 'Tu horario está cargado para toda la semana.'),
+      check('address', 'Dirección o zona de servicio', 4, 4, 'google', 'Tu dirección está cargada y verificada.'),
+      check('name', 'Nombre del negocio', 2, 2, 'google', 'Nombre limpio, sin ciudad ni rubro agregados. Así tiene que quedar: rellenarlo con palabras clave es motivo de suspensión.'),
+      check('phone', 'Teléfono', 3, 3, 'profile', 'Tu teléfono está cargado: es uno de los botones que más se tocan.', '0341 555-0000'),
+      check('website', 'Sitio web', 3, 3, 'profile', 'Tu web está cargada.', 'cafedelparque.com.ar'),
+      check('hours', 'Horario', 6, 6, 'profile', 'Tu horario está cargado para toda la semana.'),
       check('special_hours', 'Horarios especiales', 2, s.special, 'google', 'Cargá los horarios de los próximos feriados: si no, Google te muestra abierto cuando no estás.', 'Sin feriados cargados'),
     ]],
     ['reputation', 'Reputación', [
-      check('rating', 'Puntaje promedio', 7, 6, 'reviews', 'Tu promedio es 4,6. Pedir reseñas a tus clientes contentos es lo que más lo sube.', '4,6 ★', 'Objetivo: 4,8'),
-      check('review_count', 'Cantidad de reseñas', 5, 5, 'devices', 'Tenés más de 100 reseñas: Google te muestra con más confianza.', '128 reseñas'),
-      check('reply_rate', 'Reseñas respondidas', 5, s.replies, 'reviews', 'Respondé todas las reseñas, también las buenas: Google lo toma como señal de que la ficha está atendida.', '64% respondidas', 'Objetivo: 90%'),
-      check('recent_reviews', 'Reseñas del último mes', 3, 3, 'devices', 'Recibiste 7 reseñas el último mes: el expositor está funcionando.', '7 este mes'),
+      check('rating', 'Puntaje promedio', 6, 6, 'devices', 'Tu promedio es 4,6. Pedir reseñas a tus clientes contentos es lo que más lo sube.', '4,6 ★', 'Objetivo: 4,5 ★'),
+      check('review_count', 'Cantidad de reseñas', 4, 4, 'devices', 'Tenés más de 100 reseñas: Google te muestra con más confianza.', '128 reseñas'),
+      check('reply_rate', 'Reseñas respondidas', 5, s.replies, 'reviews', 'Respondé todas las reseñas, también las buenas: Google lo toma como señal de que la ficha está atendida.', '14 de 22 · 64 % · últimos 90 días', 'Objetivo: 90%'),
+      check('reply_speed', 'Velocidad de respuesta', 3, s.speed, 'reviews', 'Respondé cada reseña en uno o dos días. Una respuesta a los diez días ya no la lee nadie.', '6 días de mediana', 'Objetivo: en 2 días'),
+      check('recent_reviews', 'Reseñas del último mes', 2, 2, 'devices', 'Recibiste 7 reseñas el último mes: el expositor está funcionando.', '7 en 30 días'),
     ]],
   ].map(([id, label, checks]) => {
     const max = checks.reduce((sum, c) => sum + c.max, 0);
@@ -78,14 +88,16 @@ function auditOf(categories) {
     .map((c) => ({ label: c.label, pct: c.score / c.measuredMax, missing: c.measuredMax - c.score }))
     .sort((a, b) => b.pct - a.pct || a.missing - b.missing);
   const level = score >= 85 ? 'Destacada' : score >= 65 ? 'Bien posicionada' : score >= 35 ? 'Visible online' : 'Difícil de encontrar';
-  return { score, level, closed: false, best: ranked[0].label, worst: ranked.at(-1).label, categories };
+  const nextAt = [35, 65, 85].find((at) => at > score);
+  const next = nextAt ? { level: nextAt === 35 ? 'Visible online' : nextAt === 65 ? 'Bien posicionada' : 'Destacada', points: nextAt - score } : null;
+  return { score, level, next, closed: false, best: ranked[0].label, worst: ranked.at(-1).label, categories };
 }
 
 const MAIN = auditOf(buildCategories({
-  cover: 2, logo: 0, photos: 4, fresh: 4, services: 2, posts: 0, speed: 2, attributes: 3, special: 0, replies: 3,
+  cover: 2, logo: 0, photos: 4, fresh: 4, services: 2, posts30: 2, posts90: 1, speed: 2, attributes: 3, special: 0, replies: 3,
 }));
 const SECOND = auditOf(buildCategories({
-  cover: 2, logo: 2, photos: 7, fresh: 7, services: 4, posts: 5, speed: 5, attributes: 5, special: 2, replies: 5,
+  cover: 2, logo: 2, photos: 7, fresh: 7, services: 4, posts30: 6, posts90: 4, speed: 3, attributes: 5, special: 2, replies: 5,
 }));
 
 const LOCATIONS = [
@@ -105,7 +117,9 @@ export default function GoogleSeoLocalMockup() {
         subtitle="Qué tan completa está tu ficha de Google y qué cambiar para aparecer más en las búsquedas cercanas"
       />
 
-      <SeoSummary locations={LOCATIONS} selected={LOCATIONS[0]} onSelect={noop} onRefresh={noop} refreshing={false} />
+      <SeoToolbar locations={LOCATIONS} selected={LOCATIONS[0]} onSelect={noop} onRefresh={noop} refreshing={false} />
+      <SeoSummary selected={LOCATIONS[0]} />
+      <NextMission mission={nextMission(MAIN)} onNavigateSection={noop} onShowCategory={noop} />
       <SeoCategories audit={MAIN} category={MAIN_CATEGORY} onCategory={noop} onNavigateSection={noop} />
 
       <MissingTermsCard

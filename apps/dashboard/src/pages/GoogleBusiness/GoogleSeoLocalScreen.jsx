@@ -4,7 +4,16 @@ import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
 import BusinessLock from '../../components/BusinessLock/BusinessLock';
 import { useOrg } from '../../context/OrgContext';
 import { fetchSeoAudit } from '../../lib/googleApi';
-import { MissingTermsCard, MissingTermsPreview, Ranking, SeoCategories, SeoSummary } from './GoogleSeoBlocks';
+import {
+  MissingTermsCard,
+  MissingTermsPreview,
+  NextMission,
+  Ranking,
+  SeoCategories,
+  SeoSummary,
+  SeoToolbar,
+} from './GoogleSeoBlocks';
+import { nextMission } from './googleSeoModel';
 import { MISSING_TERMS_LOCK } from './businessLocks';
 import './GoogleBusiness.css';
 import './GoogleMetrics.css';
@@ -16,9 +25,14 @@ import './GoogleSeoLocal.css';
  * El puntaje lo calcula el API sobre la ficha en vivo (services/api/lib/
  * seoAudit.js): seis categorías que suman 100, cada punto atado a un dato que
  * el cliente puede corregir. Google no publica un «puntaje de SEO local»; este
- * es nuestro y la pantalla lo dice. La estructura sigue a la de Tapstar:
- * categorías arriba, lo pendiente de la elegida con su «Mejorar», lo que ya se
- * cumple aparte, y el ranking entre sucursales.
+ * es nuestro y la pantalla lo dice. La estructura sigue a la de Tapstar: el
+ * puntaje con cuánto falta para el próximo nivel, la próxima misión (la tarea
+ * que más suma), las categorías con lo pendiente de la elegida y su botón, lo
+ * que ya se cumple aparte, y el ranking entre sucursales.
+ *
+ * Pendiente a futuro: la evolución del puntaje («+N este mes»). Necesita guardar
+ * el puntaje de cada ficha por día —una tabla que escriba el job diario, unos 4
+ * pedidos a Google por ficha—; hoy el análisis se calcula en vivo y no queda.
  *
  * Gratis ve el análisis entero. Business suma «Búsquedas que no están en tu
  * descripción», que sale de las palabras de búsqueda de Google (Business, 0029);
@@ -121,9 +135,8 @@ export default function GoogleSeoLocalScreen({ google, onNavigateSection }) {
   return (
     <div className="gb-page">
       {header}
-      {reauthNotice}
 
-      <SeoSummary
+      <SeoToolbar
         locations={locations}
         selected={selected}
         onSelect={setSelectedId}
@@ -131,10 +144,13 @@ export default function GoogleSeoLocalScreen({ google, onNavigateSection }) {
         refreshing={refreshing}
       />
 
+      {reauthNotice}
       {selected.error && <p className="gbm-error" role="alert">{selected.error}</p>}
 
       {audit && category && (
         <>
+          <SeoSummary selected={selected} />
+          <NextMission mission={nextMission(audit)} onNavigateSection={onNavigateSection} onShowCategory={setCategoryId} />
           <SeoCategories audit={audit} category={category} onCategory={setCategoryId} onNavigateSection={onNavigateSection} />
 
           <BusinessLock {...MISSING_TERMS_LOCK} preview={<MissingTermsPreview />}>

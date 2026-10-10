@@ -55,6 +55,11 @@
   outline-offset: 2px;
 }
 
+.ls-switch--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .ls-switch__label {
   font-size: 0.76rem;
   font-weight: 600;

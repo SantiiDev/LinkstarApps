@@ -248,6 +248,11 @@ function GoogleSeoLocalRoute() {
   );
 }
 
+function MonthlyReportsRoute() {
+  const navigate = useNavigate();
+  return <MonthlyReports onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
 function ReportsNpsRoute() {
   const navigate = useNavigate();
   return <ReportsNps onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
@@ -397,7 +402,7 @@ export default function App() {
         <Route path={SECTION_PATHS['reports-sentiment']} element={<ReportsSentimentRoute />} />
         <Route path={SECTION_PATHS['reports-keywords']} element={<ReportsKeywordsRoute />} />
 
-        <Route path={SECTION_PATHS['monthly-reports']} element={<MonthlyReports />} />
+        <Route path={SECTION_PATHS['monthly-reports']} element={<MonthlyReportsRoute />} />
         <Route path={SECTION_PATHS.automations} element={<Automations />} />
 
         {/* La pestaña abierta de Configuración va en la URL, así Dispositivos

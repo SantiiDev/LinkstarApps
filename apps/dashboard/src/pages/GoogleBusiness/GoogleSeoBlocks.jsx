@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import Select from '../../components/Select/Select';
+import Icon from '../../components/Icon/Icon';
+import SelectField from '../../components/Select/SelectField';
 
 /*
  * Análisis SEO, sólo presentación. Lo usan la pantalla real
@@ -17,6 +18,15 @@ const ACTIONS = {
   reviews: { label: 'Responder', section: 'reviews' },
   devices: { label: 'Ver expositores', section: 'devices' },
   google: { label: 'Mejorar en Google', href: GOOGLE_PROFILE_MANAGER },
+};
+
+const CATEGORY_ICONS = {
+  visual: 'camera',
+  keywords: 'search',
+  activity: 'activity',
+  category: 'tag',
+  nap: 'pin',
+  reputation: 'message',
 };
 
 const pctTone = (score, max) => {
@@ -74,7 +84,7 @@ function CheckCard({ check, onNavigateSection }) {
           <span className="gseo-check__label">{check.label}</span>
           <div className="gseo-pills">
             <span className={`gseo-pill gseo-pill--${unknown ? 'muted' : check.status === 'partial' ? 'mid' : 'bad'}`}>
-              {unknown ? 'No pudimos medirlo' : check.status === 'partial' ? 'A medias' : 'Pendiente'}
+              {unknown ? 'No pudimos medirlo' : check.status === 'partial' ? 'Mejorable' : 'Pendiente'}
             </span>
             {check.current && <span className="gseo-pill gseo-pill--info">{check.current}</span>}
             {check.target && <span className="gseo-pill gseo-pill--target">{check.target}</span>}
@@ -82,7 +92,8 @@ function CheckCard({ check, onNavigateSection }) {
         </div>
       </div>
       <p className="gseo-check__tip">
-        {unknown ? 'Google no nos dejó leer este dato ahora. No cuenta en tu puntaje hasta que podamos medirlo.' : check.tip}
+        {!unknown && <span className="gseo-check__bulb"><Icon name="bulb" size={14} /></span>}
+        <span>{unknown ? 'Google no nos dejó leer este dato ahora. No cuenta en tu puntaje hasta que podamos medirlo.' : check.tip}</span>
       </p>
       {!unknown && (
         <div className="gseo-check__foot">
@@ -93,42 +104,75 @@ function CheckCard({ check, onNavigateSection }) {
   );
 }
 
-/* El puntaje de la ficha elegida, con el selector de sucursal y «Volver a analizar». */
-export function SeoSummary({ locations, selected, onSelect, onRefresh, refreshing }) {
+/* El selector de local, como en Métricas y Perfil (aunque haya una sola ficha),
+   y «Volver a analizar», que saltea la caché de 10 minutos del API. */
+export function SeoToolbar({ locations, selected, onSelect, onRefresh, refreshing }) {
+  return (
+    <div className="gb-card gbm-toolbar gseo-toolbar">
+      <div className="gbm-toolbar__filters">
+        <SelectField
+          label="Local"
+          icon="store"
+          value={selected.googleLocationId}
+          onChange={onSelect}
+          options={locations.map((l) => ({ value: l.googleLocationId, label: l.name }))}
+        />
+      </div>
+      <button type="button" className="gseo-toggle gseo-toolbar__refresh" onClick={onRefresh} disabled={refreshing}>
+        <Icon name="refresh" size={14} />
+        {refreshing ? 'Actualizando…' : 'Volver a analizar'}
+      </button>
+    </div>
+  );
+}
+
+/* El puntaje de la ficha elegida: nivel y cuánto falta para el siguiente. */
+export function SeoSummary({ selected }) {
   const audit = selected.audit;
+  if (!audit) return null;
   return (
     <div className="gb-card gseo-summary">
-      {audit ? (
-        <Ring score={audit.score} max={100} size={84} stroke={7}>
-          <b className="gseo-summary__score">{audit.score}</b><small>/100</small>
-        </Ring>
-      ) : null}
+      <Ring score={audit.score} max={100} size={104} stroke={8}>
+        <b className="gseo-summary__score">{audit.score}</b>
+      </Ring>
       <div className="gseo-summary__text">
-        <p className="gseo-summary__title">
-          {selected.name}
-          {audit && <span className={`gseo-pill gseo-pill--${pctTone(audit.score, 100)}`}>{audit.level}</span>}
+        <span className="gseo-summary__eyebrow">Tu nivel · {selected.name}</span>
+        <p className="gseo-summary__level">{audit.level}</p>
+        <p className="gseo-summary__next">
+          {audit.next
+            ? `Te faltan ${audit.next.points} punto${audit.next.points === 1 ? '' : 's'} para llegar a «${audit.next.level}».`
+            : 'Llegaste al nivel más alto. Ahora se trata de sostenerlo.'}
         </p>
         <p className="gbm-note">
           Puntaje Linkstar: Google no publica un «puntaje de SEO local», así que lo armamos con lo que sí se puede
           medir de tu ficha. Cada punto de abajo dice de dónde sale y cómo subirlo.
         </p>
-        {audit?.closed && (
+        {audit.closed && (
           <p className="gbm-error">Google muestra esta ficha como cerrada. Si abriste de nuevo, cambialo en Google: una ficha cerrada no aparece en las búsquedas.</p>
         )}
       </div>
-      <div className="gseo-summary__tools">
-        {locations.length > 1 && (
-          <label className="gbm-field">
-            <span>Sucursal</span>
-            <Select
-              value={selected.googleLocationId}
-              onChange={onSelect}
-              options={locations.map((l) => ({ value: l.googleLocationId, label: l.name }))}
-            />
-          </label>
-        )}
-        <button type="button" className="gseo-toggle" onClick={onRefresh} disabled={refreshing}>
-          {refreshing ? 'Actualizando…' : 'Volver a analizar'}
+    </div>
+  );
+}
+
+/* `mission` sale de nextMission() (googleSeoModel.js). */
+export function NextMission({ mission, onNavigateSection, onShowCategory }) {
+  if (!mission) return null;
+  const { check, points, categoryId } = mission;
+  return (
+    <div className="gb-card gseo-mission">
+      <div className="gseo-mission__body">
+        <span className="gseo-mission__eyebrow">Tu próxima misión · mayor impacto</span>
+        <p className="gseo-mission__title">
+          {check.label}{check.current ? ` — ${check.current}` : ''}
+        </p>
+        <p className="gseo-mission__tip">{check.tip}</p>
+        <span className="gseo-pill gseo-pill--good">+{points} pts al completar</span>
+      </div>
+      <div className="gseo-mission__actions">
+        <ActionButton action={check.action} onNavigateSection={onNavigateSection} />
+        <button type="button" className="gseo-toggle" onClick={() => onShowCategory?.(categoryId)}>
+          Ver en el análisis
         </button>
       </div>
     </div>
@@ -154,8 +198,8 @@ export function SeoCategories({ audit, category, onCategory, onNavigateSection }
             className={`gseo-tab ${c.id === category.id ? 'gseo-tab--active' : ''}`}
             onClick={() => onCategory(c.id)}
           >
-            <Ring score={c.score} max={c.measuredMax || c.max} size={40} stroke={4}>
-              <small>{c.measuredMax ? Math.round((c.score / c.measuredMax) * 100) : '?'}</small>
+            <Ring score={c.score} max={c.measuredMax || c.max} size={42} stroke={4}>
+              <Icon name={CATEGORY_ICONS[c.id]} size={16} />
             </Ring>
             <span className="gseo-tab__label">{c.label}</span>
             <span className={`gseo-tab__pts gseo-tab__pts--${pctTone(c.score, c.measuredMax || c.max)}`}>
@@ -167,7 +211,10 @@ export function SeoCategories({ audit, category, onCategory, onNavigateSection }
 
       <div className="gb-card gseo-detail">
         <div className="gseo-detail__head">
-          <div>
+          <Ring score={category.score} max={category.measuredMax || category.max} size={52} stroke={5}>
+            <Icon name={CATEGORY_ICONS[category.id]} size={20} />
+          </Ring>
+          <div className="gseo-detail__heading">
             <h3 className="gseo-detail__title">{category.label}</h3>
             <p className="gb-card__subtitle">
               {left > 0 ? `Te quedan ${left} punto${left === 1 ? '' : 's'} por ganar acá` : 'Ya sumaste todo lo que se puede acá.'}
