@@ -92,7 +92,9 @@ export const DEFAULT_SECTION = 'company';
  * ella, y con la lista fija AppShell no tiene que consultar a Google en cada
  * sección. El costo es que, conectada la ficha, el aviso de suscripción tampoco
  * aparece en ellas. Mi Empresa entró en octubre de 2026, cuando se rehízo sobre
- * reseñas. */
+ * reseñas. Informes mensuales no depende de Google pero está por la misma razón:
+ * en gratis va detrás del modal de ventas de Business (components/BusinessPitch),
+ * y ahí el aviso tampoco se podría tocar. */
 export const GOOGLE_GATED_SECTIONS = new Set([
   'company',
   'reviews',
@@ -103,18 +105,21 @@ export const GOOGLE_GATED_SECTIONS = new Set([
   'reports-nps',
   'reports-sentiment',
   'reports-keywords',
+  'monthly-reports',
 ]);
 
 /* Pestañas de Configuración: van en la URL para poder enlazar directo a una
- * (Dispositivos enlaza a la de ubicaciones, por ejemplo). Los alias son los
- * nombres viejos, de cuando Equipo y Gestión local eran secciones propias. */
-export const SETTINGS_TABS = ['local', 'equipo', 'facturacion', 'legal'];
+ * (Dispositivos enlaza a la de ubicaciones, por ejemplo). La primera es la que
+ * se abre sin :tab. Los alias son los nombres viejos: de cuando Equipo y Gestión
+ * local eran secciones propias, y `facturacion`, que era Plan hasta oct 2026. */
+export const SETTINGS_TABS = ['plan', 'local', 'equipo', 'legal'];
 export const SETTINGS_TAB_ALIASES = {
   general: 'local',
   locations: 'local',
   employees: 'equipo',
   team: 'equipo',
-  billing: 'facturacion',
+  billing: 'plan',
+  facturacion: 'plan',
 };
 
 export function settingsTabPath(tab) {

@@ -32,11 +32,6 @@
   background: rgba(240, 243, 250, 0.35);
 }
 
-.block--page .block__veil {
-  justify-content: flex-start;
-  padding-top: clamp(3rem, 12vh, 7rem);
-}
-
 .block__title {
   max-width: 34ch;
   font-size: 1.15rem;

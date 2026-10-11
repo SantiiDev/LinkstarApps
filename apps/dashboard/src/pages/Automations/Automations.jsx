@@ -1,42 +1,70 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import BusinessLock from '../../components/BusinessLock/BusinessLock';
+import Icon from '../../components/Icon/Icon';
 import PageHeader from '../../components/PageHeader/PageHeader';
-import SoonBadge from '../../components/SoonBadge/SoonBadge';
 import { useOrg } from '../../context/OrgContext';
+import { fetchLocationRows } from '../../lib/catalogApi';
 import {
+  AUTO_REPLY_DEFAULTS,
+  PAST_REPLY_MAX,
+  fetchAutoReplyRule,
+  fetchAutoReplyStats,
+  replyPastReviews,
+  saveAutoReplyRule,
+} from '../../lib/automationsApi';
+import {
+  ALERT_MAX_RECIPIENTS,
+  ALERT_MAX_TERMS,
   DEFAULT_PREFERENCES,
   fetchNotificationPreferences,
-  saveNotificationPreferences,
-  fetchNotificationLog,
-  describeNotification,
+  isEmail,
   notificationsErrorMessage,
+  saveNotificationPreferences,
 } from '../../lib/notificationsApi';
+import {
+  AutoReplyCard,
+  AutoReplyStatsCard,
+  DeviceAlertsCard,
+  KeywordAlertCard,
+  LowRatingAlertCard,
+  PastRepliesCard,
+  ScopeCard,
+} from './AutomationsBlocks';
+import { AUTO_REPLY_LOCK, AUTO_REPLY_STATS_LOCK, PAST_REPLIES_LOCK } from './automationLocks';
+import { SAMPLE_AUTO_REPLY, SAMPLE_AUTO_REPLY_STATS, SAMPLE_PAST_REPLIES } from './automationsSample';
 import './Automations.css';
 
 /*
- * Automatizaciones — la mitad que existe de verdad, y la que no.
+ * Automatizaciones — la estructura de Tapstar, con nuestra estética:
  *
- * REAL desde octubre de 2026, sobre la 0023:
- *   - "Expositor sin escaneos" y "Resumen semanal". Salen sólo de escaneos, no
- *     necesitan Google, y corren para TODOS los planes (decisión del 6 oct).
- *   - Los interruptores escriben notification_preferences; lo que decide qué se
- *     manda es private.pending_notifications(), y quien lo manda es
- *     services/api/scripts/send-alerts.js, una vez por día (npm run daily).
- *   - "Últimos avisos enviados" lee notification_log, que sólo tiene envíos
- *     reales: send-alerts.js registra después de que el proveedor aceptó.
+ *   1. Selector de local («Configurar automatizaciones de»).
+ *   2. Responder reseñas anteriores        ┐ Business, con IA. El backend es del
+ *   3. Respuesta automática a reseñas       │ socio: el contrato (rutas y forma de
+ *   4. Reseñas respondidas automáticamente  ┘ los datos) está en lib/automationsApi.js.
+ *   5. Alerta por palabras clave            ┐ Todos los planes. Nuestras, reales
+ *   6. Alerta por valoración baja           ┘ (0036): las manda send-alerts.js.
+ *   7. Avisos de tus expositores (0023).
  *
- * EN DESARROLLO, sin interruptor: lo que va con IA o con reseñas. Antes esta
- * pantalla tenía interruptores que se prendían y apagaban sin guardar ni
- * ejecutar nada, que es peor que un número inventado: el cliente cree que dejó
- * algo activado. Por eso esas tarjetas no tienen switch, y no lo van a tener
- * hasta que haya algo que lo ejecute.
+ * En gratis, 2–4 van detrás de BusinessLock con datos inventados
+ * (automationsSample.js). Un viewer no ve 2–4: no puede responder reseñas (0026).
  *
- * Sólo owner y admin ven y cambian las preferencias (RLS de la 0023). Un
- * manager no puede ni leerlas: su consulta vuelve vacía, y mostrarle los
- * valores por defecto como si fueran los de la cuenta sería mentirle, así que
- * ve un aviso en su lugar.
+ * El mail de los cambios de Google en la ficha (0030) sigue saliendo para
+ * Business, pero no tiene tarjeta acá: se maneja desde Perfil. Y no se muestra el
+ * registro de lo enviado (notification_log): se sigue escribiendo, porque es lo
+ * que evita mandar dos veces el mismo aviso.
  *
- * La maqueta anterior (con estadísticas inventadas) sigue en el tag:
- *   git show maquetas-pre-fase-2:apps/dashboard/src/pages/Automations/Automations.jsx
+ * Las alertas y los avisos (5–7) los ven y cambian sólo owner y admin (RLS de la
+ * 0023). Un manager no puede ni leerlos: su consulta vuelve vacía, y mostrarle
+ * los valores por defecto como si fueran los de la cuenta sería mentirle, así
+ * que ve un aviso en su lugar.
+ *
+ * Cada tarjeta guarda lo suyo («Activar regla», como Tapstar): las alertas hacen
+ * un upsert parcial de notification_preferences con sólo sus campos.
+ *
+ * Las alertas valen para todos los locales: reglas por local quedan para más
+ * adelante (llevan migración). Con un local elegido arriba, lo dicen. Y como las
+ * reseñas se leen una vez por día (job `daily`), una alerta puede llegar hasta un
+ * día después; un cron horario en Railway lo acortaría (services/api/DEPLOY.md).
  */
 
 const IDLE_HOUR_OPTIONS = [
@@ -47,317 +75,320 @@ const IDLE_HOUR_OPTIONS = [
   { value: 168, label: '1 semana' },
 ];
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const KEYWORD_FIELDS = ['keyword_alert_enabled', 'keyword_alert_terms', 'keyword_alert_recipients'];
+const LOW_RATING_FIELDS = ['low_rating_enabled', 'low_rating_stars', 'low_rating_recipients'];
+const DEVICE_FIELDS = ['device_idle_enabled', 'device_idle_hours', 'weekly_summary_enabled', 'recipient_email'];
 
-const IN_DEVELOPMENT = [
-  {
-    id: 'auto-reply-5',
-    icon: 'star',
-    title: 'Responder solas las reseñas de cinco estrellas',
-    text: 'Un agradecimiento escrito con IA, con el tono de tu negocio, publicado apenas entra la reseña.',
-  },
-  {
-    id: 'alert-negative',
-    icon: 'alert',
-    title: 'Alerta de reseña negativa',
-    text: 'Un aviso apenas llega una reseña de 1 o 2 estrellas, con una respuesta sugerida para revisar.',
-  },
-  {
-    id: 'monthly-pdf',
-    icon: 'fileText',
-    title: 'Informe mensual en PDF',
-    text: 'El resumen del mes por sucursal, a tu mail el día 1.',
-  },
-];
+/* Con el default de cada campo si falta: una lista nunca llega como null a
+   las tarjetas (hacen `.length` sobre ellas). */
+const pick = (source, keys) =>
+  Object.fromEntries(keys.map((k) => [k, source?.[k] ?? DEFAULT_PREFERENCES[k] ?? null]));
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const noop = () => {};
 
-function Icon({ name, ...rest }) {
-  const props = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', ...rest };
-  const icons = {
-    star: <svg {...props}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>,
-    alert: <svg {...props}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>,
-    mail: <svg {...props}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 6-10 7L2 6" /></svg>,
-    cpu: <svg {...props}><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" rx="1" /><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" /></svg>,
-    fileText: <svg {...props}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>,
-    lock: <svg {...props}><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>,
+/* El borrador de una tarjeta de alertas: sus campos de las preferencias
+   guardadas, lo que se cambió en pantalla, y si hay diferencia. Se vuelve a lo
+   guardado sólo cuando cambian SUS campos: guardar otra tarjeta reescribe la
+   fila entera, y no tiene que borrar lo que se estaba editando acá. */
+/* El borrador se deriva en el mismo render, no en un efecto: con un efecto, el
+   primer render después de cargar las preferencias usaba el borrador viejo
+   (todo null) y la pantalla entera se caía. Lo editado vale mientras sea sobre
+   la misma versión guardada (`key`). */
+function useCardDraft(saved, keys) {
+  const baseKey = JSON.stringify(pick(saved, keys));
+  const [edit, setEdit] = useState({ key: null, draft: null });
+  const draft = edit.key === baseKey ? edit.draft : JSON.parse(baseKey);
+  return {
+    draft,
+    update: (patch) => setEdit({ key: baseKey, draft: { ...draft, ...patch } }),
+    dirty: baseKey !== JSON.stringify(draft),
   };
-  return icons[name] || null;
 }
 
-function Toggle({ on, onChange, label, disabled }) {
-  return (
-    <button
-      type="button"
-      className={`automation-toggle ${on ? 'automation-toggle--on' : ''}`}
-      onClick={() => onChange(!on)}
-      disabled={disabled}
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-    >
-      <span className="automation-toggle__knob" />
-    </button>
-  );
-}
-
-function formatSentAt(iso) {
-  return new Date(iso).toLocaleString('es-AR', {
-    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-  }).replace('.', '');
-}
-
-/* Lo que se compara para saber si hay cambios sin guardar. */
-function editable(prefs) {
-  return JSON.stringify({
-    device_idle_enabled: Boolean(prefs.device_idle_enabled),
-    device_idle_hours: Number(prefs.device_idle_hours),
-    weekly_summary_enabled: Boolean(prefs.weekly_summary_enabled),
-    recipient_email: (prefs.recipient_email ?? '').trim(),
-  });
-}
-
-export default function Automations() {
-  const { org, canManageBilling, loading: orgLoading } = useOrg();
+export default function Automations({ onNavigateSettings }) {
+  const { org, isBusiness, canManageBilling, loading: orgLoading } = useOrg();
   const orgId = org?.organization_id;
+  const isViewer = org?.role === 'viewer';
 
-  const [saved, setSaved] = useState(null);       // lo que está en la base
-  const [draft, setDraft] = useState(null);       // lo que está en pantalla
-  const [hasRow, setHasRow] = useState(false);
-  const [log, setLog] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState(null);
-  const [justSaved, setJustSaved] = useState(false);
+  /* ── Locales para el selector ── */
+  const [locations, setLocations] = useState([]);
+  const [scope, setScope] = useState('');
+  useEffect(() => {
+    if (!orgId) return undefined;
+    let cancelled = false;
+    fetchLocationRows(orgId)
+      .then((rows) => { if (!cancelled) setLocations(rows); })
+      .catch((err) => console.error('No se pudieron cargar los locales:', err));
+    return () => { cancelled = true; };
+  }, [orgId]);
+  const scopeOptions = useMemo(
+    () => [{ value: '', label: 'Todos los locales' }, ...locations.map((l) => ({ value: l.id, label: l.name }))],
+    [locations]
+  );
+  const scopeLabel = scopeOptions.find((o) => o.value === scope)?.label ?? 'Todos los locales';
+  const locationId = scope || null;
+
+  /* ── Preferencias de avisos y registro (0023/0036) ── */
+  const [saved, setSaved] = useState(null);
+  const [prefsLoading, setPrefsLoading] = useState(true);
+  const [prefsError, setPrefsError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [cardState, setCardState] = useState({});   // { [card]: { saving, status } }
 
   useEffect(() => {
     if (orgLoading || !orgId || !canManageBilling) return undefined;
     let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
-    Promise.all([
-      fetchNotificationPreferences(orgId),
-      // El registro es secundario: si falla, la pantalla sigue sirviendo para
-      // configurar.
-      fetchNotificationLog(orgId).catch((err) => {
-        console.error('No se pudo leer el registro de avisos:', err);
-        return [];
-      }),
-    ])
-      .then(([{ prefs, saved: exists }, rows]) => {
-        if (cancelled) return;
-        setSaved(prefs);
-        setDraft({ ...prefs, recipient_email: prefs.recipient_email ?? '' });
-        setHasRow(exists);
-        setLog(rows);
+    setPrefsLoading(true);
+    setPrefsError(null);
+    fetchNotificationPreferences(orgId)
+      .then(({ prefs }) => {
+        if (!cancelled) setSaved(prefs);
       })
       .catch((err) => {
         if (cancelled) return;
         console.error('No se pudieron leer las preferencias de avisos:', err);
-        setLoadError('No pudimos leer la configuración de tus avisos.');
+        setPrefsError('No pudimos leer la configuración de tus avisos.');
       })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .finally(() => { if (!cancelled) setPrefsLoading(false); });
     return () => { cancelled = true; };
   }, [orgId, canManageBilling, orgLoading, reloadKey]);
 
-  const email = (draft?.recipient_email ?? '').trim();
-  const emailInvalid = email !== '' && !EMAIL_RE.test(email);
-  const dirty = Boolean(draft && saved) && editable(draft) !== editable(saved);
+  const keyword = useCardDraft(saved, KEYWORD_FIELDS);
+  const lowRating = useCardDraft(saved, LOW_RATING_FIELDS);
+  const devices = useCardDraft(saved, DEVICE_FIELDS);
 
-  const hourOptions = useMemo(() => {
-    const current = Number(draft?.device_idle_hours ?? DEFAULT_PREFERENCES.device_idle_hours);
-    if (IDLE_HOUR_OPTIONS.some((o) => o.value === current)) return IDLE_HOUR_OPTIONS;
-    return [...IDLE_HOUR_OPTIONS, { value: current, label: `${current} horas` }].sort((a, b) => a.value - b.value);
-  }, [draft?.device_idle_hours]);
-
-  function update(patch) {
-    setDraft((prev) => ({ ...prev, ...patch }));
-    setJustSaved(false);
-    setSaveError(null);
-  }
-
-  async function handleSave(e) {
-    e.preventDefault();
-    if (!dirty || emailInvalid || saving) return;
-    setSaving(true);
-    setSaveError(null);
+  async function savePrefs(card, patch, okText) {
+    setCardState((s) => ({ ...s, [card]: { saving: true, status: null } }));
     try {
-      const row = await saveNotificationPreferences(orgId, draft);
+      const row = await saveNotificationPreferences(orgId, patch);
       setSaved(row);
-      setDraft({ ...row, recipient_email: row.recipient_email ?? '' });
-      setHasRow(true);
-      setJustSaved(true);
+      setCardState((s) => ({ ...s, [card]: { saving: false, status: { text: okText } } }));
     } catch (err) {
-      console.error('No se pudieron guardar las preferencias de avisos:', err);
-      setSaveError(notificationsErrorMessage(err));
-    } finally {
-      setSaving(false);
+      console.error('No se pudieron guardar los avisos:', err);
+      setCardState((s) => ({
+        ...s,
+        [card]: { saving: false, status: { text: notificationsErrorMessage(err), error: true } },
+      }));
     }
   }
+
+  const hourOptions = useMemo(() => {
+    const current = Number(devices.draft.device_idle_hours ?? 48);
+    if (IDLE_HOUR_OPTIONS.some((o) => o.value === current)) return IDLE_HOUR_OPTIONS;
+    return [...IDLE_HOUR_OPTIONS, { value: current, label: `${current} horas` }].sort((a, b) => a.value - b.value);
+  }, [devices.draft.device_idle_hours]);
+  const deviceEmail = (devices.draft.recipient_email ?? '').trim();
+  const deviceEmailInvalid = deviceEmail !== '' && !isEmail(deviceEmail);
+
+  /* ── Respuestas con IA (Business, backend del socio) ── */
+  const aiVisible = isBusiness && !isViewer;
+  const [autoSaved, setAutoSaved] = useState(AUTO_REPLY_DEFAULTS);
+  const [autoDraft, setAutoDraft] = useState(AUTO_REPLY_DEFAULTS);
+  const [stats, setStats] = useState(null);
+  const [past, setPast] = useState({ count: 50, stars: '4-5' });
+  const [pastConfirming, setPastConfirming] = useState(false);
+
+  useEffect(() => {
+    if (!aiVisible || !orgId) return undefined;
+    let cancelled = false;
+    setPastConfirming(false);
+    // Una lectura que falla deja los valores por defecto, sin mensaje: la
+    // pantalla sigue sirviendo para configurar.
+    fetchAutoReplyRule(orgId, locationId)
+      .catch((err) => { console.error('No se pudo leer la respuesta automática:', err); return AUTO_REPLY_DEFAULTS; })
+      .then((rule) => { if (!cancelled) { setAutoSaved(rule); setAutoDraft(rule); } });
+    fetchAutoReplyStats(orgId, locationId)
+      .catch((err) => { console.error('No se pudieron leer las reseñas respondidas:', err); return null; })
+      .then((s) => { if (!cancelled) setStats(s); });
+    return () => { cancelled = true; };
+  }, [aiVisible, orgId, locationId]);
+
+  const saveAutoReply = useCallback(async (enabled) => {
+    setCardState((s) => ({ ...s, autoReply: { saving: true, status: null } }));
+    try {
+      const rule = await saveAutoReplyRule(orgId, locationId, { ...autoDraft, enabled });
+      const next = { ...AUTO_REPLY_DEFAULTS, ...autoDraft, ...rule, enabled };
+      setAutoSaved(next);
+      setAutoDraft(next);
+      setCardState((s) => ({
+        ...s,
+        autoReply: { saving: false, status: { text: enabled ? 'Listo, la regla está activa.' : 'Regla desactivada.' } },
+      }));
+    } catch (err) {
+      setCardState((s) => ({ ...s, autoReply: { saving: false, status: { text: err.message, error: true } } }));
+    }
+  }, [orgId, locationId, autoDraft]);
+
+  async function runPastReplies() {
+    setCardState((s) => ({ ...s, past: { saving: true, status: null } }));
+    try {
+      const { queued } = await replyPastReviews(orgId, locationId, past);
+      setPastConfirming(false);
+      setCardState((s) => ({
+        ...s,
+        past: {
+          saving: false,
+          status: {
+            text: queued
+              ? `Listo: ${queued} reseña${queued === 1 ? '' : 's'} en camino. Las respuestas aparecen en Reseñas a medida que se publican.`
+              : 'No había reseñas sin responder con ese filtro.',
+          },
+        },
+      }));
+    } catch (err) {
+      setCardState((s) => ({ ...s, past: { saving: false, status: { text: err.message, error: true } } }));
+    }
+  }
+
+  const pastCount = Number(past.count);
+  const pastValid = Number.isInteger(pastCount) && pastCount >= 1 && pastCount <= PAST_REPLY_MAX;
+
+  /* ── Render ── */
+  const toneSettings = onNavigateSettings ? () => onNavigateSettings('local') : null;
 
   return (
     <div className="automations-page">
       <PageHeader
         eyebrow="Automatizaciones"
         title="Automatizaciones"
-        subtitle="Avisos por mail que salen solos, para que no tengas que entrar a mirar"
+        subtitle="Reglas que trabajan solas sobre tus reseñas y tus expositores. Sólo afectan a lo que entra desde que guardás la regla."
       />
 
-      <section className="automations-section" aria-labelledby="automations-alerts-title">
-        <h2 id="automations-alerts-title" className="automations-section__title">Avisos por mail</h2>
-        <p className="automations-section__lede">
-          Se revisan una vez por día, a la mañana. Están incluidos en todos los planes.
-        </p>
+      <ScopeCard options={scopeOptions} value={scope} onChange={setScope} />
 
-        {orgLoading ? (
-          <p className="automations-muted">Cargando…</p>
-        ) : !canManageBilling ? (
-          <div className="automations-notice">
-            <Icon name="lock" />
-            <p>
-              Sólo el propietario o un administrador de la cuenta pueden ver y cambiar los avisos.
-              Si necesitás recibirlos, pedile a alguno de ellos que los configure.
-            </p>
-          </div>
-        ) : loading ? (
-          <p className="automations-muted">Cargando tus avisos…</p>
-        ) : loadError ? (
+      {!isViewer && (
+        <div className="automations-stack">
+          <BusinessLock
+            {...PAST_REPLIES_LOCK}
+            preview={(
+              <PastRepliesCard
+                scopeLabel={SAMPLE_PAST_REPLIES.scopeLabel}
+                count={SAMPLE_PAST_REPLIES.count}
+                stars={SAMPLE_PAST_REPLIES.stars}
+                onCount={noop} onStars={noop} onAsk={noop} onConfirm={noop} onCancel={noop}
+              />
+            )}
+          >
+            <PastRepliesCard
+              scopeLabel={scopeLabel}
+              count={past.count}
+              onCount={(count) => { setPast((p) => ({ ...p, count })); setPastConfirming(false); }}
+              stars={past.stars}
+              onStars={(stars) => { setPast((p) => ({ ...p, stars })); setPastConfirming(false); }}
+              confirming={pastConfirming}
+              onAsk={() => {
+                if (!pastValid) {
+                  setCardState((s) => ({ ...s, past: { status: { text: `Elegí entre 1 y ${PAST_REPLY_MAX} reseñas.`, error: true } } }));
+                  return;
+                }
+                setCardState((s) => ({ ...s, past: { status: null } }));
+                setPastConfirming(true);
+              }}
+              onConfirm={runPastReplies}
+              onCancel={() => setPastConfirming(false)}
+              busy={cardState.past?.saving}
+              status={cardState.past?.status}
+            />
+          </BusinessLock>
+
+          <BusinessLock
+            {...AUTO_REPLY_LOCK}
+            preview={(
+              <AutoReplyCard rule={SAMPLE_AUTO_REPLY} onChange={noop} savedEnabled dirty={false} onSave={noop} onDisable={noop} />
+            )}
+          >
+            <AutoReplyCard
+              rule={autoDraft}
+              onChange={(patch) => setAutoDraft((d) => ({ ...d, ...patch }))}
+              onToneSettings={toneSettings}
+              savedEnabled={autoSaved.enabled}
+              dirty={!same(
+                { stars: [...autoSaved.stars].sort(), delay: autoSaved.delay },
+                { stars: [...autoDraft.stars].sort(), delay: autoDraft.delay }
+              )}
+              onSave={() => saveAutoReply(true)}
+              onDisable={() => saveAutoReply(false)}
+              saving={cardState.autoReply?.saving}
+              status={cardState.autoReply?.status}
+            />
+          </BusinessLock>
+
+          <BusinessLock {...AUTO_REPLY_STATS_LOCK} preview={<AutoReplyStatsCard stats={SAMPLE_AUTO_REPLY_STATS} />}>
+            <AutoReplyStatsCard stats={stats} />
+          </BusinessLock>
+        </div>
+      )}
+
+      {orgLoading ? (
+        <p className="automations-muted">Cargando…</p>
+      ) : !canManageBilling ? (
+        <div className="automations-notice">
+          <Icon name="lock" size={18} />
+          <p>
+            Sólo el propietario o un administrador de la cuenta pueden ver y cambiar las alertas y los avisos por
+            mail. Si necesitás recibirlos, pedile a alguno de ellos que los configure.
+          </p>
+        </div>
+      ) : prefsLoading || !saved ? (
+        prefsError ? (
           <div className="automations-notice automations-notice--error" role="alert">
-            <p>{loadError}</p>
+            <p>{prefsError}</p>
             <button type="button" className="automations-link" onClick={() => setReloadKey((k) => k + 1)}>
               Reintentar
             </button>
           </div>
         ) : (
-          <form className="automations-list" onSubmit={handleSave} noValidate>
-            <div className={`automation-card ${draft.device_idle_enabled ? 'automation-card--on' : ''}`}>
-              <div className={`automation-card__icon ${draft.device_idle_enabled ? 'automation-card__icon--on' : ''}`}>
-                <Icon name="cpu" />
-              </div>
-              <div className="automation-card__body">
-                <div className="automation-card__title">Expositor sin escaneos</div>
-                <p className="automation-card__text">
-                  Te escribimos si un expositor activo pasa este tiempo sin un solo escaneo. Casi siempre es
-                  uno que quedó guardado o fuera de la vista del cliente.
-                </p>
-                <label className="automations-inline-field">
-                  <span>Avisar después de</span>
-                  <select
-                    value={draft.device_idle_hours}
-                    onChange={(e) => update({ device_idle_hours: Number(e.target.value) })}
-                    disabled={!draft.device_idle_enabled}
-                  >
-                    {hourOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </label>
-              </div>
-              <Toggle
-                on={draft.device_idle_enabled}
-                onChange={(on) => update({ device_idle_enabled: on })}
-                label="Aviso de expositor sin escaneos"
-              />
-            </div>
+          <p className="automations-muted">Cargando tus alertas…</p>
+        )
+      ) : (
+        <>
+          <div className="automations-stack">
+            <KeywordAlertCard
+              draft={keyword.draft}
+              onChange={keyword.update}
+              savedEnabled={Boolean(saved.keyword_alert_enabled)}
+              dirty={keyword.dirty}
+              saving={cardState.keyword?.saving}
+              status={cardState.keyword?.status}
+              globalNote={Boolean(scope)}
+              maxTerms={ALERT_MAX_TERMS}
+              maxRecipients={ALERT_MAX_RECIPIENTS}
+              onSave={() => savePrefs('keyword', { ...keyword.draft, keyword_alert_enabled: true },
+                saved.keyword_alert_enabled ? 'Listo, guardado.' : 'Listo, la alerta está activa.')}
+              onDisable={() => savePrefs('keyword', { keyword_alert_enabled: false }, 'Alerta desactivada.')}
+            />
 
-            <div className={`automation-card ${draft.weekly_summary_enabled ? 'automation-card--on' : ''}`}>
-              <div className={`automation-card__icon ${draft.weekly_summary_enabled ? 'automation-card__icon--on' : ''}`}>
-                <Icon name="mail" />
-              </div>
-              <div className="automation-card__body">
-                <div className="automation-card__title">Resumen semanal</div>
-                <p className="automation-card__text">
-                  Una vez por semana: los escaneos de los últimos 7 días, comparados con la semana anterior.
-                </p>
-              </div>
-              <Toggle
-                on={draft.weekly_summary_enabled}
-                onChange={(on) => update({ weekly_summary_enabled: on })}
-                label="Resumen semanal por mail"
-              />
-            </div>
+            <LowRatingAlertCard
+              draft={lowRating.draft}
+              onChange={lowRating.update}
+              savedEnabled={Boolean(saved.low_rating_enabled)}
+              dirty={lowRating.dirty}
+              saving={cardState.lowRating?.saving}
+              status={cardState.lowRating?.status}
+              globalNote={Boolean(scope)}
+              maxRecipients={ALERT_MAX_RECIPIENTS}
+              onSave={() => savePrefs('lowRating', { ...lowRating.draft, low_rating_enabled: true },
+                saved.low_rating_enabled ? 'Listo, guardado.' : 'Listo, la alerta está activa.')}
+              onDisable={() => savePrefs('lowRating', { low_rating_enabled: false }, 'Alerta desactivada.')}
+            />
+          </div>
 
-            <div className="automations-recipient">
-              <label className="automations-field">
-                <span>Mandar los avisos a</span>
-                <input
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  value={draft.recipient_email}
-                  onChange={(e) => update({ recipient_email: e.target.value })}
-                  placeholder="El mail de quien creó la cuenta"
-                  aria-invalid={emailInvalid}
-                />
-              </label>
-              <p className={`automations-hint ${emailInvalid ? 'automations-hint--error' : ''}`}>
-                {emailInvalid
-                  ? 'Revisá el mail: no parece una dirección válida.'
-                  : 'Si lo dejás vacío, los avisos van al mail de quien creó la cuenta.'}
-              </p>
-            </div>
-
-            <div className="automations-actions">
-              <span className="automations-status" role="status">
-                {saveError
-                  ? <span className="automations-status--error">{saveError}</span>
-                  : justSaved
-                    ? 'Listo, guardado.'
-                    : dirty
-                      ? 'Tenés cambios sin guardar.'
-                      : hasRow
-                        ? ''
-                        : 'Todavía no cambiaste nada: los avisos corren con esta configuración.'}
-              </span>
-              <button type="submit" className="automations-save" disabled={!dirty || emailInvalid || saving}>
-                {saving ? 'Guardando…' : 'Guardar'}
-              </button>
-            </div>
-          </form>
-        )}
-      </section>
-
-      {canManageBilling && !loading && !loadError && (
-        <section className="automations-section" aria-labelledby="automations-log-title">
-          <h2 id="automations-log-title" className="automations-section__title">Últimos avisos enviados</h2>
-          {log.length === 0 ? (
-            <p className="automations-muted">
-              Todavía no te mandamos ningún aviso. Van a aparecer acá a medida que salgan.
-            </p>
-          ) : (
-            <ul className="automations-log">
-              {log.map((row) => (
-                <li key={row.id} className="automations-log__row">
-                  <span className="automations-log__what">{describeNotification(row)}</span>
-                  <span className="automations-log__meta">
-                    {row.recipient_email} · {formatSentAt(row.sent_at)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+          <h2 className="automations-section__title">Avisos por mail</h2>
+          <div className="automations-stack">
+            <DeviceAlertsCard
+              draft={devices.draft}
+              onChange={devices.update}
+              hourOptions={hourOptions}
+              dirty={devices.dirty}
+              saving={cardState.devices?.saving}
+              status={cardState.devices?.status}
+              emailInvalid={deviceEmailInvalid}
+              globalNote={Boolean(scope)}
+              onSave={() => savePrefs('devices', devices.draft, 'Listo, guardado.')}
+            />
+          </div>
+        </>
       )}
-
-      <section className="automations-section" aria-labelledby="automations-dev-title">
-        <h2 id="automations-dev-title" className="automations-section__title">En desarrollo</h2>
-        <p className="automations-section__lede">
-          Las automatizaciones con IA y sobre tus reseñas. No tienen interruptor porque todavía no hay nada
-          que las ejecute: cuando estén listas, aparecen acá para activarlas.
-        </p>
-        <div className="automations-list">
-          {IN_DEVELOPMENT.map((a) => (
-            <div key={a.id} className="automation-card automation-card--soon">
-              <div className="automation-card__icon"><Icon name={a.icon} /></div>
-              <div className="automation-card__body">
-                <div className="automation-card__title">
-                  {a.title}
-                  <SoonBadge />
-                </div>
-                <p className="automation-card__text">{a.text}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

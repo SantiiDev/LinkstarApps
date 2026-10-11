@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon/Icon';
-import SoonBadge from '../../components/SoonBadge/SoonBadge';
 import SelectField, { FilterField } from '../../components/Select/SelectField';
 import { formatRelativeTime, initialsFor } from '../../lib/dashboardApi';
 import { settingsTabPath } from '../../lib/routes';
@@ -204,7 +203,7 @@ function AiUpsell() {
           Una respuesta escrita con tu tono de marca, lista para revisar y publicar. Incluida en el plan Business.
         </p>
       </div>
-      <button type="button" className="reviews-btn reviews-btn--primary" onClick={() => navigate(settingsTabPath('facturacion'))}>
+      <button type="button" className="reviews-btn reviews-btn--primary" onClick={() => navigate(settingsTabPath('plan'))}>
         Probar Business
       </button>
     </div>
@@ -214,7 +213,7 @@ function AiUpsell() {
 export function ReviewDetail({
   review, sentiment: sentimentProp = null, showBranch, canReply, isBusiness,
   draft, onDraft, editing, onEdit, onCancelEdit, onPublish, publishing, replyError,
-  onOpenTone, onBack,
+  onOpenTone, onShare, onBack,
 }) {
   const navigate = useNavigate();
 
@@ -266,8 +265,10 @@ export function ReviewDetail({
       <div className="reviews-detail__row">
         <span className="reviews-detail__date">{formatDate(review.created_time)}</span>
         <div className="reviews-detail__links">
-          <button type="button" className="reviews-btn reviews-btn--ghost" disabled title="Próximamente">
-            <Icon name="share" size={14} /> <Icon name="instagram" size={14} /> Compartir <SoonBadge />
+          {/* Arma una imagen para Instagram en el navegador (ReviewShareModal).
+              En la maqueta no llega `onShare` y queda deshabilitado. */}
+          <button type="button" className="reviews-btn reviews-btn--ghost" onClick={onShare} disabled={!onShare}>
+            <Icon name="share" size={14} /> <Icon name="instagram" size={14} /> Compartir
           </button>
         </div>
       </div>
@@ -297,14 +298,14 @@ export function ReviewDetail({
 
           <div className="reviews-detail__actions">
             {/* La IA la conecta el backend de la fase 5; hasta entonces el botón
-                se ve, pero no hace nada en Business y lleva a Facturación en
+                se ve, pero no hace nada en Business y lleva a Configuración → Plan en
                 gratis. */}
             {isBusiness ? (
               <button type="button" className="reviews-btn reviews-btn--ai" disabled title="Próximamente">
                 <Icon name="sparkles" size={15} /> Generar respuesta con IA <span className="reviews-soon">Próximamente</span>
               </button>
             ) : (
-              <button type="button" className="reviews-btn reviews-btn--ai reviews-btn--locked" onClick={() => navigate(settingsTabPath('facturacion'))}>
+              <button type="button" className="reviews-btn reviews-btn--ai reviews-btn--locked" onClick={() => navigate(settingsTabPath('plan'))}>
                 <Icon name="lock" size={14} /> Generar respuesta con IA
               </button>
             )}

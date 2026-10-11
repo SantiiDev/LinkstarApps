@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
-import KpiCard, { KpiTrend } from '../../components/KpiCard/KpiCard';
-import TrendChart from '../../components/TrendChart/TrendChart';
-import SelectField from '../../components/Select/SelectField';
-import Icon from '../../components/Icon/Icon';
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
-import BusinessLock from '../../components/BusinessLock/BusinessLock';
 import RetentionNote from '../../components/RetentionNote/RetentionNote';
 import { useOrg } from '../../context/OrgContext';
 import { periodOptionsFor, clampPeriod } from '../../lib/retention';
-import { percentTrend } from '../../lib/companyOverview';
 import {
   closedMonthOptions,
   fetchGoogleLocations,
@@ -17,13 +11,19 @@ import {
   fetchSearchKeywords,
   previousMonth,
 } from '../../lib/googleApi';
-import { ConversionBlock, PlatformsBlock, PlatformsCompareBlock, KeywordsBlock } from './GoogleMetricsBlocks';
 import {
-  ConversionPreview,
-  PlatformsPreview,
-  KeywordsPreview,
-  InsightsPreview,
-} from './GoogleMetricsBusinessPreview';
+  ConversionBlock,
+  PlatformsBlock,
+  PlatformsCompareBlock,
+  KeywordsBlock,
+  MetricsToolbar,
+  MetricsKpis,
+  MetricsTrends,
+  MetricsInsights,
+  LocationCompare,
+} from './GoogleMetricsBlocks';
+import { METRICS, METRICS_RANGES, buildInsights } from './googleMetricsModel';
+import { MetricsBusinessCards } from './GoogleMetricsBusinessPreview';
 import './GoogleBusiness.css';
 import './GoogleMetrics.css';
 
@@ -51,23 +51,18 @@ import './GoogleMetrics.css';
  * Gratis: las cuatro tarjetas, los gráficos y la comparativa de sucursales.
  * Business: conversión, plataformas (con la comparación contra el período
  * anterior), búsquedas y lectura de las métricas — cada una detrás de
- * BusinessLock, con una maqueta (GoogleMetricsBusinessPreview) de fondo. Las
- * tarjetas reales y las maquetas se dibujan con los mismos bloques
- * (GoogleMetricsBlocks), con la estructura de la pantalla de Tapstar. La conversión y las sugerencias salen de números que el plan gratis
+ * BusinessLock (MetricsBusinessCards), con una maqueta de fondo. Las tarjetas
+ * reales y las maquetas se dibujan con los mismos bloques (GoogleMetricsBlocks),
+ * con la estructura de la pantalla de Tapstar; la maqueta de GoogleGate
+ * (GoogleMetricsMockup) también, así lo que se ve antes de conectar es esta
+ * pantalla. La conversión y las sugerencias salen de números que el plan gratis
  * ya ve; las plataformas y las búsquedas, la base no se las manda (0029).
  */
 
-const RANGE_OPTIONS = [
-  { value: '7', label: 'Últimos 7 días' },
-  { value: '30', label: 'Últimos 30 días' },
-  { value: '90', label: 'Últimos 90 días' },
-];
+const RANGE_OPTIONS = METRICS_RANGES;
 
 // Cuántos días antes de hoy se asume publicado cuando todavía no hay ningún dato.
 const GOOGLE_LAG_DAYS = 4;
-
-const NUM = new Intl.NumberFormat('es-AR');
-const PCT = new Intl.NumberFormat('es-AR', { style: 'percent', maximumFractionDigits: 1 });
 
 /* ─── Fechas como 'YYYY-MM-DD' (calendario, sin hora) ───────────────────── */
 function addDays(iso, n) {
@@ -93,13 +88,6 @@ function dayRange(from, to) {
   return days;
 }
 
-const METRICS = [
-  { key: 'impressions', label: 'Impresiones', color: 'navy', icon: 'eye' },
-  { key: 'call_clicks', label: 'Clics en Llamar', color: 'forest', icon: 'phone' },
-  { key: 'direction_requests', label: 'Clics en «Cómo llegar»', color: 'orange', icon: 'pin' },
-  { key: 'website_clicks', label: 'Clics a la web', color: 'gold', icon: 'globe' },
-];
-
 const interactionsOf = (r) => r.call_clicks + r.direction_requests + r.website_clicks;
 
 /* Suma un conjunto de filas en un solo objeto. Las columnas de plataforma
@@ -115,53 +103,6 @@ function sumRows(rows) {
   }
   t.interactions = t.call_clicks + t.direction_requests + t.website_clicks;
   return t;
-}
-
-/* «Qué dicen tus métricas»: reglas simples sobre los números del período. No es
-   IA ni pretende serlo: cada frase sale de una comparación que se puede rehacer
-   a mano con los números de arriba. */
-function buildInsights(cur, prev) {
-  const out = [];
-  const convCur = cur.impressions ? cur.interactions / cur.impressions : 0;
-  const convPrev = prev.impressions ? prev.interactions / prev.impressions : 0;
-
-  if (prev.impressions && cur.impressions >= prev.impressions * 1.1) {
-    out.push({
-      title: 'Te encuentran más que antes',
-      text: `Tu ficha apareció ${NUM.format(cur.impressions)} veces, ${Math.round((cur.impressions / prev.impressions - 1) * 100)}% más que el período anterior. Mantené fotos y horarios al día para aprovecharlo.`,
-    });
-  } else if (prev.impressions && cur.impressions <= prev.impressions * 0.9) {
-    out.push({
-      title: 'Te están viendo menos',
-      text: 'Las impresiones bajaron frente al período anterior. Publicar novedades y responder reseñas ayuda a que Google te muestre más.',
-    });
-  }
-  if (prev.impressions && convPrev && convCur < convPrev * 0.85) {
-    out.push({
-      title: 'Te ven, pero te eligen menos',
-      text: `De cada 100 personas que ven tu ficha, ${(convCur * 100).toFixed(1).replace('.', ',')} hacen algo (antes ${(convPrev * 100).toFixed(1).replace('.', ',')}). Revisá que el teléfono, la web y el horario estén completos.`,
-    });
-  }
-  if (cur.impressions > 0 && cur.website_clicks === 0) {
-    out.push({
-      title: 'Nadie entró a tu web desde Google',
-      text: 'Si tu ficha no tiene el sitio web cargado, agregalo desde Perfil: es uno de los tres botones que más se tocan.',
-    });
-  }
-  const mobile = cur.impressions_mobile_maps + cur.impressions_mobile_search;
-  if (cur.impressions > 0 && mobile / cur.impressions >= 0.7) {
-    out.push({
-      title: 'Te buscan desde el celular',
-      text: `${PCT.format(mobile / cur.impressions)} de las veces que apareciste fue en un celular: el botón de llamar y «Cómo llegar» son los que más pesan ahí.`,
-    });
-  }
-  if (!out.length) {
-    out.push({
-      title: 'Todo estable',
-      text: 'No vemos cambios fuertes respecto del período anterior. Seguí respondiendo reseñas y publicando novedades.',
-    });
-  }
-  return out.slice(0, 4);
 }
 
 /* Pide el mes elegido y el anterior juntos: la tabla compara uno con otro. */
@@ -380,156 +321,39 @@ export default function GoogleMetricsScreen({ google, onNavigateSettings }) {
       {header}
       {reauthNotice}
 
-      <div className="gb-card gbm-toolbar">
-        {/* Los mismos campos que Mi Empresa (components/Select/SelectField). */}
-        <div className="gbm-toolbar__filters">
-          <SelectField label="Local" icon="store" value={locationId} onChange={setLocationId} options={locationOptions} />
-          <SelectField label="Rango de fechas" icon="calendar" value={activeRange} onChange={setRange} options={periodOptionsFor(RANGE_OPTIONS, retentionDays)} />
-        </div>
-        <p className="gbm-note">
-          <Icon name="info" size={14} />
-          {view.trimmed
-            ? `Período: ${longDate(view.curFrom)} – ${longDate(view.end)}. Google publica con unos días de atraso, y lo anterior al ${longDate(view.curFrom)} queda fuera del historial de tu plan.`
-            : `Google publica las métricas con unos días de atraso, así que el período llega hasta el ${longDate(view.end)}.`}
-          {view.hasPrevious && ` Período anterior: ${longDate(view.prevFrom)} – ${longDate(view.prevTo)}.`}
-        </p>
-      </div>
+      <MetricsToolbar
+        locationId={locationId}
+        onLocation={setLocationId}
+        locationOptions={locationOptions}
+        range={activeRange}
+        onRange={setRange}
+        rangeOptions={periodOptionsFor(RANGE_OPTIONS, retentionDays)}
+        note={(view.trimmed
+          ? `Período: ${longDate(view.curFrom)} – ${longDate(view.end)}. Google publica con unos días de atraso, y lo anterior al ${longDate(view.curFrom)} queda fuera del historial de tu plan.`
+          : `Google publica las métricas con unos días de atraso, así que el período llega hasta el ${longDate(view.end)}.`)
+          + (view.hasPrevious ? ` Período anterior: ${longDate(view.prevFrom)} – ${longDate(view.prevTo)}.` : '')}
+      />
 
       {!view.hasPrevious && (
         <RetentionNote days={retentionDays}>No hay período anterior para comparar.</RetentionNote>
       )}
 
-      {/* Las mismas tarjetas de KPI que Mi Empresa y Dispositivos. */}
-      <div className="kpi-grid">
-        {METRICS.map((m) => (
-          <KpiCard key={m.key} icon={<Icon name={m.icon} size={16} />} color={m.color} label={m.label}>
-            <div className="kpi-card__value">{NUM.format(cur[m.key])}</div>
-            <KpiTrend
-              trend={percentTrend(cur[m.key], prev?.[m.key])}
-              caption={prev ? `antes ${NUM.format(prev[m.key])}` : 'Sin período anterior'}
-            />
-          </KpiCard>
-        ))}
-      </div>
+      <MetricsKpis cur={cur} prev={prev} />
+      <MetricsTrends series={view.series} labels={view.labels} hasPrevious={view.hasPrevious} />
 
-      <div className="gb-card gbm-trends">
-        <div className="gb-card__header">
-          <div>
-            <h3 className="gb-card__title">Tendencia de interacciones</h3>
-            <span className="gb-card__subtitle">
-              {view.hasPrevious ? 'Línea llena: este período · punteada: el anterior' : 'Este período'}
-            </span>
-          </div>
-        </div>
-        <div className="gbm-trends__grid">
-          {METRICS.map((m) => (
-            <div key={m.key} className="gbm-trend">
-              <span className="gbm-trend__title">{m.label}</span>
-              <TrendChart
-                data={view.series[m.key].cur}
-                compareData={view.series[m.key].prev}
-                labels={view.labels}
-                color={m.color}
-                seriesName="Este período"
-                compareName="Período anterior"
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="gbm-section">
-        <BusinessLock
-          title="Descubrí cuánta gente hace algo después de ver tu ficha"
-          description="La tasa de conversión: de cada 100 que te ven, cuántos llaman, piden cómo llegar o entran a tu web."
-          preview={<ConversionPreview />}
-        >
-          <ConversionBlock cur={cur} prev={prev} />
-        </BusinessLock>
-      </div>
-
-      {/* Un solo candado sobre las dos tarjetas, como Tapstar. */}
-      <div className="gbm-section">
-        <BusinessLock
-          title="Descubrí dónde te buscan tus clientes"
-          description="Si te encuentran en el buscador de Google o en Google Maps, desde el celular o la computadora, y cómo cambió."
-          preview={<PlatformsPreview />}
-        >
+      <MetricsBusinessCards
+        conversion={<ConversionBlock cur={cur} prev={prev} />}
+        platforms={(
           <div className="gb-two-col gbm-row">
             <PlatformsBlock cur={cur} />
             <PlatformsCompareBlock cur={cur} prev={prev} />
           </div>
-        </BusinessLock>
-      </div>
+        )}
+        keywords={<KeywordsCard orgId={orgId} locationId={locationId === 'all' ? null : locationId} />}
+        insights={<MetricsInsights items={buildInsights(cur, prev ?? sumRows([]))} />}
+      />
 
-      <div className="gbm-section">
-        <BusinessLock
-          title="Descubrí qué busca la gente cuando te encuentra"
-          description="Las palabras exactas con las que te encuentran en Google, mes a mes."
-          preview={<KeywordsPreview />}
-        >
-          <KeywordsCard orgId={orgId} locationId={locationId === 'all' ? null : locationId} />
-        </BusinessLock>
-      </div>
-
-      <div className="gbm-section">
-        <BusinessLock
-          title="Qué tenés que hacer para que te busquen más"
-          description="Una lectura de tus métricas en limpio, con lo que conviene revisar."
-          preview={<InsightsPreview />}
-        >
-          <div className="gb-card">
-            <div className="gb-card__header">
-              <div>
-                <h3 className="gb-card__title">Qué dicen tus métricas</h3>
-                <span className="gb-card__subtitle">Sugerencias a partir de los números de arriba</span>
-              </div>
-            </div>
-            <ul className="gbm-insights">
-              {buildInsights(cur, prev ?? sumRows([])).map((i) => (
-                <li key={i.title}>
-                  <strong>{i.title}</strong>
-                  <span>{i.text}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </BusinessLock>
-      </div>
-
-      {locationId === 'all' && view.byLocation.length > 1 && (
-        <div className="gb-card gbm-section">
-          <div className="gb-card__header">
-            <div>
-              <h3 className="gb-card__title">Comparativa de sucursales</h3>
-              <span className="gb-card__subtitle">Las {view.byLocation.length} con más impresiones del período</span>
-            </div>
-          </div>
-          <div className="gbm-compare">
-            {view.byLocation.map((l) => {
-              const conv = l.cur.impressions ? l.cur.interactions / l.cur.impressions : 0;
-              const convP = l.prev?.impressions ? l.prev.interactions / l.prev.impressions : 0;
-              const rowsOf = [
-                ['Impresiones', NUM.format(l.cur.impressions), percentTrend(l.cur.impressions, l.prev?.impressions)],
-                ['Interacciones', NUM.format(l.cur.interactions), percentTrend(l.cur.interactions, l.prev?.interactions)],
-                ['Conversión', PCT.format(conv), percentTrend(conv, convP)],
-              ];
-              return (
-                <div key={l.locationId} className="gbm-compare__item">
-                  <span className="gbm-compare__name">{l.name}</span>
-                  {rowsOf.map(([label, value, t]) => (
-                    <div key={label} className="gbm-compare__row">
-                      <span>{label}</span>
-                      <strong>{value}</strong>
-                      <em className={t?.direction === 'down' ? 'gbm-down' : 'gbm-up'}>{t?.text ?? '—'}</em>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {locationId === 'all' && view.byLocation.length > 1 && <LocationCompare byLocation={view.byLocation} />}
     </div>
   );
 }

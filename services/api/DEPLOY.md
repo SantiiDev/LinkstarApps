@@ -136,6 +136,15 @@ El certificado lo emite Railway solo, en unos minutos.
 El job corre siempre los dos pasos: si Google falla, las alertas por escaneos salen igual, y la
 corrida queda marcada en rojo para que se vea.
 
+> **Posible más adelante: alertas de reseñas más rápidas.** Las alertas de valoración baja y de
+> palabras clave (migración 0036) salen del mismo `daily`, así que una reseña de 1★ puede avisarse
+> hasta un día después. Para acortarlo alcanza con un tercer servicio, `hourly`, igual que `daily`
+> pero con **Custom Start Command** `node scripts/sync-google.js && node scripts/send-alerts.js` y
+> **Cron Schedule** `0 * * * *`. Gasta poca cuota de Google (las reseñas se leen sólo desde la última
+> que ya está guardada) y casi nada de Railway. No hace falta tocar código ni la base: la lógica de qué
+> avisar y el registro anti-repetidos ya están en SQL. Después, cambiar en Automatizaciones el texto
+> que dice que se revisa una vez por día.
+
 ## 5. Verificar
 
 ```bash

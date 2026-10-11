@@ -55,6 +55,17 @@
   /* Typography */
   /* Misma tipografía que apps/ventas: los dos frontends son la misma marca. */
   --font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Alto de la barra de arriba del panel (AppShell). De 641px para arriba no
+     hay barra; en móvil sólo lleva el botón del menú. La leen GoogleGate y
+     BusinessPitch para ubicar su capa fija debajo. */
+  --app-topbar-h: 0px;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --app-topbar-h: 52px;
+  }
 }
 
 /* --- Reset & Base --- */

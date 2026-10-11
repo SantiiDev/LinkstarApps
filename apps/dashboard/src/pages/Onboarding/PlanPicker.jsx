@@ -92,7 +92,7 @@ export default function PlanPicker() {
         rpcError.code === '42501'
           ? 'Sólo el dueño o un administrador puede elegir el plan.'
           : rpcError.hint === 'paid_plan_active'
-            ? 'Tu plan actual sigue vigente. Cancelalo desde Configuración → Facturación antes de pasar a Gratis.'
+            ? 'Tu plan actual sigue vigente. Cancelalo desde Configuración → Plan antes de pasar a Gratis.'
             : 'No pudimos activar el plan. Intentá de nuevo en un momento.'
       );
       return;

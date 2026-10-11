@@ -119,240 +119,110 @@
   box-shadow: 0 8px 25px rgba(26, 38, 57, 0.35);
 }
 
-/* ── Stats Strip ── */
-.loc-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.75rem;
-  animation: fadeInUp 0.55s ease both;
-  animation-delay: 0.08s;
-}
-
-.loc-stat-card {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-card);
-  padding: 1.25rem 1.5rem;
-  box-shadow: var(--glass-shadow);
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  transition: all var(--transition-base);
-  position: relative;
-  overflow: hidden;
-}
-
-.loc-stat-card::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 40%;
-  background: linear-gradient(155deg, rgba(255,255,255,0.5) 0%, transparent 100%);
-  pointer-events: none;
-}
-
-.loc-stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--glass-shadow-hover);
-  background: var(--glass-bg-hover);
-}
-
-.loc-stat-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.loc-stat-icon--navy   { background: rgba(26,38,57,0.09);   color: var(--color-navy); }
-.loc-stat-icon--forest { background: rgba(16,185,129,0.1);  color: var(--color-forest); }
-.loc-stat-icon--gold   { background: rgba(245,158,11,0.1);  color: var(--color-gold); }
-.loc-stat-icon--orange { background: rgba(245,133,41,0.1);  color: var(--color-orange); }
-
-/* min-width: 0 — sin esto el item flex no baja de su ancho de contenido y las
-   etiquetas largas se salen de la tarjeta en pantallas angostas. */
-.loc-stat-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  min-width: 0;
-}
-
-.loc-stat-label {
-  overflow-wrap: anywhere;
-}
-
-.loc-stat-value {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: var(--color-navy);
-  line-height: 1.1;
-}
-
-.loc-stat-label {
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-}
-
-/* ── Toolbar ── */
+/* ── Toolbar ──
+   Vive adentro de una tarjeta de Configuración (Gestión local), así que los
+   controles son campos blancos y no vidrio: un backdrop-filter dentro de otro no
+   suma nada y cuesta. Sin animación de entrada (regla 4 de rendimiento). */
 .loc-toolbar {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  animation: fadeInUp 0.55s ease both;
-  animation-delay: 0.15s;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
   flex-wrap: wrap;
 }
 
 .loc-search {
   position: relative;
   flex: 1;
-  min-width: 220px;
+  min-width: 200px;
 }
 
 .loc-search__icon {
   position: absolute;
-  left: 1rem;
+  left: 0.85rem;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--color-text-secondary);
+  color: var(--color-orange);
   pointer-events: none;
 }
 
 .loc-search__input {
   width: 100%;
-  padding: 0.7rem 1rem 0.7rem 2.75rem;
-  border-radius: var(--radius-button);
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
+  padding: 0.62rem 0.9rem 0.62rem 2.35rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(26, 38, 57, 0.1);
   font-family: var(--font-family);
-  font-size: 0.875rem;
+  font-size: 0.83rem;
+  font-weight: 600;
   color: var(--color-navy);
-  transition: all var(--transition-base);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
   outline: none;
 }
 
-.loc-search__input::placeholder { color: var(--color-text-secondary); }
+.loc-search__input::placeholder { color: rgba(27, 26, 46, 0.38); font-weight: 500; }
 
+.loc-search__input:hover,
 .loc-search__input:focus {
-  background: var(--glass-bg-hover);
-  border-color: var(--color-orange);
-  box-shadow: 0 0 0 3px rgba(245,133,41,0.12), var(--glass-shadow);
+  border-color: rgba(245, 133, 41, 0.55);
+  box-shadow: 0 0 0 3px rgba(245, 133, 41, 0.1);
 }
 
-/* Filter tabs */
+/* Todas / Operativas: el mismo control segmentado que las pestañas de
+   Configuración. */
 .loc-filters {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-button);
-  padding: 0.3rem;
-  box-shadow: var(--glass-shadow);
+  gap: 0.2rem;
+  padding: 0.25rem;
+  border-radius: 0.75rem;
+  background: var(--color-light);
 }
 
 .loc-filter-tab {
-  padding: 0.45rem 1rem;
-  border-radius: 2rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 0.55rem;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--color-text-secondary);
   background: transparent;
-  transition: all var(--transition-base);
+  transition: color var(--transition-base), background var(--transition-base);
   white-space: nowrap;
 }
 
 .loc-filter-tab:hover {
   color: var(--color-navy);
-  background: rgba(255,255,255,0.5);
 }
 
-.loc-filter-tab--active {
-  background: var(--color-navy);
-  color: white;
-  box-shadow: 0 2px 10px rgba(26,38,57,0.25);
-}
-
+.loc-filter-tab--active,
 .loc-filter-tab--active:hover {
-  background: var(--color-navy);
-  color: white;
-}
-
-/* Sort select */
-.loc-sort {
-  padding: 0.65rem 1.1rem;
-  border-radius: var(--radius-button);
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  font-family: var(--font-family);
-  font-size: 0.8rem;
-  font-weight: 600;
+  background: var(--color-white);
   color: var(--color-navy);
-  outline: none;
-  cursor: pointer;
-  transition: all var(--transition-base);
+  box-shadow: var(--shadow-card);
 }
 
-.loc-sort:hover {
-  background: var(--glass-bg-hover);
+/* Orden: <Select> del panel con un ícono a la izquierda (.ls-select-field--icon
+   le deja el lugar). */
+.loc-sort {
+  position: relative;
+  flex: 0 0 15.5rem;
 }
 
-/* View toggle */
-.loc-view-toggle {
+.loc-sort__icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
-  align-items: center;
-  gap: 0.2rem;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: 0.75rem;
-  padding: 0.3rem;
-  box-shadow: var(--glass-shadow);
+  color: var(--color-orange);
+  pointer-events: none;
+  z-index: 1;
 }
 
-.loc-view-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-secondary);
-  background: transparent;
-  transition: all var(--transition-base);
-}
-
-.loc-view-btn:hover { color: var(--color-navy); background: rgba(255,255,255,0.5); }
-
-.loc-view-btn--active {
-  background: var(--color-navy);
-  color: white;
-}
-
-.loc-view-btn--active:hover {
-  background: var(--color-navy);
-  color: white;
-}
-
-/* ── Location Card Grid ── */
+/* ── Location Card Grid ──
+   La grilla ya no se dibuja (oct 2026, la lista es sólo la tabla), pero el
+   detalle (LocationModal) todavía usa .loc-card__status-dot y
+   .loc-card__rating de esta sección. */
 /* flex (not CSS grid) so an incomplete last row centers itself instead
    of leaving stray empty tracks — grid-template-columns would keep the
    same column count on every row and strand a lone trailing card. */
@@ -664,46 +534,28 @@
   color: var(--color-orange);
 }
 
-/* ── Table View ── */
-/* overflow-x: auto (no hidden): con 8 columnas la tabla no entra en pantallas
-   angostas y con hidden las últimas quedaban recortadas e inalcanzables. */
+/* ── Lista (tabla) ──
+   Cuatro columnas que entran en el ancho de la tarjeta: sin min-width y sin
+   scroll horizontal. Los textos largos se parten en vez de estirar la tabla. En
+   celular cada fila se apila (ver Responsive). */
 .loc-table-wrap {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--glass-shadow);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  position: relative;
-}
-
-.loc-table {
-  min-width: 780px;
-}
-
-.loc-table-wrap::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 60px;
-  background: linear-gradient(155deg, rgba(255,255,255,0.5) 0%, transparent 100%);
-  pointer-events: none;
-  z-index: 1;
-  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  border: 1px solid rgba(26, 38, 57, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
 }
 
 .loc-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: auto;
 }
 
-.loc-table thead tr { border-bottom: 1px solid rgba(255,255,255,0.45); }
+.loc-table thead tr { border-bottom: 1px solid rgba(26, 38, 57, 0.08); }
 
 .loc-table th {
-  padding: 1rem 1.25rem;
-  font-size: 0.7rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
@@ -713,30 +565,33 @@
 }
 
 .loc-table td {
-  padding: 0.9rem 1.25rem;
-  font-size: 0.85rem;
+  padding: 0.8rem 1rem;
+  font-size: 0.84rem;
   color: var(--color-navy);
-  border-bottom: 1px solid rgba(255,255,255,0.35);
+  border-bottom: 1px solid rgba(26, 38, 57, 0.06);
   vertical-align: middle;
 }
 
 .loc-table tbody tr {
-  transition: all var(--transition-base);
+  transition: background var(--transition-base);
   cursor: pointer;
 }
 
 .loc-table tbody tr:last-child td { border-bottom: none; }
-.loc-table tbody tr:hover { background: rgba(255,255,255,0.35); }
+.loc-table tbody tr:hover { background: rgba(255, 255, 255, 0.7); }
+
+.loc-table__cell-main { width: 45%; }
 
 .loc-table__location {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .loc-table__icon {
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -744,11 +599,47 @@
   flex-shrink: 0;
 }
 
-/* nowrap: la tabla ya se desliza dentro de .loc-table-wrap, así que dejar que
-   la columna crezca es preferible a partir "Sucursal de Prueba" en tres
-   renglones para ganar unos píxeles que igual hay que scrollear. */
-.loc-table__name { font-weight: 700; line-height: 1.2; white-space: nowrap; }
-.loc-table__address { font-size: 0.7rem; color: var(--color-text-secondary); white-space: nowrap; }
+.loc-table__text { min-width: 0; }
+
+.loc-table__name { font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.loc-table__address { font-size: 0.72rem; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+
+/* Los destinos de la sucursal (linksOf): uno por tipo de expositor. Verde =
+   link cargado, ámbar = hay expositores de ese tipo sin link, gris = sin cargar
+   y nadie lo usa. */
+.loc-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.loc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.22rem 0.6rem;
+  border-radius: var(--radius-badge);
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.loc-link--ok      { background: rgba(16, 185, 129, 0.12); color: var(--color-forest); }
+.loc-link--missing { background: rgba(245, 158, 11, 0.16); color: #92400e; }
+.loc-link--unset   { background: transparent; color: var(--color-text-secondary); box-shadow: inset 0 0 0 1px rgba(26, 38, 57, 0.12); }
+
+.loc-link__count {
+  min-width: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.75);
+  font-size: 0.64rem;
+  text-align: center;
+}
+
+.loc-link__flag {
+  font-weight: 600;
+}
 
 .loc-table__badge-status {
   display: inline-flex;
@@ -758,6 +649,7 @@
   border-radius: var(--radius-badge);
   font-size: 0.68rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .loc-table__badge-status--active   { background: rgba(16,185,129,0.12); color: var(--color-forest); }
@@ -770,26 +662,16 @@
   background: currentColor;
 }
 
-.loc-table__badge-status--active .loc-table__badge-dot { animation: pulse 2s ease-in-out infinite; }
-
-.loc-table__stat--orange { font-weight: 700; color: var(--color-orange); }
-.loc-table__stat--gold   { font-weight: 700; color: var(--color-gold); }
-.loc-table__stat--forest { font-weight: 700; color: var(--color-forest); }
-
 .loc-table__devices-count {
   font-weight: 700;
   color: var(--color-navy);
+  white-space: nowrap;
 }
 
 .loc-table__devices-sep {
   color: var(--color-text-secondary);
-  font-weight: 400;
+  font-weight: 500;
   margin: 0 0.15rem;
-}
-
-.loc-table__rating-cell {
-  font-weight: 700;
-  color: var(--color-gold);
 }
 
 /* ── Modal ── */
@@ -1279,20 +1161,61 @@
 }
 
 /* ── Responsive ── */
-@media (max-width: 1024px) {
-  .loc-stats { grid-template-columns: repeat(2, 1fr); }
-  .loc-card { flex-basis: 300px; }
-}
-
 @media (max-width: 768px) {
   .loc-page { padding: 1rem; }
+  .loc-page--embedded { padding: 0; }
   .loc-page__header { flex-direction: column; gap: 1rem; align-items: flex-start; }
   .loc-page__title  { font-size: 1.4rem; }
-  .loc-stats { grid-template-columns: repeat(2, 1fr); }
-  .loc-card { flex-basis: 100%; max-width: 100%; }
   .loc-modal__info-grid { grid-template-columns: 1fr; }
   .loc-modal__charts-row { grid-template-columns: 1fr; }
   .loc-modal__footer { flex-direction: column; }
+
+  .loc-search { flex-basis: 100%; }
+  .loc-sort { flex: 1 1 12rem; }
+}
+
+/* Angosto: cada fila es un bloque. La sucursal arriba, y abajo destino,
+   expositores y estado en una línea que se parte si no entra. Cada dato lleva
+   su etiqueta (data-label) porque el encabezado de la tabla se esconde. */
+@media (max-width: 640px) {
+  .loc-table thead { display: none; }
+
+  .loc-table,
+  .loc-table tbody,
+  .loc-table tr,
+  .loc-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .loc-table tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid rgba(26, 38, 57, 0.06);
+  }
+
+  .loc-table tbody tr:last-child { border-bottom: none; }
+
+  .loc-table td {
+    width: auto;
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .loc-table td.loc-table__cell-main { flex: 1 1 100%; }
+
+  .loc-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.64rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-text-secondary);
+  }
 }
 
 @media (max-width: 480px) {
@@ -1308,18 +1231,10 @@
 
   .loc-filters::-webkit-scrollbar { display: none; }
 
-  .loc-filter-tab { flex-shrink: 0; }
+  .loc-filter-tab { flex: 1 0 auto; }
 
-  .loc-stats   { grid-template-columns: 1fr 1fr; }
+  .loc-sort,
+  .loc-toolbar__new { flex: 1 1 100%; justify-content: center; }
+
   .loc-modal__stats { grid-template-columns: 1fr 1fr 1fr; }
-
-  /* La tarjeta se queda sin ancho para icono + texto en una fila. */
-  .loc-stat-card {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.6rem;
-    padding: 1rem;
-  }
-
-  .loc-stat-value { font-size: 1.35rem; }
 }

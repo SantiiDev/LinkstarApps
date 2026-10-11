@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import Select from '../../components/Select/Select';
+import SelectField from '../../components/Select/SelectField';
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
 import { useOrg } from '../../context/OrgContext';
 import { fetchLocationRows } from '../../lib/catalogApi';
@@ -204,9 +204,13 @@ export default function GoogleFichas() {
                     </span>
                   </div>
 
+                  {/* Select sin estilo propio se veía como texto suelto con una
+                      flecha: SelectField le da el campo del resto del panel. */}
                   {canEdit ? (
                     <div className="gfichas__select">
-                      <Select
+                      <SelectField
+                        label="Sucursal"
+                        icon="store"
                         value={ficha.location_id ?? NONE}
                         onChange={(next) => requestChange(ficha, next)}
                         options={options}
@@ -214,7 +218,7 @@ export default function GoogleFichas() {
                       />
                     </div>
                   ) : (
-                    <span className="gfichas__meta">
+                    <span className={`gfichas__pill${ficha.location_id ? ' gfichas__pill--linked' : ''}`}>
                       {ficha.location_id ? `Vinculada a ${branchName(ficha.location_id)}` : 'Sin vincular'}
                     </span>
                   )}

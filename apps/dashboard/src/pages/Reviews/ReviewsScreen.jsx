@@ -14,6 +14,7 @@ import {
   useGoogleSyncRequest,
 } from '../../lib/googleApi';
 import BrandToneModal from './BrandToneModal';
+import ReviewShareModal from './ReviewShareModal';
 import { ReviewDetail, ReviewList, ReviewsToolbar } from './ReviewsBlocks';
 import './Reviews.css';
 
@@ -102,6 +103,7 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
   const [compose, setCompose] = useState(NO_COMPOSE);
   const [publishing, setPublishing] = useState(false);
   const [toneOpen, setToneOpen] = useState(false);
+  const [sharing, setSharing] = useState(null); // la reseña que se está compartiendo
 
   const sync = useGoogleSyncRequest(google);
   const [syncMessage, setSyncMessage] = useState(null);
@@ -366,11 +368,13 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
           publishing={publishing}
           replyError={current.error}
           onOpenTone={() => setToneOpen(true)}
+          onShare={() => setSharing(selected)}
           onBack={() => setMobileDetail(false)}
         />
       </div>
 
       {toneOpen && <BrandToneModal onClose={() => setToneOpen(false)} />}
+      {sharing && <ReviewShareModal review={sharing} onClose={() => setSharing(null)} />}
     </div>
   );
 }
