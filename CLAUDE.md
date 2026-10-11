@@ -115,8 +115,8 @@ longer depend on physical row order either. 142 assertions green on the test pro
 (review analysis), 18 (`0032`'s free-plan fallback) and 19 (`0034`'s retention) are green there too; 185 there
 on 10 Oct 2026 with `0035`–`0036` and section 20 (review alerts). Without
 psql or Docker, that run used `node-pg` installed in a scratch folder. The local stack started on the default ports on this machine.
-220 green on a local stack on 11 Oct 2026 through `0037` (section 21, AI replies); `0037` has **not**
-been run on the test project yet.
+220 green on a local stack on 11 Oct 2026 through `0037` (section 21, AI replies); `0037` is in
+production but has **not** been pushed to the test project yet.
 
 Test accounts in that project: `linkstar.app1@gmail.com` (free plan) and `business@linkstar.test` (org
 "Linkstar Business (prueba)", Business `active` for a year, set by hand — no Mercado Pago involved; the
@@ -309,14 +309,15 @@ trigger, and the new `pending_notifications()` (see "Review alerts" under "Team"
 `review_reply_settings`, `review_auto_reply_rules`, `review_reply_jobs`, `google_reviews.reply_source`,
 `google_record_reply()` with `p_source`, and the scope/queue RPCs (see "AI replies" below).
 
-**`0035`–`0036` are on the TEST project only** (pushed 10 Oct 2026, `rls_isolation.sql` 185 green), and
-**`0037` only on a local stack** (11 Oct 2026, 220 green). `main` was merged on 11 Oct 2026 with the
-`0035`–`0036` code while production lacked them — the wrong order again, harmless only because
-`send-alerts.js` works with the old `pending_notifications()`. **Push `0035`–`0037` to production before
-deploying the panel or merging the AI-replies API**: the panel selects the new columns, and
-`routes/automations.js` / `google_record_reply(p_source)` need `0037`.
+**Everything up to `0037` is applied in production.** `0035`–`0036` reached it on 11 Oct 2026 (after
+the test project on 10 Oct, 185 green), but `main` had been merged with their code a little earlier —
+the wrong order again, harmless only because `send-alerts.js` works with the old
+`pending_notifications()`. `0037` was pushed the same day **before** the AI-replies API reached `main`
+and before the panel was deployed (the right order), after 220 green on a local stack and the push
+simulation. **The test project does not have `0037` yet** — it needs its pooler password, which only
+Santiago has. The panel was redeployed on 11 Oct 2026 with everything up to the AI replies.
 
-**Everything up to `0034` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
+**Before that, everything up to `0034`** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
 16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026, `0028`–`0033` on 7 Oct 2026,
 `0034` on 8 Oct 2026, **before** the API that calls `run_purge_scan_events()` reached `main` — the right
 order this time. `0034` went through `db reset --local`, `rls_isolation.sql` (176 green) and the push
@@ -1734,12 +1735,15 @@ only real contact channel in the repo. Replace it when there's a sales email or 
   host). Step-by-step in **`services/api/DEPLOY.md`**. Things that look optional and aren't: the Railway
   root directory is the **repo root**, not `services/api` (the only lockfile is at the root, and the
   Docker build context needs it); the Cloudflare CNAMEs are **DNS-only**, because `trust proxy = 1`
-  counts exactly one proxy and Cloudflare's would make the rate limit see Cloudflare's IP; and a second
+  counts exactly one proxy and Cloudflare's would make the rate limit see Cloudflare's IP; a second
   Railway service, `daily`, runs `npm run daily` (`scripts/daily.js` → `rebuild-rollups`, `sync-google`,
-  `send-alerts`, all always, non-zero exit if any fails) at `0 11 * * *` (08:00 Argentina); its secrets are Railway
-  references to the `api` service's (`${{api.SUPABASE_SERVICE_ROLE_KEY}}`…), so they live in one place.
+  `run-auto-replies`, `send-alerts`, all always, non-zero exit if any fails) at `0 11 * * *` (08:00
+  Argentina); and a third, `hourly` (since 11 Oct 2026), runs `npm run hourly` at `0 * * * *`
+  (`sync-google`, `run-auto-replies`, `send-alerts --solo-resenas`). Their secrets are Railway references
+  to the `api` service's (`${{api.SUPABASE_SERVICE_ROLE_KEY}}`…), so they live in one place;
+  `AI_AUTO_REPLY_PUBLISH` is unset in all three (see "AI replies").
   **Live since 6 Oct 2026**, and ventas' `VITE_API_URL` points at it. Still missing there: Mercado Pago
-  production credentials and webhook. **Both Railway services (`api` and `daily`) deploy from `main`**
+  production credentials and webhook. **All three Railway services (`api`, `daily`, `hourly`) deploy from `main`**
   (since 7 Oct 2026; before that `develop`, which is how the API shipped ahead of its migrations — see
   "Data model"). Work happens on `develop`; merging into `main` *is* the API deploy, so push any new
   migrations first.
