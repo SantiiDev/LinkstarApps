@@ -13,7 +13,8 @@
   align-items: center;
   justify-content: center;
 }
-.gseo-ring svg { position: absolute; inset: 0; }
+/* Sólo el svg del anillo: el ícono de adentro también es un svg. */
+.gseo-ring > svg { position: absolute; inset: 0; }
 .gseo-ring__track { stroke: rgba(14, 30, 60, 0.08); }
 .gseo-ring__value { stroke: var(--color-danger); }
 .gseo-ring--mid .gseo-ring__value { stroke: var(--color-gold); }
@@ -27,33 +28,92 @@
   color: var(--color-text-primary);
 }
 .gseo-ring__inner small { font-size: 0.6rem; color: var(--color-text-secondary); }
+/* El ícono de categoría adentro del anillo toma el color del puntaje. */
+.gseo-ring__inner > svg { color: var(--color-danger); }
+.gseo-ring--mid .gseo-ring__inner > svg { color: var(--color-gold); }
+.gseo-ring--good .gseo-ring__inner > svg { color: var(--color-forest); }
 
-/* ── Resumen ── */
+/* ── Barra: local + volver a analizar ── */
+.gseo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.gseo-toolbar__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* ── Puntaje y nivel ── */
 .gseo-summary {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1.5rem;
   flex-wrap: wrap;
   margin-bottom: 1.25rem;
+  /* Degradado cálido sobre el vidrio; sin tocar backdrop-filter. */
+  background-image: linear-gradient(135deg, rgba(232, 112, 28, 0.1), rgba(212, 160, 23, 0.06));
+  border-color: rgba(232, 112, 28, 0.25);
 }
-.gseo-summary__score { font-size: 1.45rem; font-weight: 800; }
+.gseo-summary__score { font-size: 2rem; font-weight: 800; color: var(--color-navy); }
 .gseo-summary__text { flex: 1 1 22rem; min-width: 0; }
-.gseo-summary__title {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.35rem;
-  font-size: 1.1rem;
+.gseo-summary__eyebrow {
+  font-size: 0.7rem;
   font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-orange);
+}
+.gseo-summary__level {
+  margin: 0.15rem 0 0.25rem;
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.2;
   color: var(--color-navy);
 }
-.gseo-summary__tools {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+.gseo-summary__next {
+  margin-bottom: 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #8a6508;
 }
+
+/* ── Próxima misión ── */
+.gseo-mission {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--color-orange);
+}
+.gseo-mission__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.gseo-mission__eyebrow {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-orange);
+}
+.gseo-mission__title { font-size: 1.05rem; font-weight: 800; color: var(--color-navy); }
+.gseo-mission__tip { font-size: 0.82rem; line-height: 1.55; color: var(--color-text-secondary); }
+.gseo-mission__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  flex: none;
+}
+.gseo-mission__actions .gseo-action { justify-content: center; }
 
 /* ── Pestañas de categorías ── */
 .gseo-tabs {
@@ -92,11 +152,11 @@
 .gseo-detail { margin-bottom: 1.25rem; }
 .gseo-detail__head {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 1rem;
   margin-bottom: 1rem;
 }
+.gseo-detail__heading { flex: 1; min-width: 0; }
 .gseo-detail__title { font-size: 1.05rem; font-weight: 800; color: var(--color-navy); }
 .gseo-detail__score { font-size: 1.5rem; font-weight: 800; }
 .gseo-detail__score small { font-size: 0.9rem; color: var(--color-text-secondary); }
@@ -124,6 +184,8 @@
   line-height: 1.55;
   color: var(--color-text-secondary);
 }
+.gseo-check .gseo-check__tip { display: flex; gap: 0.4rem; }
+.gseo-check__bulb { flex: none; margin-top: 0.1rem; color: var(--color-gold); }
 .gseo-check__foot { display: flex; justify-content: flex-end; margin-top: auto; }
 
 .gseo-pills { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.3rem; }
@@ -255,5 +317,7 @@
 }
 @media (max-width: 760px) {
   .gseo-checks { grid-template-columns: 1fr; }
+  .gseo-mission { flex-direction: column; align-items: stretch; }
+  .gseo-summary__level { font-size: 1.3rem; }
   .gseo-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

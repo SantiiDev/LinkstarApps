@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../context/AuthContext';
 import { API_URL } from '../../lib/config';
@@ -18,9 +18,17 @@ function firstChargeDate(trialDays) {
 
 export default function PlanCheckout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { session } = useAuth();
   const planCode = searchParams.get('plan');
+  // Desde adentro del panel (Configuración → Plan o un modal de ventas) se llega
+  // con `state.from`: «Volver» regresa ahí y no al selector de planes del alta,
+  // que para alguien que ya tiene plan es una pantalla ajena. Sólo se aceptan
+  // rutas internas.
+  const from = typeof location.state?.from === 'string' && location.state.from.startsWith('/')
+    ? location.state.from
+    : null;
 
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -140,7 +148,7 @@ export default function PlanCheckout() {
           Al continuar autorizás a Linkstar a cobrarte {formatArs(plan.price_ars)} por mes mediante
           Mercado Pago
           {plan.trial_days > 0 ? `, a partir del ${firstChargeDate(plan.trial_days)}` : ''}. Podés
-          cancelar cuando quieras desde Configuración → Facturación y no se te cobra el mes siguiente.
+          cancelar cuando quieras desde Configuración → Plan y no se te cobra el mes siguiente.
         </p>
 
         <button
@@ -154,8 +162,8 @@ export default function PlanCheckout() {
         </button>
       </div>
 
-      <button type="button" className="onb-back" onClick={() => navigate(ONBOARDING_ROUTES.plan)}>
-        Volver a los planes
+      <button type="button" className="onb-back" onClick={() => navigate(from ?? ONBOARDING_ROUTES.plan)}>
+        {from ? 'Volver' : 'Volver a los planes'}
       </button>
     </OnboardingLayout>
   );

@@ -204,7 +204,7 @@ function AiUpsell() {
           Una respuesta escrita con tu tono de marca, lista para revisar y publicar. Incluida en el plan Business.
         </p>
       </div>
-      <button type="button" className="reviews-btn reviews-btn--primary" onClick={() => navigate(settingsTabPath('facturacion'))}>
+      <button type="button" className="reviews-btn reviews-btn--primary" onClick={() => navigate(settingsTabPath('plan'))}>
         Probar Business
       </button>
     </div>
@@ -297,14 +297,14 @@ export function ReviewDetail({
 
           <div className="reviews-detail__actions">
             {/* La IA la conecta el backend de la fase 5; hasta entonces el botón
-                se ve, pero no hace nada en Business y lleva a Facturación en
+                se ve, pero no hace nada en Business y lleva a Configuración → Plan en
                 gratis. */}
             {isBusiness ? (
               <button type="button" className="reviews-btn reviews-btn--ai" disabled title="Próximamente">
                 <Icon name="sparkles" size={15} /> Generar respuesta con IA <span className="reviews-soon">Próximamente</span>
               </button>
             ) : (
-              <button type="button" className="reviews-btn reviews-btn--ai reviews-btn--locked" onClick={() => navigate(settingsTabPath('facturacion'))}>
+              <button type="button" className="reviews-btn reviews-btn--ai reviews-btn--locked" onClick={() => navigate(settingsTabPath('plan'))}>
                 <Icon name="lock" size={14} /> Generar respuesta con IA
               </button>
             )}

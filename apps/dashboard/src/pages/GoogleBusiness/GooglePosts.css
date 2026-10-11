@@ -33,8 +33,12 @@
   margin-bottom: 1.5rem;
 }
 
+/* ── Barra de pasos (como Tapstar) ──
+   Naranja lo hecho y el paso actual. Debajo: hecho en verde con ✓, el actual
+   en negrita, lo que falta en gris. Las columnas las pone el componente según
+   cuántos pasos tiene el tipo (4 o 5). */
 .gbpo-steps {
-  margin: 1rem 0 1.25rem;
+  margin: 0.75rem 0 1.5rem;
 }
 
 .gbpo-steps__count {
@@ -44,7 +48,6 @@
 
 .gbpo-steps__bars {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
   gap: 0.4rem;
   margin-top: 0.4rem;
 }
@@ -52,9 +55,19 @@
 .gbpo-steps__bar {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.35rem;
+  min-width: 0;
   font-size: 0.7rem;
-  color: var(--color-text-secondary);
+  color: rgba(26, 38, 57, 0.35);
+}
+
+.gbpo-steps__bar span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .gbpo-steps__bar::before {
@@ -64,26 +77,41 @@
   background: rgba(26, 38, 57, 0.1);
 }
 
-.gbpo-steps__bar--on {
-  font-weight: 700;
+.gbpo-steps__bar--done,
+.gbpo-steps__bar--current {
   color: var(--color-navy);
 }
 
-.gbpo-steps__bar--on::before {
+.gbpo-steps__bar--done {
+  color: var(--color-forest);
+}
+
+.gbpo-steps__bar--current {
+  font-weight: 700;
+}
+
+.gbpo-steps__bar--done::before,
+.gbpo-steps__bar--current::before {
   background: var(--color-orange);
 }
 
 .gbpo-question {
   margin-bottom: 0.35rem;
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 800;
   color: var(--color-navy);
 }
 
+.gbpo-lead {
+  margin-bottom: 1.1rem;
+}
+
+/* ── Paso 1: tipo ── */
 .gbpo-types {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
+  margin-top: 1rem;
 }
 
 .gbpo-type {
@@ -143,57 +171,59 @@
   color: #fff;
 }
 
-/* «Escribir con IA»: sólo el botón, Próximamente (el de Reseñas, en chico). */
-.gbpo-ai {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  margin-top: -0.4rem;
-}
-
-.gbpo-ai__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.9rem;
-  border-radius: var(--radius-button);
-  border: 1px solid transparent;
-  background: linear-gradient(135deg, var(--color-orange), var(--color-gold));
-  color: #fff;
-  font-size: 0.76rem;
-  font-weight: 700;
-}
-
-.gbpo-ai__btn:disabled {
-  opacity: 0.7;
-  cursor: default;
-}
-
-.gbpo-ai__btn--locked {
-  background: rgba(245, 133, 41, 0.1);
-  border-color: rgba(245, 133, 41, 0.35);
-  color: var(--color-orange);
-}
-
-.gbpo-drop {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 140px;
-  border-radius: 1rem;
-  border: 2px dashed rgba(26, 38, 57, 0.15);
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--color-orange);
-  cursor: pointer;
-}
-
-.gbpo-drop input {
+/* ── Paso 2: foto ── */
+.gbpo-file {
   position: absolute;
   width: 1px;
   height: 1px;
   opacity: 0;
+  pointer-events: none;
+}
+
+.gbpo-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 170px;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  border: 2px dashed rgba(245, 133, 41, 0.35);
+  background: rgba(245, 133, 41, 0.04);
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color var(--transition-base), background var(--transition-base);
+}
+
+.gbpo-drop strong {
+  font-size: 0.88rem;
+  color: var(--color-navy);
+}
+
+.gbpo-drop:hover,
+.gbpo-drop--over {
+  border-color: var(--color-orange);
+  background: rgba(245, 133, 41, 0.08);
+}
+
+.gbpo-drop:disabled {
+  cursor: progress;
+}
+
+.gbpo-drop__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: 0.2rem;
+  border-radius: 50%;
+  background: rgba(245, 133, 41, 0.12);
+  color: var(--color-orange);
 }
 
 .gbpo-photo {
@@ -203,53 +233,549 @@
   gap: 1rem;
 }
 
-.gbpo-photo img,
-.gbpo-review img {
-  max-width: 260px;
-  max-height: 200px;
+.gbpo-photo img {
+  max-width: 280px;
+  max-height: 210px;
   border-radius: 0.9rem;
   object-fit: cover;
 }
 
-.gbpo-form {
+.gbpo-photo__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ── Paso 3: detalles ── */
+.gbpo-fields {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.gbpo-span-2 {
-  grid-column: 1 / -1;
+.gbpo-sep {
+  margin: 0.15rem 0;
+  border: 0;
+  border-top: 1px solid rgba(26, 38, 57, 0.08);
 }
 
+.gbpo-warn {
+  margin-top: 0.85rem;
+  font-size: 0.75rem;
+  color: #c2620a;
+}
+
+/* ── Paso 4: qué contar ── */
+.gbpo-ai-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 1.4rem 1.25rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.07);
+  text-align: center;
+}
+
+.gbpo-ai-card strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+  color: var(--color-navy);
+}
+
+.gbpo-ai-card p {
+  max-width: 54ch;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.gbpo-ai-card .gb-btn-primary {
+  margin-top: 0.35rem;
+}
+
+.gbpo-ai-card__icon {
+  color: #b7791f;
+}
+
+.gbpo-or {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.gbpo-or::before,
+.gbpo-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(26, 38, 57, 0.1);
+}
+
+.gbpo-write {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  border: 1.5px dashed rgba(26, 38, 57, 0.18);
+  background: var(--color-white);
+  text-align: left;
+  transition: border-color var(--transition-base), background var(--transition-base);
+}
+
+.gbpo-write:hover {
+  border-color: var(--color-orange);
+  background: rgba(245, 133, 41, 0.04);
+}
+
+.gbpo-write__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  flex-shrink: 0;
+  border-radius: 0.7rem;
+  background: rgba(26, 38, 57, 0.06);
+  color: var(--color-navy);
+}
+
+.gbpo-write__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.gbpo-write__text strong {
+  font-size: 0.9rem;
+  color: var(--color-navy);
+}
+
+.gbpo-write__text small {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+/* ── Paso 5: revisar ── */
 .gbpo-review {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 1rem 1.25rem;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 1.25rem;
   align-items: start;
+  margin-top: 0.9rem;
 }
 
-.gbpo-review h4 {
-  margin: 0.4rem 0 0.2rem;
-  font-size: 1rem;
-  color: var(--color-navy);
+.gbpo-review__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
 }
 
-.gbpo-review__text {
-  margin: 0.5rem 0;
-  font-size: 0.88rem;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  color: var(--color-navy);
+.gbpo-meter {
+  height: 4px;
+  margin-top: -0.5rem;
+  border-radius: 4px;
+  background: rgba(26, 38, 57, 0.08);
+  overflow: hidden;
 }
 
-.gbpo-cta {
-  display: inline-block;
-  padding: 0.35rem 0.9rem;
-  border-radius: 999px;
-  border: 1px solid var(--color-orange);
+.gbpo-meter span {
+  display: block;
+  height: 100%;
+  background: var(--color-orange);
+}
+
+.gbpo-count {
+  align-self: flex-end;
+  margin-top: -0.6rem;
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.gbpo-vars {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+}
+
+.gbpo-vars__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(26, 38, 57, 0.15);
+  background: var(--color-white);
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.gbpo-vars__btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.gbpo-vars__info {
+  display: inline-flex;
+  color: var(--color-text-secondary);
+  cursor: help;
+}
+
+.gbpo-vars__error {
+  font-size: 0.72rem;
+  color: #c2620a;
+}
+
+.gbpo-vars__menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 20;
+  min-width: 260px;
+  max-width: 100%;
+  padding: 0.35rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(26, 38, 57, 0.1);
+  background: var(--color-white);
+  box-shadow: 0 12px 32px rgba(26, 38, 57, 0.16);
+}
+
+.gbpo-vars__menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.55rem;
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.gbpo-vars__menu button:hover:not(:disabled) {
+  background: var(--color-light);
+}
+
+.gbpo-vars__menu button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.gbpo-vars__menu small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.gbpo-tweaks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.gbpo-tweaks__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.gbpo-tweaks__label b {
   color: var(--color-orange);
+}
+
+.gbpo-tweaks__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.gbpo-tweak {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(26, 38, 57, 0.12);
+  background: var(--color-white);
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+
+.gbpo-tweak:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.gbpo-schedule-field span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.gbpo-schedule-field input:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.gbpo-publish {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.gbpo-publish .gb-btn-primary {
+  justify-content: center;
+}
+
+.gbpo-publish .gb-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+.gbpo-schedule {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.65rem 1rem;
+  border-radius: var(--radius-button);
+  border: 1px solid rgba(26, 38, 57, 0.12);
+  background: var(--color-white);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.gbpo-schedule:disabled {
+  cursor: default;
+}
+
+/* Vista previa: una publicación al estilo de Google. */
+.gbpo-preview {
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(26, 38, 57, 0.08);
+  background: rgba(26, 38, 57, 0.025);
+}
+
+.gbpo-preview__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+  font-size: 0.85rem;
+  color: var(--color-navy);
+}
+
+.gbpo-preview__modes {
+  display: inline-flex;
+  padding: 0.2rem;
+  border-radius: 0.6rem;
+  background: rgba(26, 38, 57, 0.06);
+}
+
+.gbpo-preview__modes button {
+  display: inline-flex;
+  padding: 0.3rem 0.45rem;
+  border-radius: 0.45rem;
+  color: var(--color-text-secondary);
+}
+
+.gbpo-preview__modes button[aria-pressed='true'] {
+  background: var(--color-white);
+  color: var(--color-navy);
+  box-shadow: 0 1px 3px rgba(26, 38, 57, 0.12);
+}
+
+.gbpo-preview__stage {
+  margin: 0 auto;
+  transition: max-width var(--transition-base);
+}
+
+.gbpo-preview__stage--mobile {
+  max-width: 340px;
+}
+
+.gbpo-preview__stage--desktop {
+  max-width: 100%;
+}
+
+.gbpo-preview__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+  padding: 1rem;
+  border-radius: 0.8rem;
+  border: 1.5px dashed rgba(26, 38, 57, 0.15);
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.gbpo-gpost {
+  overflow: hidden;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(26, 38, 57, 0.1);
+  background: var(--color-white);
+  font-family: Roboto, Arial, sans-serif;
+}
+
+.gbpo-gpost__head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 0.85rem;
+}
+
+.gbpo-gpost__head span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.gbpo-gpost__head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  color: #202124;
+}
+
+.gbpo-gpost__head small {
+  font-size: 0.7rem;
+  color: #70757a;
+}
+
+.gbpo-gpost__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-orange);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.gbpo-gpost__img {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+}
+
+.gbpo-gpost__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 0.75rem 0.85rem 0.9rem;
+}
+
+.gbpo-gpost__title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #202124;
+}
+
+.gbpo-gpost__dates {
+  font-size: 0.75rem;
+  color: #70757a;
+}
+
+.gbpo-gpost__text {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #3c4043;
+}
+
+.gbpo-gpost__coupon {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px dashed #dadce0;
+  font-size: 0.72rem;
+  color: #70757a;
+}
+
+.gbpo-gpost__coupon strong {
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  color: #202124;
+}
+
+.gbpo-gpost__link,
+.gbpo-gpost__cta {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a73e8;
+}
+
+.gbpo-gpost__terms {
+  font-size: 0.7rem;
+  color: #70757a;
+}
+
+/* ── Navegación de los pasos ── */
+.gbpo-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+.gbpo-nav__right {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.gbpo-back {
+  padding: 0.5rem 0.25rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.gbpo-back:hover {
+  color: var(--color-orange);
+}
+
+.gbpo-nav .gb-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
 }
 
 .gbpo-chip {
@@ -260,19 +786,6 @@
   font-size: 0.7rem;
   font-weight: 700;
   color: var(--color-navy);
-}
-
-.gbpo-nav {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.6rem;
-  margin-top: 1.25rem;
-}
-
-.gbpo-nav .gb-btn-primary:disabled {
-  opacity: 0.55;
-  cursor: default;
-  transform: none;
 }
 
 /* ── Lista ── */
@@ -358,12 +871,30 @@
 .gbpo-state--processing { background: rgba(245, 158, 11, 0.14); color: #b45309; }
 .gbpo-state--rejected { background: rgba(239, 68, 68, 0.12); color: var(--color-danger, #ef4444); }
 
+/* Revisar: el texto arriba y la vista previa abajo. */
+@media (max-width: 900px) {
+  .gbpo-review {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .gbpo-types {
     grid-template-columns: 1fr;
   }
 
-  .gbpo-review {
+  /* Con 5 pasos los nombres no entran: queda sólo el del paso actual. */
+  .gbpo-steps__bar--done span,
+  .gbpo-steps__bar--todo span {
+    visibility: hidden;
+  }
+
+  /* El del paso actual puede ocupar el lugar vacío de los de al lado. */
+  .gbpo-steps__bar--current span {
+    overflow: visible;
+  }
+
+  .gbpo-publish {
     grid-template-columns: 1fr;
   }
 

@@ -186,7 +186,7 @@ function CompanyRoute() {
   const navigate = useNavigate();
   const pathFor = (section) => {
     if (section === 'settings-local') return settingsTabPath('local');
-    if (section === 'settings-billing') return settingsTabPath('facturacion');
+    if (section === 'settings-billing') return settingsTabPath('plan');
     return pathForSection(section);
   };
   return <Company onNavigate={(section, state) => navigate(pathFor(section), state ? { state } : undefined)} />;
@@ -246,6 +246,16 @@ function GoogleSeoLocalRoute() {
       )}
     />
   );
+}
+
+function AutomationsRoute() {
+  const navigate = useNavigate();
+  return <Automations onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
+}
+
+function MonthlyReportsRoute() {
+  const navigate = useNavigate();
+  return <MonthlyReports onNavigateSettings={(tab) => navigate(settingsTabPath(tab))} />;
 }
 
 function ReportsNpsRoute() {
@@ -397,8 +407,8 @@ export default function App() {
         <Route path={SECTION_PATHS['reports-sentiment']} element={<ReportsSentimentRoute />} />
         <Route path={SECTION_PATHS['reports-keywords']} element={<ReportsKeywordsRoute />} />
 
-        <Route path={SECTION_PATHS['monthly-reports']} element={<MonthlyReports />} />
-        <Route path={SECTION_PATHS.automations} element={<Automations />} />
+        <Route path={SECTION_PATHS['monthly-reports']} element={<MonthlyReportsRoute />} />
+        <Route path={SECTION_PATHS.automations} element={<AutomationsRoute />} />
 
         {/* La pestaña abierta de Configuración va en la URL, así Dispositivos
             puede enlazar directo a "Gestión local" y el enlace se puede

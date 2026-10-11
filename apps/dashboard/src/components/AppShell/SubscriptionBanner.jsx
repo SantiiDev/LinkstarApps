@@ -30,7 +30,7 @@ export default function SubscriptionBanner() {
 
   if (!org) return null;
 
-  const goToBilling = () => navigate(settingsTabPath('facturacion'));
+  const goToBilling = () => navigate(settingsTabPath('plan'));
 
   if (org.status === 'past_due') {
     const until = formatDate(org.grace_until);

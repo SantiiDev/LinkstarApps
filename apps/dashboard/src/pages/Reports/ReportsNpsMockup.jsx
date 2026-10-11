@@ -1,13 +1,12 @@
 /*
  * MAQUETA DECORATIVA — no es la pantalla, es el fondo.
  *
- * Todos los números de acá son inventados. Se renderiza ÚNICAMENTE en los dos
- * lugares donde una maqueta es legal: como `children` de `GoogleGate` (sin
- * Google conectado) y como `preview` de `BusinessLock` (con Google, en el plan
- * gratis, desde ReportsNpsScreen, con `showHeader={false}` porque la pantalla ya
- * muestra el suyo). Los dos la dejan borrosa, inerte y detrás de un velo que no
- * se cierra. NO agregar otro importador: fuera de esas puertas es una pantalla
- * inventando datos.
+ * Todos los números de acá son inventados (reportsSample.js). Se renderiza
+ * ÚNICAMENTE en los dos lugares donde una maqueta es legal en Reportes: como
+ * `children` de `BusinessPitch` (plan gratis) y de `GoogleGate` (Business sin
+ * Google conectado). Los dos la dejan borrosa, inerte y detrás de un modal que
+ * no se cierra. NO agregar otro importador: fuera de esas puertas es una
+ * pantalla inventando datos.
  *
  * Dibuja con los mismos bloques que la pantalla real (NpsBlocks.jsx) y las
  * mismas cuentas (lib/reviewInsights.js), así el ejemplo es coherente: el +58
@@ -18,39 +17,22 @@ import PageHeader from '../../components/PageHeader/PageHeader';
 import SelectField from '../../components/Select/SelectField';
 import { RANGE_OPTIONS, strengthAndChallenge, npsInsights } from '../../lib/reviewInsights';
 import { NpsKpis, NpsBreakdown, AspectList, NpsInsights } from './NpsBlocks';
+import { SAMPLE_NPS, SAMPLE_ASPECTS } from './reportsSample';
 import '../GoogleBusiness/GoogleBusiness.css';
 import '../GoogleBusiness/GoogleMetrics.css';
 import './Reports.css';
 
-const NPS = { promoters: 33, passives: 10, detractors: 5, total: 48, score: 58, small: false };
-
-const aspect = (topic, label, positive, neutral, negative) => {
-  const mentions = positive + neutral + negative;
-  return { topic, label, positive, neutral, negative, mentions, score: Math.round(((positive - negative) / mentions) * 100) };
-};
-
-const ASPECTS = [
-  aspect('calidad', 'Calidad', 41, 6, 1),
-  aspect('atencion', 'Atención', 32, 6, 3),
-  aspect('ambiente', 'Ambiente', 25, 9, 2),
-  aspect('limpieza', 'Limpieza', 15, 5, 2),
-  aspect('precio', 'Precio', 12, 13, 8),
-  aspect('espera', 'Tiempo de espera', 4, 3, 12),
-];
-
 const noop = () => {};
 
-export default function ReportsNpsMockup({ showHeader = true }) {
-  const { strength, challenge } = strengthAndChallenge(ASPECTS);
+export default function ReportsNpsMockup() {
+  const { strength, challenge } = strengthAndChallenge(SAMPLE_ASPECTS);
   return (
     <div className="reports-page">
-      {showHeader && (
-        <PageHeader
-          eyebrow="Reportes"
-          title="NPS"
-          subtitle="Net Promoter Score y análisis de aspectos por reseña"
-        />
-      )}
+      <PageHeader
+        eyebrow="Reportes"
+        title="NPS"
+        subtitle="Net Promoter Score y análisis de aspectos por reseña"
+      />
 
       <div className="gb-card gbm-toolbar">
         <div className="gbm-toolbar__filters">
@@ -59,11 +41,11 @@ export default function ReportsNpsMockup({ showHeader = true }) {
         </div>
       </div>
 
-      <NpsKpis nps={NPS} strength={strength} challenge={challenge} />
+      <NpsKpis nps={SAMPLE_NPS} strength={strength} challenge={challenge} />
       <div className="reports-nps-body">
-        <NpsBreakdown nps={NPS} />
-        <AspectList aspects={ASPECTS} />
-        <NpsInsights items={npsInsights({ nps: NPS, strength, challenge })} />
+        <NpsBreakdown nps={SAMPLE_NPS} />
+        <AspectList aspects={SAMPLE_ASPECTS} />
+        <NpsInsights items={npsInsights({ nps: SAMPLE_NPS, strength, challenge })} />
       </div>
     </div>
   );

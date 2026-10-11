@@ -178,6 +178,8 @@ router.get('/api/google/locations/:id/profile', readLimiter, requireAuth(supabas
         primaryCategory: location.categories?.primaryCategory?.displayName ?? null,
         additionalCategories: (location.categories?.additionalCategories ?? []).map((c) => c.displayName).filter(Boolean),
         address: formatAddress(location.storefrontAddress),
+        // Sola, para «Insertar variable» de Publicaciones (GooglePostComposer).
+        city: location.storefrontAddress?.locality ?? null,
         openStatus: location.openInfo?.status ?? null,
         mapsUri: location.metadata?.mapsUri ?? null,
       },

@@ -3,24 +3,37 @@ import { useOrg } from '../../context/OrgContext';
 import { useGoogleConnection } from '../../lib/googleApi';
 import ReportsSentimentMockup from './ReportsSentimentMockup';
 import ReportsSentimentScreen from './ReportsSentimentScreen';
+import { SentimentPitch } from './ReportsPitches';
 
 /*
  * Sentimiento — sale del modal como salieron Reseñas y Métricas (fase 5).
  *
- *   sin Google conectado → GoogleGate con ReportsSentimentMockup de fondo:
- *                          sin la conexión no tenemos el texto de las reseñas,
- *                          y sin texto no hay nada que analizar.
- *   conectado            → ReportsSentimentScreen, sobre v_review_analysis
+ *   plan gratis          → SentimentPitch (el modal de ventas de Business) con
+ *                          ReportsSentimentMockup de fondo, esté o no conectada
+ *                          la ficha: es una sección de Business.
+ *   Business sin Google  → GoogleGate con la misma maqueta: sin la conexión no
+ *                          tenemos el texto de las reseñas, y sin texto no hay
+ *                          nada que analizar.
+ *   Business conectado   → ReportsSentimentScreen, sobre v_review_analysis
  *                          (0033). También en 'needs_reauth': lo ya analizado
  *                          se sigue mostrando, con un aviso para reconectar.
  *
  * Mientras se averigua el estado se muestra el modal, no la pantalla (mismo
- * criterio que GoogleMetrics).
+ * criterio que GoogleMetrics). El corte de verdad lo hace la base (RLS de
+ * google_review_analysis, 0033): esto sólo decide qué se dibuja.
  */
 export default function ReportsSentiment({ onNavigateSettings, onNavigateSection }) {
-  const { org } = useOrg();
+  const { org, isBusiness } = useOrg();
   const google = useGoogleConnection(org?.organization_id);
   const status = google.connection?.status;
+
+  if (!isBusiness) {
+    return (
+      <SentimentPitch>
+        <ReportsSentimentMockup />
+      </SentimentPitch>
+    );
+  }
 
   if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
     return (

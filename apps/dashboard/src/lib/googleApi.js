@@ -21,7 +21,7 @@ import { requireOrg } from './dashboardApi';
  * vía API, responde reseñas y pide "Actualizar ahora".
  */
 
-async function authHeaders() {
+export async function authHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Sesión vencida');
   return {
@@ -34,7 +34,7 @@ async function authHeaders() {
  * mostrar: el panel publicado puede estar arriba mientras el API todavía no
  * (el API se despliega después), y "TypeError: Failed to fetch" en pantalla no
  * le dice nada a nadie. */
-async function apiFetch(path, options, fallbackMessage) {
+export async function apiFetch(path, options, fallbackMessage) {
   let response;
   try {
     response = await fetch(`${API_URL}${path}`, options);

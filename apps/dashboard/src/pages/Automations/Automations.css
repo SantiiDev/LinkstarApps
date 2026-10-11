@@ -1,5 +1,8 @@
 /* ============================================
-   AUTOMATIZACIONES PAGE
+   AUTOMATIZACIONES
+   Las tarjetas son de vidrio (`.auto-card`). Nada de acá anima backdrop-filter
+   ni usa `transition: all`, y no hay animaciones de entrada (reglas de
+   rendimiento de CLAUDE.md): los hover cambian borde, color o transform.
    ============================================ */
 
 .automations-page {
@@ -8,180 +11,31 @@
   margin: 0 auto;
 }
 
-.automations-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.25rem;
-  margin-bottom: 1.75rem;
-}
-
-.automations-list {
+.automations-stack {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-.automation-card {
-  display: flex;
-  align-items: center;
-  gap: 1.1rem;
-  padding: 1.1rem 1.25rem;
-  border-radius: var(--radius-card);
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  transition: all var(--transition-base);
-}
-
-.automation-card--on {
-  border-color: rgba(245, 133, 41, 0.25);
-}
-
-.automation-card--soon {
-  opacity: 0.75;
-}
-
-.automation-card__icon {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--color-light);
-  color: var(--color-text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-base);
-}
-
-.automation-card__icon--on {
-  background: rgba(245, 133, 41, 0.1);
-  color: var(--color-orange);
-}
-
-.automation-card__body {
-  flex: 1;
-  min-width: 0;
-}
-
-.automation-card__title {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: var(--color-navy);
-}
-
-.automation-card__text {
-  font-size: 0.78rem;
-  color: var(--color-text-secondary);
-  margin-top: 0.2rem;
-  line-height: 1.4;
-  max-width: 60ch;
-}
-
-/* ── Toggle switch ── */
-.automation-toggle {
-  flex-shrink: 0;
-  position: relative;
-  width: 46px;
-  height: 26px;
-  border-radius: 999px;
-  background: rgba(26, 38, 57, 0.15);
-  transition: background var(--transition-base);
-}
-
-.automation-toggle--on {
-  background: var(--color-orange);
-}
-
-.automation-toggle:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.automation-toggle__knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: white;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
-  transition: transform var(--transition-base);
-}
-
-.automation-toggle--on .automation-toggle__knob {
-  transform: translateX(20px);
-}
-
-@media (max-width: 1024px) {
-  .automations-stat-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .automations-page {
-    padding: 1.5rem;
-  }
-}
-
-@media (max-width: 768px) {
-  .automations-page {
-    padding: 1rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .automations-stat-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .automation-card {
-    flex-wrap: wrap;
-  }
-
-  .automation-toggle {
-    margin-left: auto;
-  }
-}
-
-/* ── Pantalla real (0023) ──
-   Nada de esto anima un backdrop-filter: las tarjetas heredan el vidrio de
-   .automation-card y el resto son superficies planas (regla 2 de scroll en
-   CLAUDE.md). */
-.automations-section {
-  margin-bottom: 2rem;
+  margin-bottom: 1.75rem;
 }
 
 .automations-section__title {
+  margin: 0 0 0.75rem;
   font-size: 1rem;
   font-weight: 800;
   color: var(--color-navy);
-  margin: 0 0 0.3rem;
-}
-
-.automations-section__lede {
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
-  margin: 0 0 1rem;
-  max-width: 70ch;
-  line-height: 1.5;
 }
 
 .automations-muted {
+  margin: 0 0 1.5rem;
   font-size: 0.82rem;
   color: var(--color-text-secondary);
-  margin: 0;
 }
 
 .automations-notice {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
+  margin-bottom: 1.75rem;
   padding: 1rem 1.25rem;
   border-radius: var(--radius-card);
   border: 1px solid var(--color-border);
@@ -191,14 +45,8 @@
   color: var(--color-navy);
 }
 
-.automations-notice svg {
-  flex-shrink: 0;
-  color: var(--color-text-secondary);
-}
-
-.automations-notice p {
-  margin: 0;
-}
+.automations-notice svg { flex-shrink: 0; color: var(--color-text-secondary); }
+.automations-notice p { margin: 0; }
 
 .automations-notice--error {
   border-color: rgba(192, 57, 43, 0.3);
@@ -212,158 +60,425 @@
   color: var(--color-orange);
 }
 
-.automations-link:hover {
-  text-decoration: underline;
+.automations-link:hover { text-decoration: underline; }
+
+/* ── Tarjeta de una regla ── */
+.auto-card {
+  position: relative;
+  padding: 1.25rem 1.4rem;
+  border-radius: var(--radius-card);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  transition: border-color var(--transition-base);
 }
 
-.automations-inline-field {
+.auto-card--on { border-color: rgba(245, 133, 41, 0.35); }
+
+/* El vidrio (backdrop-filter) hace de cada tarjeta su propio contexto de
+   apilamiento: el menú abierto de un Select quedaría debajo de la tarjeta de
+   abajo. La que tiene el foco (el Select abierto) sube. */
+.auto-card:focus-within { z-index: 4; }
+
+/* Adentro del candado de Business la tarjeta va opaca: el desenfoque lo pone
+   BusinessLock con `filter`, y un backdrop-filter debajo sería doble costo. */
+.block__preview .auto-card {
+  background: var(--color-white);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.auto-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+}
+
+.auto-card__icon {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--color-navy);
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
 }
 
-.automations-inline-field select,
-.automations-field input {
-  border-radius: 0.6rem;
-  border: 1px solid var(--color-border);
-  background: var(--color-white);
-  font-family: inherit;
-  color: var(--color-navy);
-}
+.auto-card__icon--orange { background: rgba(245, 133, 41, 0.12); color: var(--color-orange); }
+.auto-card__icon--navy { background: rgba(26, 38, 57, 0.08); color: var(--color-navy); }
+.auto-card__icon--red { background: rgba(220, 53, 69, 0.1); color: var(--color-danger); }
 
-.automations-inline-field select {
-  padding: 0.35rem 0.6rem;
-  font-size: 0.78rem;
-}
+.auto-card__titles { flex: 1; min-width: 0; }
 
-.automations-inline-field select:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.automations-recipient {
-  padding: 0.25rem 0.25rem 0;
-}
-
-.automations-field {
+.auto-card__title {
   display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  max-width: 420px;
-}
-
-.automations-field span {
-  font-size: 0.78rem;
-  font-weight: 600;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 800;
   color: var(--color-navy);
 }
 
-.automations-field input {
-  padding: 0.65rem 0.9rem;
-  font-size: 0.85rem;
-}
-
-.automations-field input:focus,
-.automations-inline-field select:focus {
-  outline: none;
-  border-color: var(--color-orange);
-}
-
-.automations-field input[aria-invalid="true"] {
-  border-color: #c0392b;
-}
-
-.automations-hint {
-  margin: 0.4rem 0 0;
-  font-size: 0.74rem;
+.auto-card__text {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
   color: var(--color-text-secondary);
 }
 
-.automations-hint--error,
-.automations-status--error {
-  color: #c0392b;
+.auto-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.1rem;
 }
 
-.automations-actions {
+.auto-card__foot {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 1rem;
   flex-wrap: wrap;
-  padding-top: 0.25rem;
+  gap: 0.75rem 1rem;
+  margin-top: 1.1rem;
 }
 
-.automations-status {
+.auto-card__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.auto-status {
+  flex: 1 1 auto;
   font-size: 0.78rem;
-  color: var(--color-text-secondary);
+  color: var(--color-forest);
 }
 
-.automations-save {
-  padding: 0.65rem 1.6rem;
+.auto-status--error { color: #c0392b; }
+
+.auto-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.5rem;
+  border-radius: var(--radius-badge);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.auto-pill--on { background: rgba(34, 102, 68, 0.12); color: var(--color-forest); }
+
+/* ── Botones ── */
+.auto-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid transparent;
   border-radius: var(--radius-button);
-  background: var(--color-orange);
-  color: white;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  box-shadow: var(--shadow-button);
+  cursor: pointer;
   transition: transform var(--transition-base), box-shadow var(--transition-base);
 }
 
-.automations-save:not(:disabled):hover {
-  transform: translateY(-2px);
+.auto-btn--primary {
+  background: var(--color-orange);
+  color: var(--color-white);
+  box-shadow: var(--shadow-button);
+}
+
+.auto-btn--primary:not(:disabled):hover {
+  transform: translateY(-1px);
   box-shadow: var(--shadow-button-hover);
 }
 
-.automations-save:disabled {
-  background: var(--color-light);
-  color: var(--color-text-secondary);
-  box-shadow: none;
-  cursor: not-allowed;
-}
-
-.automations-log {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.6);
-  overflow: hidden;
-}
-
-.automations-log__row {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: 0.75rem 1.1rem;
-  font-size: 0.8rem;
-  border-bottom: 1px solid rgba(26, 38, 57, 0.06);
-}
-
-.automations-log__row:last-child {
-  border-bottom: none;
-}
-
-.automations-log__what {
-  font-weight: 600;
+.auto-btn--ghost {
+  background: var(--color-white);
+  border-color: var(--color-border);
   color: var(--color-navy);
 }
 
-.automations-log__meta {
+.auto-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.auto-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: inherit;
+  font-weight: 700;
+  color: var(--color-orange);
+  cursor: pointer;
+}
+
+.auto-link:hover { text-decoration: underline; }
+
+/* ── Campos ── */
+.auto-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.auto-field__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.auto-input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.62rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.6rem;
+  background: var(--color-white);
+  font-family: inherit;
+  font-size: 0.84rem;
+  color: var(--color-navy);
+}
+
+.auto-input:focus { outline: none; border-color: var(--color-orange); }
+.auto-input[aria-invalid="true"] { border-color: #c0392b; }
+.auto-input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.auto-hint {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
   color: var(--color-text-secondary);
 }
 
-@media (max-width: 480px) {
-  .automations-actions {
-    justify-content: stretch;
-  }
+.auto-hint--error { color: #c0392b; }
 
-  .automations-save {
-    width: 100%;
-  }
+.auto-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  /* Por encima de lo que sigue: el menú del Select se despliega sobre ello. */
+  position: relative;
+  z-index: 2;
+}
+
+/* SelectField (components/Select) a lo ancho de su columna. */
+.auto-card .ls-field { width: 100%; }
+
+.auto-chip-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.auto-add {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  border: none;
+  border-radius: 0.6rem;
+  background: rgba(245, 133, 41, 0.14);
+  color: var(--color-orange);
+  cursor: pointer;
+}
+
+.auto-add:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.auto-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auto-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.3rem 0.2rem 0.65rem;
+  border: 1px solid rgba(245, 133, 41, 0.3);
+  border-radius: var(--radius-badge);
+  background: rgba(245, 133, 41, 0.07);
+  font-size: 0.76rem;
+  color: var(--color-navy);
+}
+
+.auto-chip button {
+  display: inline-flex;
+  padding: 0.15rem;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.auto-stars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.auto-star {
+  min-width: 52px;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-button);
+  background: var(--color-white);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-navy);
+  cursor: pointer;
+  transition: border-color var(--transition-base), background-color var(--transition-base), color var(--transition-base);
+}
+
+.auto-star:hover:not(:disabled) { border-color: var(--color-orange); }
+
+.auto-star--on {
+  border-color: var(--color-orange);
+  background: var(--color-orange);
+  color: var(--color-white);
+}
+
+.auto-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.7rem;
+  background: rgba(26, 38, 57, 0.04);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.auto-info svg { flex: none; margin-top: 0.15rem; color: var(--color-orange); }
+.auto-info p { margin: 0; }
+
+.auto-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.auto-scope-line {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.auto-scope-line strong { color: var(--color-navy); }
+
+.auto-confirm {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(245, 133, 41, 0.35);
+  border-radius: 0.7rem;
+  background: rgba(245, 133, 41, 0.07);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-navy);
+}
+
+/* ── Selector de local ── */
+.auto-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  /* El menú del Select se despliega sobre las tarjetas de abajo. */
+  z-index: 5;
+}
+
+.auto-scope .ls-field { max-width: 360px; }
+
+/* ── Reseñas respondidas automáticamente ── */
+.auto-stats {
+  background-image: linear-gradient(135deg, rgba(245, 133, 41, 0.08), rgba(212, 160, 23, 0.04));
+  border-color: rgba(245, 133, 41, 0.25);
+}
+
+.auto-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin: 1.1rem 0 0.75rem;
+}
+
+.auto-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.8rem;
+  background: var(--color-white);
+}
+
+.auto-stat strong {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--color-navy);
+}
+
+.auto-stat .auto-stat__good { color: var(--color-forest); }
+
+.auto-stat span {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+
+/* ── Avisos de expositores: una fila por aviso, con su interruptor ── */
+.auto-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.auto-row__text { flex: 1; min-width: 0; }
+
+.auto-row__title {
+  margin: 0 0 0.2rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.auto-row__field {
+  max-width: 260px;
+  margin-top: 0.6rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 1024px) {
+  .automations-page { padding: 1.5rem; }
+}
+
+@media (max-width: 768px) {
+  .automations-page { padding: 1rem; }
+  .auto-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .auto-card { padding: 1.1rem 1rem; }
+  .auto-card__foot { justify-content: stretch; }
+  .auto-card__actions { width: 100%; }
+  .auto-card__actions .auto-btn { flex: 1; justify-content: center; }
 }
