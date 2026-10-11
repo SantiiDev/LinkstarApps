@@ -127,23 +127,45 @@ El certificado lo emite Railway solo, en unos minutos.
    - **Custom Start Command:** `npm run daily`.
    - **Cron Schedule:** `0 11 * * *`, todos los días a las 11:00 UTC (08:00 en Argentina).
 3. **Variables:** agregá `RAILWAY_DOCKERFILE_PATH=services/api/Dockerfile` y las que usan los jobs:
-   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, las cuatro `GOOGLE_*`, `RESEND_API_KEY`, `RESEND_FROM`
-   y `DASHBOARD_URL`. Para no copiarlas dos veces: **Project Settings → Shared Variables**, y en cada
-   servicio «Add shared variable». O referencialas desde el servicio `api` con `${{api.SUPABASE_URL}}`.
+   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, las cuatro `GOOGLE_*`, `RESEND_API_KEY`, `RESEND_FROM`,
+   `DASHBOARD_URL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` (análisis de reseñas y respuestas con IA) y
+   `AI_AUTO_REPLY_PUBLISH` (ver abajo; vacío = no publica solo). Para no copiarlas dos veces:
+   **Project Settings → Shared Variables**, y en cada servicio «Add shared variable». O referencialas
+   desde el servicio `api` con `${{api.SUPABASE_URL}}`.
 4. Para probarlo sin esperar al día siguiente: en el servicio `daily`, **Deployments → Run now** (o
    el botón de ejecutar el cron). El log tiene que terminar en `✓ Job diario completo.`.
 
-El job corre siempre los dos pasos: si Google falla, las alertas por escaneos salen igual, y la
-corrida queda marcada en rojo para que se vea.
+El job corre siempre todos los pasos (`rebuild-rollups`, `sync-google`, `run-auto-replies`,
+`send-alerts`): si Google falla, las alertas por escaneos salen igual, y la corrida queda marcada en
+rojo para que se vea.
 
-> **Posible más adelante: alertas de reseñas más rápidas.** Las alertas de valoración baja y de
-> palabras clave (migración 0036) salen del mismo `daily`, así que una reseña de 1★ puede avisarse
-> hasta un día después. Para acortarlo alcanza con un tercer servicio, `hourly`, igual que `daily`
-> pero con **Custom Start Command** `node scripts/sync-google.js && node scripts/send-alerts.js` y
-> **Cron Schedule** `0 * * * *`. Gasta poca cuota de Google (las reseñas se leen sólo desde la última
-> que ya está guardada) y casi nada de Railway. No hace falta tocar código ni la base: la lógica de qué
-> avisar y el registro anti-repetidos ya están en SQL. Después, cambiar en Automatizaciones el texto
-> que dice que se revisa una vez por día.
+## 4b. El servicio `hourly` (cron)
+
+Lo que no puede esperar al día siguiente: las respuestas automáticas con IA (0037) y las alertas de
+reseñas (0036). Sin esto, «Inmediata» en la respuesta automática quiere decir «mañana a las 8».
+
+1. Igual que `daily` (mismo repo, mismas variables, sin healthcheck), nombrado `hourly`.
+2. **Custom Start Command:** `npm run hourly` (`scripts/hourly.js`: `sync-google`, `run-auto-replies`
+   y `send-alerts --solo-resenas`).
+3. **Cron Schedule:** `0 * * * *`.
+
+Las alertas de escaneos y el resumen semanal quedan sólo en `daily` (`--solo-resenas`): el resumen
+sale a los 6 días del anterior, y corriendo cada hora se iría adelantando una hora por semana.
+
+Cuota de Google: las reseñas se leen sólo desde la última guardada, pero `sync-google` también relee
+los últimos 10 días de métricas de cada ficha en cada corrida. Con pocas fichas no importa; si crece,
+conviene que el `hourly` lea sólo reseñas.
+
+### La publicación automática: `AI_AUTO_REPLY_PUBLISH`
+
+La respuesta automática y «Responder reseñas anteriores» publican en Google sin que una persona
+apriete «Publicar». **Sólo lo hacen con `AI_AUTO_REPLY_PUBLISH=on`** en `api`, `daily` y `hourly`.
+Vacío (o cualquier otro valor) encolan las reseñas y las dejan pendientes; el panel lo dice.
+
+Va **apagado** hasta que Google apruebe la verificación de la app: la política de privacidad (§3.1) y
+la justificación de `apps/dashboard/GOOGLE_VERIFICATION.md` dicen «nunca publicamos nada por nuestra
+cuenta». Encenderlo es cambiar esos dos textos el mismo día. Lo que esté en cola sale en la primera
+corrida después de encenderlo: antes, revisá con `npm run auto-replies -- --dry-run` cuántas hay.
 
 ## 5. Verificar
 

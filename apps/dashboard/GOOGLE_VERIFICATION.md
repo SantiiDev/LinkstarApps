@@ -98,8 +98,12 @@ hace falta ese y no uno más chico. Texto sugerido (los revisores leen en inglé
 > asks the AI to suggest or rewrite a post, the location's name, primary
 > category, description and city are sent to the same API, together with the
 > photo and details the owner entered for that post; the result is a draft
-> that is published only if the owner clicks "Publicar ahora". Anthropic
-> processes this data on our behalf and does not use it for training.
+> that is published only if the owner clicks "Publicar ahora". Likewise, only
+> when the owner asks the AI to draft a reply to a review, the review's text and
+> star rating (never the reviewer's name), the location's name and the owner's
+> brand-tone instructions are sent to the same API; the draft appears in the
+> reply box and is published only if the owner clicks "Publicar en Google".
+> Anthropic processes this data on our behalf and does not use it for training.
 > business.manage is the only scope that grants access to the Account
 > Management, Business Information, Performance and My Business (reviews and
 > posts) APIs; there is no narrower read-only scope for reviews, and replying,
@@ -110,6 +114,14 @@ hace falta ese y no uno más chico. Texto sugerido (los revisores leen en inglé
 
 Si cambia el proveedor de IA, cambiar este párrafo y `pages/Legal/Privacy.jsx`
 (§3.2 y §4) juntos: el revisor compara los dos.
+
+**La frase «We never write anything on our own» sigue siendo cierta en
+producción porque la publicación automática está apagada** (respuesta automática
+y «responder reseñas anteriores», 0037: `AI_AUTO_REPLY_PUBLISH` en el API). El
+día que se encienda, después de aprobada la verificación, hay que reescribir esa
+frase y el punto (3) para declarar respuestas publicadas por una regla que
+configuró el dueño, y cambiar a la vez §3.1 de la política («Nunca publicamos
+nada por nuestra cuenta»).
 
 ## 5. Video de demostración
 
@@ -140,7 +152,7 @@ se declara y no se ve en el video es el motivo de rechazo más común.
 | 3 | Pantalla de consentimiento: que se vean **el nombre "Linkstar"**, el permiso, y la **barra de direcciones con el `client_id`**. Elegir la cuenta y aceptar. | "Google shows our app name and the only scope we request, business.manage." |
 | 4 | De vuelta en el panel: el mensaje "Listo, tu ficha de Google quedó conectada". | "We're back in the dashboard. The refresh token is stored encrypted on our server and never reaches the browser." |
 | 5 | **Configuración → Gestión local → Fichas de Google**: vincular *Linkstar* con su sucursal. Mostrar que la otra ficha queda **sin vincular**. Tocar **Actualizar ahora**. | "The owner chooses which locations belong to their business. We only read reviews and metrics of linked locations. Unlinked locations keep only their name and address, so they can be offered here." |
-| 6 | **Reseñas**: la bandeja con las reseñas de Linkstar. Abrir una, escribir una respuesta y tocar **Publicar en Google**. Después mostrar la respuesta en Google Maps, en otra pestaña. | "Reviews of the linked location. The owner writes a reply and publishes it. We only post when the owner clicks this button. Here is the same reply on Google Maps." |
+| 6 | **Reseñas**: la bandeja con las reseñas de Linkstar. Abrir una; si la cuenta es Business, tocar **Generar respuesta con IA** y retocar el borrador (si no, escribirla a mano). Tocar **Publicar en Google**. Después mostrar la respuesta en Google Maps, en otra pestaña. | "Reviews of the linked location. On the paid plan the owner can ask the AI for a draft: the review's text and rating, never the reviewer's name, are sent to Anthropic's Claude API. The owner edits it and publishes it. We only post when the owner clicks this button. Here is the same reply on Google Maps." |
 | 7 | **Google Business → Métricas**: tarjetas y gráfico del período. | "Performance metrics of the linked location: views, calls, direction requests and website clicks." |
 | 8 | **Google Business → Perfil**: cambiar algo inocuo (por ejemplo, una frase de la descripción), **Guardar cambios**, y volver a dejarlo como estaba. | "The owner can edit the profile from here. We only write when the owner saves a change." |
 | 9 | **Google Business → Publicaciones**: **Nueva publicación**; en «Qué contar», **Generar sugerencias** (si la cuenta es Business) y elegir una; publicarla y después **borrarla**. | "On the paid plan the owner can ask the AI for a draft: the location's name, category, description and the post's photo are sent to Anthropic's Claude API. It's only a draft — posts are created and deleted only by the owner." |

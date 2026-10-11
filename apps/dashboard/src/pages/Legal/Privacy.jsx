@@ -139,18 +139,27 @@ export default function Privacy() {
           <h3>3.2 Inteligencia artificial</h3>
           <p>
             En el plan Business, el panel usa el modelo de inteligencia artificial Claude, de{' '}
-            <strong>Anthropic</strong>, para dos cosas. En el plan gratis no se le envía nada.
+            <strong>Anthropic</strong>, para tres cosas. En el plan gratis no se le envía nada.
           </p>
           <p>
             <strong>Análisis de reseñas.</strong> El panel te muestra el tono de tus reseñas, los temas
             que mencionan, las palabras que más se repiten y un NPS estimado a partir del texto. Para eso
             enviamos <strong>el texto y el puntaje</strong> de cada reseña de tus fichas vinculadas, y
             Anthropic nos devuelve la clasificación. Guardamos ese resultado junto a la reseña, así cada
-            una se analiza una sola vez.
+            una se analiza una sola vez. Para el análisis no se envía ningún dato tuyo o de tu cuenta, y
+            las reseñas que sólo tienen estrellas, sin texto, no se envían.
+          </p>
+          <p>
+            <strong>Escribir respuestas a reseñas.</strong> Cuando vos (o alguien de tu equipo con
+            permiso) le pedís a la IA una respuesta para una reseña, enviamos <strong>el texto y el
+            puntaje</strong> de esa reseña (o sólo el puntaje, si no tiene texto), el nombre de tu ficha y
+            el tono de marca que configuraste (tus indicaciones y si usar emojis). Lo que vuelve es un
+            borrador que aparece en el cuadro de respuesta: no se publica nada hasta que lo publicás vos.
+            Si configuraste un mail de contacto para reseñas negativas, la IA sólo sabe que existe; el mail
+            y la firma los agregamos nosotros al texto.
           </p>
           <ul>
-            <li><strong>No enviamos el nombre ni la foto de quien escribió la reseña</strong>, ni ningún dato tuyo o de tu cuenta.</li>
-            <li>Las reseñas que sólo tienen estrellas, sin texto, no se envían.</li>
+            <li><strong>En ningún caso enviamos el nombre ni la foto de quien escribió la reseña.</strong> Si la respuesta saluda por el nombre, lo completamos nosotros, después de que vuelve el texto.</li>
           </ul>
           <p>
             <strong>Escribir publicaciones.</strong> Cuando vos (o alguien de tu equipo con permiso) le
@@ -160,7 +169,7 @@ export default function Privacy() {
             vuelve es un borrador: no se publica nada hasta que lo publicás vos.
           </p>
           <p>
-            En los dos casos, Anthropic trata esos datos por nuestra cuenta y sólo para darnos el
+            En los tres casos, Anthropic trata esos datos por nuestra cuenta y sólo para darnos el
             resultado; según sus condiciones comerciales, no los usa para entrenar sus modelos.
           </p>
 
@@ -207,7 +216,7 @@ export default function Privacy() {
             <li><strong>Mercado Pago</strong> — cobro de los planes pagos.</li>
             <li><strong>Resend</strong> — envío de correos (invitaciones a tu equipo y avisos), cuando el envío está activado.</li>
             <li><strong>Google</strong> — únicamente si conectás tu ficha, y sólo en esa dirección.</li>
-            <li><strong>Anthropic</strong> — inteligencia artificial para analizar el texto de las reseñas y para escribir borradores de publicaciones, sólo en el plan Business y sólo como se explica en el punto 3.2.</li>
+            <li><strong>Anthropic</strong> — inteligencia artificial para analizar el texto de las reseñas y para escribir borradores de respuestas y de publicaciones, sólo en el plan Business y sólo como se explica en el punto 3.2.</li>
           </ul>
           <p>
             También los entregaríamos si nos lo exigiera una autoridad competente por una vía legal

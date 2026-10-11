@@ -16,7 +16,9 @@
     "send-alerts": "node scripts/send-alerts.js",
     "sync-google": "node scripts/sync-google.js",
     "analyze-reviews": "node scripts/analyze-reviews.js",
-    "daily": "node scripts/daily.js"
+    "auto-replies": "node scripts/run-auto-replies.js",
+    "daily": "node scripts/daily.js",
+    "hourly": "node scripts/hourly.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",

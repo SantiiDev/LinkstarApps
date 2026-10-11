@@ -38,9 +38,11 @@ import './Automations.css';
  * Automatizaciones — la estructura de Tapstar, con nuestra estética:
  *
  *   1. Selector de local («Configurar automatizaciones de»).
- *   2. Responder reseñas anteriores        ┐ Business, con IA. El backend es del
- *   3. Respuesta automática a reseñas       │ socio: el contrato (rutas y forma de
- *   4. Reseñas respondidas automáticamente  ┘ los datos) está en lib/automationsApi.js.
+ *   2. Responder reseñas anteriores        ┐ Business, con IA (0037). Rutas en
+ *   3. Respuesta automática a reseñas       │ services/api/routes/automations.js,
+ *   4. Reseñas respondidas automáticamente  ┘ contrato en lib/automationsApi.js.
+ *      Lo que se publica solo (2 y 3) sale sólo con AI_AUTO_REPLY_PUBLISH=on en
+ *      el servidor; mientras tanto se encola y la pantalla lo dice.
  *   5. Alerta por palabras clave            ┐ Todos los planes. Nuestras, reales
  *   6. Alerta por valoración baja           ┘ (0036): las manda send-alerts.js.
  *   7. Avisos de tus expositores (0023).
@@ -222,19 +224,17 @@ export default function Automations({ onNavigateSettings }) {
   async function runPastReplies() {
     setCardState((s) => ({ ...s, past: { saving: true, status: null } }));
     try {
-      const { queued } = await replyPastReviews(orgId, locationId, past);
+      const { queued, publishing } = await replyPastReviews(orgId, locationId, past);
       setPastConfirming(false);
-      setCardState((s) => ({
-        ...s,
-        past: {
-          saving: false,
-          status: {
-            text: queued
-              ? `Listo: ${queued} reseña${queued === 1 ? '' : 's'} en camino. Las respuestas aparecen en Reseñas a medida que se publican.`
-              : 'No había reseñas sin responder con ese filtro.',
-          },
-        },
-      }));
+      const plural = queued === 1 ? '' : 's';
+      // `publishing: false`: el servidor todavía no publica solo (0037,
+      // AI_AUTO_REPLY_PUBLISH). Quedan en cola; decir «en camino» sería mentir.
+      const text = !queued
+        ? 'No había reseñas sin responder con ese filtro.'
+        : publishing === false
+          ? `Listo: ${queued} reseña${plural} en cola. La publicación automática todavía no está habilitada; se van a publicar apenas se habilite.`
+          : `Listo: ${queued} reseña${plural} en camino. Las respuestas aparecen en Reseñas a medida que se publican.`;
+      setCardState((s) => ({ ...s, past: { saving: false, status: { text } } }));
     } catch (err) {
       setCardState((s) => ({ ...s, past: { saving: false, status: { text: err.message, error: true } } }));
     }

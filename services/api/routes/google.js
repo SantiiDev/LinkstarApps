@@ -9,14 +9,13 @@ import {
   buildAuthUrl,
   createPkcePair,
   exchangeCode,
-  refreshAccessToken,
   revokeToken,
   isSecureCallback,
   GBP_SCOPE,
 } from '../lib/googleOAuth.js';
 import { encryptToken, decryptToken } from '../lib/tokenCrypto.js';
 import { syncGoogleOrganization } from '../lib/googleSync.js';
-import { putReviewReply } from '../lib/googleBusiness.js';
+import { publishReviewReply } from '../lib/replyPublisher.js';
 
 const router = Router();
 
@@ -404,11 +403,12 @@ router.post('/api/google/sync', syncLimiter, requireAuth(supabase), async (req, 
 });
 
 // ──────────────────────────────────────────────────────────
-// POST /api/google/reviews/:id/reply   { comment }
+// POST /api/google/reviews/:id/reply   { comment, source? }
 // Publica (o reemplaza) la respuesta del dueño en Google y, recién cuando Google
 // la acepta, la registra en la base. Quién puede responder qué lo decide
 // google_review_reply_target() (0026): owner/admin, o un manager en sus
-// sucursales.
+// sucursales. `source` es 'ai_draft' cuando el texto salió de «Generar respuesta
+// con IA» (0037); cualquier otra cosa cuenta como escrita a mano.
 // ──────────────────────────────────────────────────────────
 const MAX_REPLY_LENGTH = 4096; // límite de Google
 
@@ -435,33 +435,15 @@ router.post('/api/google/reviews/:id/reply', replyLimiter, requireAuth(supabase)
     if (error) throw rpcError(error, { rol_insuficiente: [403, 'No tenés permiso para responder reseñas de esta sucursal'] });
     const review = rows?.[0];
 
-    const target = await activeTarget(review.organization_id);
-    if (!target) {
-      const err = new Error('Hay que volver a conectar tu ficha de Google para poder responder');
-      err.status = 409;
-      throw err;
-    }
-
-    const refreshToken = decryptToken(target.refresh_token_enc, target.key_id, target.organization_id);
-    const { accessToken } = await refreshAccessToken(refreshToken);
-    const reply = await putReviewReply(
-      accessToken,
-      review.google_account,
-      review.google_location,
-      review.review_id,
-      comment
-    );
-
-    const { error: recordError } = await supabase.rpc('google_record_reply', {
-      p_review: req.params.id,
-      p_user: req.user.id,
-      p_comment: reply.comment,
-      p_updated: reply.updateTime,
+    // Google primero, el registro después (lib/replyPublisher.js). Sin conexión
+    // utilizable, accessTokenForOrg responde 409 con su propio texto.
+    const reply = await publishReviewReply({
+      reviewId: req.params.id,
+      target: review,
+      comment,
+      userId: req.user.id,
+      source: req.body?.source === 'ai_draft' ? 'ai_draft' : 'panel',
     });
-    // La respuesta ya está publicada en Google. Si no se pudo registrar, se
-    // avisa en el log pero no se le dice al usuario que falló: la próxima
-    // lectura de la ficha la trae de Google igual.
-    if (recordError) console.error('Respuesta publicada en Google pero no registrada:', recordError.message);
 
     res.json({ comment: reply.comment, updatedTime: reply.updateTime });
   } catch (err) {

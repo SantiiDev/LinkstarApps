@@ -4,13 +4,18 @@ import path from 'node:path';
 
 /* El job diario del API: lo que corre el cron del host (Railway), una vez por día.
  *
- *   node scripts/daily.js            corre los tres jobs
- *   node scripts/daily.js --dry-run  se lo pasa a los tres: muestran, no escriben ni mandan
+ *   node scripts/daily.js            corre los cuatro jobs
+ *   node scripts/daily.js --dry-run  se lo pasa a los cuatro: muestran, no escriben ni mandan
  *
  * En orden:
- *   1. rebuild-rollups — scan_daily_rollups de ayer y hoy, y vence suscripciones.
- *   2. sync-google     — fichas, reseñas, snapshot del día y métricas de Google.
- *   3. send-alerts     — expositores inactivos y resumen semanal.
+ *   1. rebuild-rollups  — scan_daily_rollups de ayer y hoy, y vence suscripciones.
+ *   2. sync-google      — fichas, reseñas, snapshot del día y métricas de Google.
+ *   3. run-auto-replies — respuestas con IA que se publican solas (0037). Sólo
+ *                         publica con AI_AUTO_REPLY_PUBLISH=on; si no, encola.
+ *   4. send-alerts      — expositores inactivos, resumen semanal y alertas de reseñas.
+ *
+ * Lo que tiene que ser del día (reseñas, respuestas automáticas, alertas de
+ * reseñas) corre también cada hora en scripts/hourly.js.
  *
  * Los rollups van primero porque el resumen semanal de send-alerts los lee: con
  * el orden al revés, el mail diría lo de ayer.
@@ -30,7 +35,7 @@ import path from 'node:path';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const passthrough = process.argv.slice(2).filter((arg) => arg === '--dry-run');
 
-const JOBS = ['rebuild-rollups.js', 'sync-google.js', 'send-alerts.js'];
+const JOBS = ['rebuild-rollups.js', 'sync-google.js', 'run-auto-replies.js', 'send-alerts.js'];
 
 function run(script) {
   return new Promise((resolve) => {

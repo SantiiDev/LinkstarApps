@@ -13,6 +13,7 @@ import {
   REVIEWS_INBOX_PAGE_SIZE,
   useGoogleSyncRequest,
 } from '../../lib/googleApi';
+import { generateReplyDraft } from '../../lib/automationsApi';
 import BrandToneModal from './BrandToneModal';
 import ReviewShareModal from './ReviewShareModal';
 import { ReviewDetail, ReviewList, ReviewsToolbar } from './ReviewsBlocks';
@@ -38,7 +39,9 @@ import './Reviews.css';
  *     que se muestra después es lo que devolvió Google, no el borrador. Con el
  *     filtro «Sin responder», la reseña respondida sale de la lista y el detalle
  *     pasa a la siguiente: es una bandeja, se vacía respondiendo.
- *   - La IA y el tono de marca son sólo frontend por ahora (ver BrandToneModal).
+ *   - «Generar respuesta con IA» (Business, 0037) pone un borrador en el cuadro;
+ *     se publica igual que uno escrito a mano, marcado 'ai_draft'. El tono de
+ *     marca que usa se guarda desde BrandToneModal.
  */
 
 function useDebounced(value, ms) {
@@ -57,7 +60,9 @@ const ICONS = {
   alert: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>,
 };
 
-const NO_COMPOSE = { id: null, text: '', editing: false, error: null };
+// `fromAi`: el texto salió de «Generar respuesta con IA» (aunque después se lo
+// haya retocado). Se publica con source 'ai_draft'.
+const NO_COMPOSE = { id: null, text: '', editing: false, error: null, fromAi: false };
 
 /* `initialFilter` son filtros con los que abrir la bandeja. «Responder ahora»
  * de Mi Empresa manda { rating: 'low', status: 'pending', locationId }: las de
@@ -102,6 +107,7 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
   // nunca queda listo para publicarse en ésta.
   const [compose, setCompose] = useState(NO_COMPOSE);
   const [publishing, setPublishing] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [toneOpen, setToneOpen] = useState(false);
   const [sharing, setSharing] = useState(null); // la reseña que se está compartiendo
 
@@ -193,12 +199,29 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
   const current = compose.id === selectedId ? compose : NO_COMPOSE;
   const updateCompose = (patch) => setCompose({ ...current, id: selectedId, ...patch });
 
+  // El borrador vuelve para la reseña que se pidió, aunque mientras tanto se
+  // haya elegido otra: queda guardado en la suya y no pisa la que está abierta.
+  async function generate() {
+    if (!selected) return;
+    const reviewId = selected.id;
+    setGenerating(true);
+    updateCompose({ error: null });
+    try {
+      const text = await generateReplyDraft(reviewId);
+      setCompose((prev) => ({ ...(prev.id === reviewId ? prev : NO_COMPOSE), id: reviewId, text, fromAi: true, error: null }));
+    } catch (err) {
+      setCompose((prev) => ({ ...(prev.id === reviewId ? prev : NO_COMPOSE), id: reviewId, error: err.message }));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   async function publish() {
     if (!selected) return;
     setPublishing(true);
     updateCompose({ error: null });
     try {
-      const saved = await replyToReview(selected.id, current.text);
+      const saved = await replyToReview(selected.id, current.text, current.fromAi ? 'ai_draft' : 'panel');
       if (filters.status === 'pending') {
         // Sale de la bandeja y el detalle pasa a la que ocupa su lugar. Se
         // relee la página para que la primera de la siguiente suba a ésta (y
@@ -367,13 +390,15 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
           onPublish={publish}
           publishing={publishing}
           replyError={current.error}
+          onGenerate={generate}
+          generating={generating}
           onOpenTone={() => setToneOpen(true)}
           onShare={() => setSharing(selected)}
           onBack={() => setMobileDetail(false)}
         />
       </div>
 
-      {toneOpen && <BrandToneModal onClose={() => setToneOpen(false)} />}
+      {toneOpen && <BrandToneModal organizationId={orgId} onClose={() => setToneOpen(false)} />}
       {sharing && <ReviewShareModal review={sharing} onClose={() => setSharing(null)} />}
     </div>
   );

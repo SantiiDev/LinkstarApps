@@ -90,11 +90,12 @@ export async function requestGoogleSync() {
 }
 
 /* Publica (o reemplaza) la respuesta a una reseña. Devuelve lo que Google
- * guardó, que es lo que hay que mostrar. */
-export async function replyToReview(reviewId, comment) {
+ * guardó, que es lo que hay que mostrar. `source` es 'ai_draft' cuando el texto
+ * salió de «Generar respuesta con IA» (queda en google_reviews.reply_source). */
+export async function replyToReview(reviewId, comment, source = 'panel') {
   return apiFetch(
     `/api/google/reviews/${encodeURIComponent(reviewId)}/reply`,
-    { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ comment }) },
+    { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ comment, source }) },
     'No se pudo publicar la respuesta'
   );
 }
@@ -132,10 +133,11 @@ export const REVIEWS_PAGE_SIZE = 50;
 /* Los filtros de la bandeja, combinables entre sí (formato de <Select>).
  *
  *   - Rating: las estrellas que puso el cliente.
- *   - Estado: «Resp. automáticamente» (fase 7, responder solas las de 5★) y
+ *   - Estado: «Resp. automáticamente» son las que publicó la respuesta
+ *     automática o «responder reseñas anteriores» (reply_source, 0037).
  *     «Retiradas» (reseñas que el autor o Google borraron: la lectura todavía no
- *     las detecta) no tienen dato. Van deshabilitadas para que se vea lo que
- *     viene, sin un filtro que devuelva siempre vacío.
+ *     las detecta) no tiene dato: va deshabilitada para que se vea lo que viene,
+ *     sin un filtro que devuelva siempre vacío.
  *   - Tipo: el TONO del texto según la IA (0033), no las estrellas. Es de
  *     Business: en gratis la pantalla deshabilita las opciones, y aunque no lo
  *     hiciera el RLS de google_review_analysis no devolvería nada. */
@@ -151,7 +153,7 @@ export const REVIEW_STATUS_OPTIONS = [
   { value: 'all', label: 'Todas' },
   { value: 'answered', label: 'Respondidas' },
   { value: 'pending', label: 'Sin responder' },
-  { value: 'auto', label: 'Resp. automáticamente', disabled: true, soon: true },
+  { value: 'auto', label: 'Resp. automáticamente' },
   { value: 'withdrawn', label: 'Retiradas', disabled: true, soon: true },
 ];
 
@@ -246,6 +248,7 @@ function reviewsQuery(organizationId, {
   else if (rating !== 'all') query = query.eq('star_rating', Number(rating));
   if (status === 'answered') query = query.not('reply_comment', 'is', null);
   if (status === 'pending') query = query.is('reply_comment', null);
+  if (status === 'auto') query = query.in('reply_source', ['auto', 'past']);
   if (sentiment !== 'all') query = query.eq('google_review_analysis.sentiment', sentiment);
   if (locationId) query = query.eq('google_locations.location_id', locationId);
 

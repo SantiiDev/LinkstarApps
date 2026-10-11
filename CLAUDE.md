@@ -76,7 +76,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0036 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0037 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -115,6 +115,8 @@ longer depend on physical row order either. 142 assertions green on the test pro
 (review analysis), 18 (`0032`'s free-plan fallback) and 19 (`0034`'s retention) are green there too; 185 there
 on 10 Oct 2026 with `0035`–`0036` and section 20 (review alerts). Without
 psql or Docker, that run used `node-pg` installed in a scratch folder. The local stack started on the default ports on this machine.
+220 green on a local stack on 11 Oct 2026 through `0037` (section 21, AI replies); `0037` has **not**
+been run on the test project yet.
 
 Test accounts in that project: `linkstar.app1@gmail.com` (free plan) and `business@linkstar.test` (org
 "Linkstar Business (prueba)", Business `active` for a year, set by hand — no Mercado Pago involved; the
@@ -123,12 +125,20 @@ real client's ficha**: in the Business org it is linked on purpose to have real 
 Reading it is harmless; editing the profile, publishing or replying from the panel writes to that client's
 public listing, so test writes only on the Linkstar ficha.
 
+**In production, "Organización de Prueba"** (owner `linkstar.app1@gmail.com`, the only org there) **was
+set to Business by hand on 11 Oct 2026**, `active` until 11 Oct 2027, with no Mercado Pago preapproval —
+so the team can see the Business sections. `run_expire_subscriptions()` never expires `active` rows: it
+has to be put back to `free` / `active` (dates nulled) by hand. With it, the daily job analyzes its
+reviews and runs listing protection on its fichas. Its «Cancelar suscripción» has nothing behind it.
+
 Ops scripts live in `services/api/scripts/` and run with `node scripts/<name>.js` from `services/api`
 (`provision-devices.js`, `rebuild-today-rollup.js`, `rebuild-rollups.js`, `send-alerts.js`,
 `sync-google.js` and `analyze-reviews.js` also have npm aliases — `npm run provision-devices`,
 `npm run rebuild-today-rollup`, `npm run rebuild-rollups`, `npm run send-alerts`, `npm run sync-google`,
-`npm run analyze-reviews`, `npm run print-claim-sheet`; `seed-test-device.js` doesn't;
-`npm run daily` runs `rebuild-rollups` → `sync-google` → `send-alerts` and is what the deployed cron calls).
+`npm run analyze-reviews`, `npm run print-claim-sheet`, `npm run auto-replies`; `seed-test-device.js` doesn't;
+`npm run daily` runs `rebuild-rollups` → `sync-google` → `run-auto-replies` → `send-alerts` and is what the
+deployed cron calls; `npm run hourly` runs `sync-google` → `run-auto-replies` → `send-alerts --solo-resenas`
+for a second, hourly Railway cron — see "AI replies").
 `sync-google.js` was `sync-reviews.js` until phase 4.6, when it started reading metrics and checking
 profile changes too. `provision-devices.js` takes `--form=<device_form>` (default `nfc_stand`; `nfc_card`
 for personal cards) and also writes `claim-sheet-<lote>.html`: an A4 sheet of the small **claim** QRs
@@ -166,8 +176,11 @@ to `.env`, don't rename them away.
   `PORT` (3001), and `lib/googleOAuth.js` warns at boot if they differ. Losing `GOOGLE_TOKEN_ENC_KEY`
   makes every stored refresh token unreadable — every customer has to reconnect. `ANTHROPIC_API_KEY` /
   `ANTHROPIC_MODEL` (optional, default `claude-haiku-5-5`) power the review analysis of phase 5 and,
-  since 11 Oct 2026, the AI drafts of Publicaciones (`lib/postWriter.js`); without the key the Google
-  sync works the same, reviews simply stay pending, and the post AI answers 503. The provider that
+  since 11 Oct 2026, the AI drafts of Publicaciones (`lib/postWriter.js`) and of review replies
+  (`lib/replyWriter.js`); without the key the Google sync works the same, reviews simply stay pending,
+  and the post/reply AI answers 503. `AI_AUTO_REPLY_PUBLISH` (optional, off unless exactly `on`) is the
+  switch that lets the auto-reply queue publish on Google by itself — off in production until Google
+  approves the app verification (see "AI replies"). The provider that
   receives the review text and the ficha data is named in the panel's privacy policy, so the key and the
   policy move together (see "Review analysis").
   `DASHBOARD_URL` is optional too (defaults to the *second* entry of `FRONTEND_URL`) and is where the
@@ -292,11 +305,16 @@ and the two `service_role` RPCs the analyzer uses (see "Review analysis" below) 
 and in `google_metrics_daily()`, the raw-scan purge, and the 30-day guard on `rebuild_today_rollup()`
 (see "Retention by plan" below) · `0035` the two new `notification_kind` values (`low_rating`,
 `review_keyword`) · `0036` review alerts: the columns in `notification_preferences`, the `*_enabled_at`
-trigger, and the new `pending_notifications()` (see "Review alerts" under "Team").
+trigger, and the new `pending_notifications()` (see "Review alerts" under "Team") · `0037` AI replies:
+`review_reply_settings`, `review_auto_reply_rules`, `review_reply_jobs`, `google_reviews.reply_source`,
+`google_record_reply()` with `p_source`, and the scope/queue RPCs (see "AI replies" below).
 
-**`0035`–`0036` are on the TEST project only** (pushed 10 Oct 2026, `rls_isolation.sql` 185 green).
-**Push them to production before merging the API or deploying the panel** that uses them: the panel
-selects the new columns, and `send-alerts.js` has templates for the new kinds.
+**`0035`–`0036` are on the TEST project only** (pushed 10 Oct 2026, `rls_isolation.sql` 185 green), and
+**`0037` only on a local stack** (11 Oct 2026, 220 green). `main` was merged on 11 Oct 2026 with the
+`0035`–`0036` code while production lacked them — the wrong order again, harmless only because
+`send-alerts.js` works with the old `pending_notifications()`. **Push `0035`–`0037` to production before
+deploying the panel or merging the AI-replies API**: the panel selects the new columns, and
+`routes/automations.js` / `google_record_reply(p_source)` need `0037`.
 
 **Everything up to `0034` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
 16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026, `0028`–`0033` on 7 Oct 2026,
@@ -536,14 +554,13 @@ How it behaves:
 - **`DEFAULT_PREFERENCES` in `notificationsApi.js` mirrors the defaults** of `pending_notifications()`
   and the `0036` columns; change one, change both.
 
-**The three AI cards.** The backend of the replies with AI (phase 5) was assigned to the partner; on
-11 Oct 2026 Santiago said nothing was built outside the repo and it is ours to build (it needs
-migrations — rules, brand tone, an auto-reply flag). "The partner" below is history:
+**The three AI cards.** Their backend exists since 11 Oct 2026 (`0037`, see "AI replies"); it had
+been assigned to the partner, but nothing was built outside the repo:
 - **The contract is the header of `lib/automationsApi.js`:** the `/api/automations/...` routes, the
   shape of the data, the per-location override and the reply permissions.
-- **The UI is complete on purpose, with no Próximamente.** Santiago asked for it, with the partner
-  implementing the routes. Until they exist, reads quietly fall back to defaults (or "—" in the
-  counter) and saves show the API's generic error.
+- **The UI is complete on purpose, with no Próximamente.** A failed read quietly falls back to defaults
+  (or "—" in the counter). «Responder reseñas anteriores» says «en cola» instead of «en camino» when
+  the API answers `publishing: false` (the publish switch is off).
 - **In free, these cards go behind `BusinessLock`** (texts in `automationLocks.js`, invented data in
   `automationsSample.js`), and a viewer doesn't see them.
 - **What used to be here is gone:** the old "En desarrollo" section, including the monthly-PDF card,
@@ -1034,6 +1051,79 @@ stars), `topics` from a **closed list** (`atencion`, `calidad`, `precio`, `esper
   analysis and the post drafts (see "Google Business Profile — the screens") — and so does the
   justification.
 
+### AI replies — draft, brand tone, auto-reply and its queue (rest of phase 5, `0037`)
+
+Built 11 Oct 2026. The panel already had every screen; the contract was `apps/dashboard/src/lib/automationsApi.js`.
+
+| Piece | Triggered by | Publishes on Google? |
+|---|---|---|
+| Draft (`POST /api/google/reviews/:id/reply/ai`) | the button in the review detail | No — it fills the reply box |
+| Brand tone + negative-review email | Configuración → Gestión local, the modal | No |
+| Auto-reply rule | per location or global, run by the cron | Yes, only with `AI_AUTO_REPLY_PUBLISH=on` |
+| «Responder reseñas anteriores» | Automatizaciones | Yes, same switch |
+
+How it is built:
+- **Writing:** `lib/replyWriter.js` (pattern of `postWriter.js`).
+- **Publishing:** `lib/replyPublisher.js`. It is the only path to Google: the manual route in
+  `routes/google.js` uses it too. Google first, then `google_record_reply(..., p_source)`.
+- **Queue:** `lib/autoReplies.js` + `scripts/run-auto-replies.js`. It runs in `daily` and in the new
+  `hourly` Railway cron (`scripts/hourly.js`), and in the background for the org that clicked
+  «Responder anteriores».
+- **Routes:** `routes/automations.js`.
+
+Things that are load-bearing:
+- **Nothing reaches Claude that the privacy policy doesn't name** (§3.2).
+  - What it gets: the review's stars and original text, the ficha's name, and the tone instructions
+    and emoji rule.
+  - What it never gets: **the reviewer's name**. The model writes `{nombre}` and the server fills it in
+    (`fillPlaceholders`). The same goes for `{email}` (it is told only that one exists) and the
+    signature, which the model never writes.
+- **Reviews with stars only are answered too** (a thank-you). The policy says so.
+- **The publish switch.** `AI_AUTO_REPLY_PUBLISH` stays off until Google approves the verification:
+  §3.1 of the policy and `GOOGLE_VERIFICATION.md` say «we never publish on our own».
+  - **While it's off,** reviews are queued (`review_reply_jobs`) and the panel says «en cola».
+  - **The day it goes on,** whatever is queued goes out in the first run. Rewrite those two texts the
+    same day.
+- **Permissions are in SQL, and nothing reads the three tables from the panel** (RLS forced, no
+  policies, everything through the API).
+  - `review_ai_target()` covers one review: the `0026` reply rule plus Business.
+  - `review_ai_scope_target()` covers a scope: owner/admin anywhere; a manager only in their
+    locations, who can *read* the global scope but not write it; never a viewer; Business only.
+- **A location's rule overrides the global one even when it's off.** A rule only answers reviews
+  created after it was switched on: `enabled_at`, set by a trigger like `0036`'s.
+- **One queue row per review** (`review_id` unique). `claim_reply_jobs()` re-checks before every
+  publish that:
+  - the review is still unanswered;
+  - the org is still Business;
+  - the rule is still on.
+
+  Two more details:
+  - A job stuck in `processing` for 30 minutes is retaken. A job that failed is retried up to 3
+    times, an hour apart.
+  - The token is fetched **before** Claude, so an expired connection doesn't pay for texts it can't
+    publish.
+- **`google_reviews.reply_source`:**
+  - Values: `panel` | `ai_draft` | `auto` | `past`.
+  - It feeds the «Reseñas respondidas automáticamente» counter (2 estimated minutes per reply) and
+    the «Resp. automáticamente» filter.
+  - A sync that brings a different reply text resets it to NULL (trigger, bypassed only by
+    `google_record_reply()` through `linkstar.recording_reply`), so we never claim a reply the owner
+    wrote on Google.
+- **Hourly cron.** It runs `send-alerts --solo-resenas`. The weekly summary goes out 6 days after the
+  previous one, so running all alerts hourly would drift it one hour per week.
+
+Tested on 11 Oct 2026:
+- `rls_isolation.sql` section 21, 220 green on a local stack.
+- An end-to-end run of the routes against the local stack (20 checks, real Claude).
+- A browser pass of the panel against the local stack.
+- **Not tested against Google:** publishing (manual with `ai_draft`, or from the queue). Test it only
+  on the Linkstar ficha, never Vineria Martu, with `--org` of an org that links only Linkstar.
+
+Pending:
+- the «Respuestas IA» settings tab (with the language control);
+- per-location review alerts;
+- the hourly `sync-google` also re-reads 10 days of metrics per run — split it if quota matters.
+
 ### Retention by plan — what each plan shows and what we keep (`0034`, decision 3)
 
 `plans.data_retention_days` (free 30 · Business 365 · Enterprise 1095) is enforced in two separate ways:
@@ -1135,11 +1225,11 @@ split below before wiring anything — the shell is finished, the data mostly is
       fichas" rule all hang off them). Activating a ficha creates and links its sucursal (name, address,
       `place_id`). Manual "Nuevo local" stays only for accounts without Google (or Instagram-only). It
       needs a small RPC, because `createLocation` can't return the id (see `lib/catalogApi.js`).
-  - **Respuestas IA — not started.** Moves "Tonos de marca" and "Email de contacto para reseñas
-    negativas" out of Gestión local (where they still are) and adds "Idioma de las respuestas" (Tapstar).
-    All three belong to the partner's AI work, and the email's «Guardar» still saves nothing. The open
-    question for Santiago: build the UI with its contract documented in `lib/automationsApi.js` (like
-    the Automatizaciones cards), or mark them Próximamente.
+  - **Respuestas IA — not started as a tab.** "Tonos de marca" and "Email de contacto para reseñas
+    negativas" still live in Gestión local, and since 11 Oct 2026 they work (`pages/Settings/AiReplySettings.jsx`,
+    backed by `0037`). Moving them here and adding "Idioma de las respuestas" (Tapstar) is what's left;
+    the language is already stored (`review_reply_settings.language`, `business` | `review`) but has no
+    control yet.
   - **Equipo — partly done.** Done: employees removed; members + activity log only. Pending: Tapstar's
     header ("Equipo · 1/5" + «Invitar usuario») and an «Invitar usuario» modal like Tapstar's (email,
     sucursales multi-select, a Ver/Editar permission matrix per section). Today's model is four roles
@@ -1214,16 +1304,18 @@ split below before wiring anything — the shell is finished, the data mostly is
   `fetchReviewPage` embeds `google_review_analysis!inner` **only** while that filter is on, and the
   detail's tone label comes from a separate `fetchReviewSentiments()` whose failure is swallowed. Don't
   embed the analysis by default: an environment without `0033` (the test project until 9 Oct 2026) rejects
-  the whole query, and `fetchReviews` also feeds Mi Empresa. Estado's "Resp. automáticamente" and
-  "Retiradas" are disabled options — no data exists for either yet. Mi Empresa's "Responder ahora" opens
+  the whole query, and `fetchReviews` also feeds Mi Empresa. Estado's "Resp. automáticamente" filters
+  `reply_source in (auto, past)` (`0037`); "Retiradas" is a disabled option — no data exists for it yet.
+  Mi Empresa's "Responder ahora" opens
   Rating "1 y 2 estrellas" + Sin responder + the local it was showing — exactly what its alert counts
   (`pendingNegatives()`). Until 9 Oct 2026 it opened Tipo = Negativas (the AI tone), a different list
   whose size didn't match the alert, and which errored outright where `0033` was missing. With the Sin responder filter on, publishing removes
   the review and the detail moves to the next one; the draft is tied to the review id it was written for.
-  "Generar respuesta con IA" and the brand-tone modal (`BrandToneModal.jsx`, also opened by Configuración →
-  Tonos de marca) are **frontend only**: the AI replies (rest of phase 5) are being built separately,
-  "Guardar tono" is disabled, and the data shape the backend should store is documented at the top of that
-  file. Free sees the AI button locked plus a "Probar Business" card, never a fake remaining-replies count.
+  "Generar respuesta con IA" (Business) puts a draft from `POST /api/google/reviews/:id/reply/ai` in the
+  reply box; it is published like a hand-written one, with `source: 'ai_draft'`. The brand-tone modal
+  (`BrandToneModal.jsx`, also opened by Configuración → Tonos de marca) saves for real and loads the
+  scope's existing tone first, so saving never silently overwrites one (see "AI replies"). Free sees the
+  AI button locked plus a "Probar Business" card, never a fake remaining-replies count.
   «Compartir» (11 Oct 2026, every plan) opens `ReviewShareModal.jsx`: an Instagram image (story 9:16 or
   post 1:1) drawn in the browser by `lib/reviewImage.js` — no API, nothing stored — with the author as
   «Nombre I.» (`shortAuthorName`) and no Linkstar mark (both product decisions). «Compartir» uses the

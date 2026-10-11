@@ -199,6 +199,56 @@ export const googlePostAiSchema = z
   })
   .refine((b) => b.mode !== 'tweak' || (b.text && b.tweak), { message: 'Falta el texto o el ajuste' });
 
+// Respuestas con IA (0037, routes/automations.js). Los ids van con el mismo
+// patrón laxo que el resto de las rutas (requireUuid): z.uuid() de Zod 4 exige
+// los bits de versión del RFC y rechazaría ids válidos de la base.
+const dbId = z.string().regex(/^[0-9a-f-]{36}$/i, 'Id inválido');
+// null = «Todos los locales». El panel lo manda explícito; si falta, es global.
+const scopeFields = {
+  org: dbId,
+  location_id: dbId.nullable().optional().transform((v) => v ?? null),
+};
+
+// La forma de DEFAULT_BRAND_TONE en apps/dashboard/src/pages/Reviews/BrandToneModal.jsx.
+export const brandToneSchema = z.object({
+  ...scopeFields,
+  instructions: z.string().trim().max(500).default(''),
+  signature: z.string().trim().max(120).default(''),
+  emojis: z
+    .object({
+      enabled: z.boolean(),
+      mode: z.enum(['auto', 'custom']),
+      amount: z.enum(['moderate', 'few']),
+      custom: z.array(z.string().trim().min(1).max(16)).max(10),
+    })
+    .strict(),
+  language: z.enum(['business', 'review']).default('business'),
+});
+
+// `email` vacío o null borra el mail de ese alcance.
+export const negativeContactSchema = z.object({
+  ...scopeFields,
+  email: z.union([z.string().trim().email().max(254), z.literal(''), z.null()]),
+});
+
+export const autoReplyRuleSchema = z.object({
+  ...scopeFields,
+  enabled: z.boolean(),
+  stars: z.array(z.number().int().min(1).max(5)).min(1).max(5),
+  delay: z.enum(['now', '1-3h', '3-6h']),
+});
+
+export const replyPastSchema = z.object({
+  ...scopeFields,
+  count: z.number().int().min(1).max(200),
+  stars: z.enum(['all', '4-5', '5', '1-3']),
+});
+
+// El borrador de una respuesta: una indicación opcional para esta reseña.
+export const reviewReplyAiSchema = z.object({
+  instructions: z.string().trim().max(300).optional(),
+});
+
 // Middleware genérico: valida req.body contra un schema de Zod. 400 con el
 // primer error legible si falla, y reemplaza req.body por los datos ya
 // parseados/coercionados (trim, etc.) si pasa.

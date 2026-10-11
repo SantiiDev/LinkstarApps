@@ -5,8 +5,15 @@ import { send, deviceIdleEmail, weeklySummaryEmail, lowRatingEmail, keywordAlert
 
 /* Ejecutor de las alertas de la fase 7 que no dependen de Google.
  *
- *   node scripts/send-alerts.js            manda lo que haya pendiente
- *   node scripts/send-alerts.js --dry-run  muestra qué mandaría, sin mandar
+ *   node scripts/send-alerts.js                 manda lo que haya pendiente
+ *   node scripts/send-alerts.js --dry-run       muestra qué mandaría, sin mandar
+ *   node scripts/send-alerts.js --solo-resenas  sólo las alertas de reseñas (low_rating,
+ *                                               review_keyword): es lo que corre cada hora
+ *                                               (scripts/hourly.js)
+ *
+ * Por qué el de cada hora no manda las de escaneos: el resumen semanal sale
+ * cuando pasaron 6 días del anterior, así que corriendo cada hora saldría una
+ * hora antes cada semana (y el día se correría). Esas quedan en el diario.
  *
  * Toda la decisión de QUÉ mandar vive en SQL (public.pending_notifications,
  * migración 0023). Acá sólo se arma el mail y se manda, igual que
@@ -25,6 +32,8 @@ import { send, deviceIdleEmail, weeklySummaryEmail, lowRatingEmail, keywordAlert
  * que no ocurrió haría que el aviso real nunca salga.
  */
 
+const REVIEW_KINDS = new Set(['low_rating', 'review_keyword']);
+
 const TEMPLATES = {
   device_idle: deviceIdleEmail,
   weekly_summary: weeklySummaryEmail,
@@ -35,9 +44,13 @@ const TEMPLATES = {
 
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
+  const onlyReviews = process.argv.includes('--solo-resenas');
 
-  const { data: pending, error } = await supabase.rpc('pending_notifications');
+  const { data: all, error } = await supabase.rpc('pending_notifications');
   if (error) throw error;
+  const pending = onlyReviews
+    ? (all ?? []).filter((row) => REVIEW_KINDS.has(row.kind))
+    : all;
 
   if (!pending?.length) {
     console.log('No hay avisos pendientes.');

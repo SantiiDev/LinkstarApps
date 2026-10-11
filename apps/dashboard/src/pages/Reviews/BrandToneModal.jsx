@@ -1,20 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon/Icon';
 import Select from '../../components/Select/Select';
 import Switch from '../../components/Switch/Switch';
 import { settingsTabPath } from '../../lib/routes';
+import { fetchBrandTones, saveBrandTone } from '../../lib/automationsApi';
 import '../../components/FormModal/FormModal.css';
 import './BrandToneModal.css';
 
 /*
  * Tono de marca: cómo tiene que escribir la IA las respuestas a las reseñas.
- *
- * SÓLO FRONTEND por ahora. Las respuestas con IA son el resto de la fase 5 y
- * las está haciendo otra persona; todavía no hay tabla donde guardar esto, así
- * que el formulario funciona entero en pantalla y «Guardar tono» queda
- * deshabilitado. Cuando exista el backend, lo que se guarda es exactamente
- * DEFAULT_BRAND_TONE con lo que se cargó:
+ * Se guarda con PUT /api/automations/brand-tones (0037, review_reply_settings),
+ * uno por alcance: lo que se guarda es exactamente DEFAULT_BRAND_TONE con lo que
+ * se cargó:
  *
  *   {
  *     location_id:  uuid | null,     null = el tono global; uno por local pisa al global
@@ -28,9 +26,20 @@ import './BrandToneModal.css';
  *     },
  *   }
  *
+ * (más `language`, que el modal no muestra todavía y conserva tal cual).
+ *
  * Se abre desde el detalle de una reseña («Crear tono de marca») y desde
- * Configuración → Gestión local → Tonos de marca («+ Añadir tono»); en el
- * segundo caso recibe `locationOptions` y deja elegir a qué local aplica.
+ * Configuración → Gestión local → Tonos de marca («+ Añadir tono» y «Editar»);
+ * en el segundo caso recibe `locationOptions` y deja elegir a qué local aplica.
+ *
+ *   existingTones  los tonos ya guardados (lo que devuelve fetchBrandTones). Al
+ *                  elegir un local que ya tiene tono, el formulario lo carga:
+ *                  guardar sin verlo pisaría el que había. Desde Reseñas no
+ *                  llega y el modal lo pide solo.
+ *   initialTone    el tono a editar («Editar» en Configuración).
+ *   allowGlobal    false para un encargado: puede escribir el tono de sus
+ *                  sucursales, no el de «Todos los locales» (0037).
+ *   onSaved(tone)  después de guardar.
  */
 
 const BRAND_TONE_MAX = 500;
@@ -41,7 +50,15 @@ const DEFAULT_BRAND_TONE = {
   instructions: '',
   signature: '',
   emojis: { enabled: false, mode: 'auto', amount: 'moderate', custom: [] },
+  language: 'business',
 };
+
+const toneFrom = (saved, locationId) => ({
+  ...DEFAULT_BRAND_TONE,
+  ...(saved ?? {}),
+  location_id: locationId ?? null,
+  emojis: { ...DEFAULT_BRAND_TONE.emojis, ...(saved?.emojis ?? {}) },
+});
 
 /* Los emojis de lo que se escribió, o null si hay algo que no es un emoji
  * (letras, números, signos). Se separa por grafema y no por carácter: un emoji
@@ -80,11 +97,57 @@ function SegmentedChoice({ label, value, options, onChange }) {
   );
 }
 
-export default function BrandToneModal({ onClose, locationOptions = null }) {
+export default function BrandToneModal({
+  onClose, organizationId, locationOptions = null, existingTones = null, initialTone = null,
+  allowGlobal = true, onSaved,
+}) {
   const navigate = useNavigate();
-  const [tone, setTone] = useState(DEFAULT_BRAND_TONE);
+  const [tones, setTones] = useState(existingTones);
+  const [tone, setTone] = useState(() => toneFrom(initialTone, initialTone?.location_id));
   const [emojiDraft, setEmojiDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
   const { emojis } = tone;
+
+  // Desde Reseñas no llega la lista: se pide para cargar el tono global si ya
+  // existe, en vez de mostrar el formulario vacío y pisarlo al guardar.
+  useEffect(() => {
+    if (existingTones || initialTone || !organizationId) return;
+    let cancelled = false;
+    fetchBrandTones(organizationId)
+      .then((list) => {
+        if (cancelled) return;
+        setTones(list);
+        const global = list.find((t) => t.location_id == null);
+        if (global) setTone(toneFrom(global, null));
+      })
+      .catch(() => { if (!cancelled) setTones([]); });
+    return () => { cancelled = true; };
+  }, [existingTones, initialTone, organizationId]);
+
+  const isEditing = (tones ?? []).some((t) => (t.location_id ?? null) === (tone.location_id ?? null));
+
+  // Elegir otro local carga su tono si ya tiene uno; si no, el formulario
+  // vacío para ese local.
+  function changeLocation(value) {
+    const locationId = value === 'all' ? null : value;
+    const saved = (tones ?? []).find((t) => (t.location_id ?? null) === locationId);
+    setTone(toneFrom(saved, locationId));
+    setError(null);
+  }
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await saveBrandTone(organizationId, tone);
+      onSaved?.(saved);
+      onClose();
+    } catch (err) {
+      setError(err.message);
+      setSaving(false);
+    }
+  }
 
   const set = (patch) => setTone((prev) => ({ ...prev, ...patch }));
   const setEmojis = (patch) => setTone((prev) => ({ ...prev, emojis: { ...prev.emojis, ...patch } }));
@@ -105,10 +168,10 @@ export default function BrandToneModal({ onClose, locationOptions = null }) {
 
   return (
     <div className="fmodal-overlay tone-modal-overlay" onClick={onClose}>
-      <div className="fmodal tone-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Crear tono">
+      <div className="fmodal tone-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={isEditing ? 'Editar tono' : 'Crear tono'}>
         <div className="fmodal__header">
           <div>
-            <h3 className="fmodal__title">Crear tono</h3>
+            <h3 className="fmodal__title">{isEditing ? 'Editar tono' : 'Crear tono'}</h3>
             <p className="tone-modal__subtitle">Definí cómo la IA se comunica en tus respuestas.</p>
           </div>
           <button className="fmodal__close" onClick={onClose} aria-label="Cerrar" type="button">
@@ -122,8 +185,8 @@ export default function BrandToneModal({ onClose, locationOptions = null }) {
               <span className="fmodal__label">Aplica a</span>
               <Select
                 value={tone.location_id ?? 'all'}
-                onChange={(v) => set({ location_id: v === 'all' ? null : v })}
-                options={[{ value: 'all', label: 'Todos los locales' }, ...locationOptions]}
+                onChange={changeLocation}
+                options={allowGlobal ? [{ value: 'all', label: 'Todos los locales' }, ...locationOptions] : locationOptions}
                 triggerClassName="ls-select-field ls-select-field--block"
               />
             </label>
@@ -231,9 +294,7 @@ export default function BrandToneModal({ onClose, locationOptions = null }) {
             )}
           </div>
 
-          <p className="tone-modal__soon">
-            <Icon name="info" size={14} /> Guardar el tono llega junto con las respuestas con IA. Por ahora podés ver cómo va a funcionar.
-          </p>
+          {error && <p className="tone-modal__emoji-error" role="alert">{error}</p>}
 
           {!fromSettings && (
             <button
@@ -248,8 +309,13 @@ export default function BrandToneModal({ onClose, locationOptions = null }) {
 
         <div className="fmodal__footer tone-modal__footer">
           <button type="button" className="fmodal__btn fmodal__btn--ghost" onClick={onClose}>Cancelar</button>
-          <button type="button" className="fmodal__btn fmodal__btn--primary" disabled title="Próximamente">
-            Guardar tono
+          <button
+            type="button"
+            className="fmodal__btn fmodal__btn--primary"
+            onClick={save}
+            disabled={saving || !organizationId}
+          >
+            {saving ? 'Guardando…' : 'Guardar tono'}
           </button>
         </div>
       </div>

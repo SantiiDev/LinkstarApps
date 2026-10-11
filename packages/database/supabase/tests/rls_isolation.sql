@@ -1554,6 +1554,212 @@ update public.notification_preferences set low_rating_enabled = false
 select pg_temp.check('Apagada, no avisa',
   (select count(*) from pg_temp.pending_for('low_rating')) = 0);
 
+-- =========================================================================
+-- 21. Respuestas con IA: tono de marca, respuesta automática y su cola (0037)
+-- =========================================================================
+-- A esta altura, en Bar Uno:
+--   Echesortu (dddd..04, de Caro)   9b..03 5★ ya respondida · 9b..07 3★ sin responder
+--   Pichincha (dddd..02, no de Caro) 9b..04 2★ sin responder (created_time = now())
+--                                    9b..05 1★ sin responder (created_time = now() - 1h)
+--   ficha sin vincular              9b..01 4★ · 9b..06 1★
+-- Las RPC son de service_role: se llaman como postgres con el usuario de
+-- parámetro, que es como las usa el API.
+create or replace function pg_temp.raises(p_sql text, p_code text)
+returns boolean language plpgsql as $$
+begin
+  execute p_sql;
+  return false;
+exception
+  when raise_exception then
+    return sqlerrm like '%' || p_code || '%';
+end;
+$$;
+
+-- Quién puede, sobre un alcance (org + local; local NULL = «Todos los locales»).
+select pg_temp.check('Ana (owner) puede escribir la regla global',
+  public.review_ai_scope_target('11111111-1111-1111-1111-111111111111',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, true) = 'owner');
+select pg_temp.check('Caro (manager) puede escribir en su sucursal',
+  public.review_ai_scope_target('33333333-3333-3333-3333-333333333333',
+    'aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000004', true) = 'manager');
+select pg_temp.check('Caro puede LEER el global (es lo que heredan sus sucursales)',
+  public.review_ai_scope_target('33333333-3333-3333-3333-333333333333',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, false) = 'manager');
+select pg_temp.check('… pero no escribirlo',
+  pg_temp.raises($q$select public.review_ai_scope_target('33333333-3333-3333-3333-333333333333',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, true)$q$, 'rol_insuficiente'));
+select pg_temp.check('Caro no puede en una sucursal que no tiene',
+  pg_temp.raises($q$select public.review_ai_scope_target('33333333-3333-3333-3333-333333333333',
+    'aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000002', false)$q$, 'rol_insuficiente'));
+select pg_temp.check('Dani (viewer) no puede nada',
+  pg_temp.raises($q$select public.review_ai_scope_target('44444444-4444-4444-4444-444444444444',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, false)$q$, 'rol_insuficiente'));
+select pg_temp.check('Beto (otra organización) no puede en Bar Uno',
+  pg_temp.raises($q$select public.review_ai_scope_target('22222222-2222-2222-2222-222222222222',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, false)$q$, 'rol_insuficiente'));
+select pg_temp.check('Un local de otra organización no existe para Bar Uno',
+  pg_temp.raises($q$select public.review_ai_scope_target('11111111-1111-1111-1111-111111111111',
+    'aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000003', false)$q$, 'local_inexistente'));
+
+-- Una reseña puntual, para el borrador.
+select pg_temp.check('review_ai_target: Ana, reseña de Pichincha, con el texto y sin respuesta',
+  (select star_rating = 2 and not has_reply and business_name = 'Bar Uno Pichincha'
+     from public.review_ai_target('11111111-1111-1111-1111-111111111111', '9b000000-0000-0000-0000-000000000004')));
+select pg_temp.check('review_ai_target: Caro no, en una sucursal que no tiene',
+  pg_temp.raises($q$select * from public.review_ai_target('33333333-3333-3333-3333-333333333333',
+    '9b000000-0000-0000-0000-000000000004')$q$, 'rol_insuficiente'));
+select pg_temp.check('review_ai_target: el texto que llega es el original de una traducida',
+  (select comment = 'Atención lentísima, los mozos LENTOS'
+     from public.review_ai_target('11111111-1111-1111-1111-111111111111', '9b000000-0000-0000-0000-000000000007')));
+
+-- Es Business: en gratis, nada.
+update public.subscriptions set plan_code = 'free' where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check('En gratis el alcance da solo_business',
+  pg_temp.raises($q$select public.review_ai_scope_target('11111111-1111-1111-1111-111111111111',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, false)$q$, 'solo_business'));
+select pg_temp.check('… y el borrador también',
+  pg_temp.raises($q$select * from public.review_ai_target('11111111-1111-1111-1111-111111111111',
+    '9b000000-0000-0000-0000-000000000004')$q$, 'solo_business'));
+update public.subscriptions set plan_code = 'business' where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+-- Tono de marca: global y uno de Echesortu; el del local pisa al global.
+select public.save_brand_tone('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null,
+  'Agradecé siempre', '— Bar Uno', '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}');
+select public.save_brand_tone('33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001',
+  'dddddddd-0000-0000-0000-000000000004',
+  'Tuteá y usá emojis', '— Echesortu', '{"enabled": true, "mode": "custom", "amount": "few", "custom": ["🍷"]}');
+select public.save_negative_contact('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null,
+  'hola@bar-uno.test');
+
+select pg_temp.check('Echesortu usa su tono y el mail global',
+  (select instructions = 'Tuteá y usá emojis' and signature = '— Echesortu' and negative_contact_email = 'hola@bar-uno.test'
+     from public.review_reply_context('aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000004')));
+select pg_temp.check('Pichincha, sin tono propio, usa el global',
+  (select instructions = 'Agradecé siempre' and signature = '— Bar Uno'
+     from public.review_reply_context('aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000002')));
+select pg_temp.check('Caro ve el tono global y el de su sucursal',
+  (select count(*) from public.list_brand_tones('33333333-3333-3333-3333-333333333333',
+     'aaaaaaaa-0000-0000-0000-000000000001')) = 2);
+
+select public.delete_brand_tone('33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001',
+  'dddddddd-0000-0000-0000-000000000004');
+select pg_temp.check('Borrado el de Echesortu, vuelve al global (y la fila vacía no queda)',
+  (select instructions = 'Agradecé siempre'
+     from public.review_reply_context('aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000004'))
+  and not exists (select 1 from public.review_reply_settings
+                   where location_id = 'dddddddd-0000-0000-0000-000000000004'));
+
+do $$
+begin
+  perform public.save_brand_tone('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null,
+    'x', '', '{"enabled": true, "mode": "otro", "amount": "few", "custom": []}');
+  raise exception 'FALLA: se guardó un tono con emojis inválidos';
+exception
+  when check_violation then
+    raise notice '  OK   Los emojis del tono se validan en la base';
+end $$;
+
+-- Regla automática: global prendida para 1 y 2★; Echesortu con la suya apagada.
+select public.save_auto_reply_rule('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null,
+  true, '{2,1,2}', 'now');
+select public.save_auto_reply_rule('33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001',
+  'dddddddd-0000-0000-0000-000000000004', false, '{1,2,3}', 'now');
+select pg_temp.check('La regla guarda estrellas ordenadas y sin repetir, y la base anota desde cuándo',
+  (select stars = '{1,2}' and enabled_at = now()
+     from public.review_auto_reply_rules
+    where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001' and location_id is null));
+select pg_temp.check('Sin regla guardada en Pichincha, get_auto_reply_rule no devuelve nada (el API pone los valores por defecto)',
+  not exists (select 1 from public.get_auto_reply_rule('11111111-1111-1111-1111-111111111111',
+    'aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000002')));
+
+-- En dos sentencias: una subconsulta de la misma sentencia no ve lo que acaba
+-- de insertar la función (misma foto de la base).
+select pg_temp.check('enqueue_auto_replies encola una',
+  public.enqueue_auto_replies() = 1);
+select pg_temp.check('… la 2★ de Pichincha',
+  (select array_agg(review_id) from public.review_reply_jobs
+    where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001') = '{9b000000-0000-0000-0000-000000000004}');
+-- No entraron: 9b..05 (anterior a prender la regla), 9b..07 (Echesortu tiene su
+-- regla apagada, que pisa a la global), 9b..06 (ficha sin vincular).
+select pg_temp.check('Encolar otra vez no duplica',
+  public.enqueue_auto_replies() = 0);
+
+-- «Responder anteriores» en Echesortu: la 3★ sin responder, no la ya respondida.
+select pg_temp.check('enqueue_past_replies: Caro en su sucursal encola la que falta responder',
+  public.enqueue_past_replies('33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001',
+    'dddddddd-0000-0000-0000-000000000004', 50, 'all') = 1);
+select pg_temp.check('… y no puede en «Todos los locales»',
+  pg_temp.raises($q$select public.enqueue_past_replies('33333333-3333-3333-3333-333333333333',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, 50, 'all')$q$, 'rol_insuficiente'));
+
+-- Alguien la respondió a mano mientras esperaba: al tomarla, se saltea.
+select public.google_record_reply('9b000000-0000-0000-0000-000000000007',
+  '11111111-1111-1111-1111-111111111111', 'Gracias, lo vamos a mejorar', now());
+select pg_temp.check('claim_reply_jobs devuelve sólo la que se puede publicar',
+  (select array_agg(review_id) from public.claim_reply_jobs(10, 'aaaaaaaa-0000-0000-0000-000000000001'))
+    = '{9b000000-0000-0000-0000-000000000004}');
+select pg_temp.check('… y la ya respondida queda skipped con el motivo',
+  (select status = 'skipped' and error = 'ya_respondida'
+     from public.review_reply_jobs where review_id = '9b000000-0000-0000-0000-000000000007'));
+
+-- La publica el ejecutor: sin usuario, con origen 'auto'.
+select public.google_record_reply('9b000000-0000-0000-0000-000000000004', null, '¡Gracias por tu reseña!', now(), 'auto');
+select public.finish_reply_job((select id from public.review_reply_jobs
+                                 where review_id = '9b000000-0000-0000-0000-000000000004'), 'done');
+select pg_temp.check('Respuesta automática: queda con su origen y el registro sin persona',
+  (select reply_source = 'auto' from public.google_reviews where id = '9b000000-0000-0000-0000-000000000004')
+  and exists (select 1 from public.audit_log
+               where entity_id = '9b000000-0000-0000-0000-000000000004'
+                 and actor_id is null and metadata ->> 'source' = 'auto'));
+select pg_temp.check('El contador la cuenta (2 minutos estimados por respuesta)',
+  (select replied = 1 and minutes_saved = 2
+     from public.auto_reply_stats('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null)));
+select pg_temp.check('La respuesta a mano quedó como «panel»',
+  (select reply_source = 'panel' from public.google_reviews where id = '9b000000-0000-0000-0000-000000000007'));
+
+-- Si la sincronización trae otro texto (el dueño la cambió en Google), ya no es nuestra.
+update public.google_reviews set reply_comment = 'Escrita desde Google'
+ where id = '9b000000-0000-0000-0000-000000000004';
+select pg_temp.check('Una respuesta cambiada fuera del panel pierde el origen',
+  (select reply_source is null from public.google_reviews where id = '9b000000-0000-0000-0000-000000000004'));
+
+-- Desde el panel no se lee ni se escribe nada de esto.
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+do $$
+begin
+  perform 1 from public.review_reply_settings;
+  raise exception 'FALLA: authenticated pudo leer review_reply_settings';
+exception when insufficient_privilege then
+  raise notice '  OK   authenticated no lee review_reply_settings';
+end $$;
+do $$
+begin
+  perform 1 from public.review_reply_jobs;
+  raise exception 'FALLA: authenticated pudo leer review_reply_jobs';
+exception when insufficient_privilege then
+  raise notice '  OK   authenticated no lee review_reply_jobs';
+end $$;
+do $$
+begin
+  perform public.save_auto_reply_rule('11111111-1111-1111-1111-111111111111',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, true, '{5}', 'now');
+  raise exception 'FALLA: authenticated pudo guardar una regla';
+exception when insufficient_privilege then
+  raise notice '  OK   authenticated no ejecuta las RPC de respuestas con IA';
+end $$;
+reset role;
+
+select set_config('role', 'anon', true);
+select set_config('request.jwt.claims', null, true);
+do $$
+begin
+  perform 1 from public.review_auto_reply_rules;
+  raise exception 'FALLA: anon pudo leer review_auto_reply_rules';
+exception when insufficient_privilege then
+  raise notice '  OK   anon no lee review_auto_reply_rules';
+end $$;
+reset role;
+
 do $$ begin
   raise notice '';
   raise notice '=== Todos los tests de aislamiento pasaron ===';

@@ -213,7 +213,7 @@ function AiUpsell() {
 export function ReviewDetail({
   review, sentiment: sentimentProp = null, showBranch, canReply, isBusiness,
   draft, onDraft, editing, onEdit, onCancelEdit, onPublish, publishing, replyError,
-  onOpenTone, onShare, onBack,
+  onGenerate, generating = false, onOpenTone, onShare, onBack,
 }) {
   const navigate = useNavigate();
 
@@ -297,12 +297,18 @@ export function ReviewDetail({
           {replyError && <p className="reviews-error" role="alert">{replyError}</p>}
 
           <div className="reviews-detail__actions">
-            {/* La IA la conecta el backend de la fase 5; hasta entonces el botón
-                se ve, pero no hace nada en Business y lleva a Configuración → Plan en
-                gratis. */}
+            {/* La IA escribe un borrador con el tono de marca del local (0037) y
+                lo pone en el cuadro: nunca publica. En gratis lleva a
+                Configuración → Plan. En la maqueta no llega `onGenerate`. */}
             {isBusiness ? (
-              <button type="button" className="reviews-btn reviews-btn--ai" disabled title="Próximamente">
-                <Icon name="sparkles" size={15} /> Generar respuesta con IA <span className="reviews-soon">Próximamente</span>
+              <button
+                type="button"
+                className="reviews-btn reviews-btn--ai"
+                onClick={onGenerate}
+                disabled={!onGenerate || generating || publishing}
+              >
+                <Icon name="sparkles" size={15} />{' '}
+                {generating ? 'Escribiendo…' : draft.trim() ? 'Generar otra respuesta' : 'Generar respuesta con IA'}
               </button>
             ) : (
               <button type="button" className="reviews-btn reviews-btn--ai reviews-btn--locked" onClick={() => navigate(settingsTabPath('plan'))}>

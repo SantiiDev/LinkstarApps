@@ -345,6 +345,38 @@
   overflow-wrap: anywhere;
 }
 
+/* ── Gestión local: tonos de marca (AiReplySettings) ── */
+.settings-tone-list .settings-account-row__name,
+.settings-tone-list .settings-account-row__email {
+  display: block;
+}
+
+.settings-tone-list .settings-account-row:last-child {
+  margin-bottom: 0;
+}
+
+.settings-tone-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .settings-tone-list .settings-account-row {
+    flex-wrap: wrap;
+  }
+
+  .settings-tone-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+.settings-card__hint--error {
+  color: var(--color-error, #DC2626);
+}
+
 /* ── Danger banners / cards ── */
 .settings-danger-banner {
   display: flex;
