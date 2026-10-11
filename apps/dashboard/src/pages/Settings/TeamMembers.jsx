@@ -279,16 +279,17 @@ export default function TeamMembers() {
     );
   }
 
+  // `--raised`: el menú de rol de la última fila se abre sobre la tarjeta del
+  // Registro de actividad, que si no lo tapaba (ver Settings.css).
   return (
-    <div className="settings-card">
+    <div className="settings-card settings-card--raised">
       <div className="settings-card__head">
         <div className="settings-card__head-left">
           <div className="settings-icon-box settings-icon-box--orange"><Icon name="mail" size={18} /></div>
           <div>
             <h3 className="settings-card__title-row">Miembros de la cuenta</h3>
             <p className="settings-card__subtitle">
-              Las personas que entran a este panel. Distinto de los empleados de acá abajo, que no
-              inician sesión y existen para atribuirles escaneos.
+              Las personas que entran a este panel y qué puede hacer cada una.
             </p>
           </div>
         </div>

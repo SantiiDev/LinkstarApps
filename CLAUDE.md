@@ -76,7 +76,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0034 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0036 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -112,7 +112,8 @@ all order by it) was decided by physical row order. The test now gives the secon
 longer depend on physical row order either. 142 assertions green on the test project as of 6 Oct 2026;
 159 green on a local stack (`db reset` through `0033`) on 7 Oct 2026, and 176 on 8 Oct 2026 through
 `0034`; and 176 on the test project on 9 Oct 2026, after `0032`–`0034` were pushed to it, so sections 17
-(review analysis), 18 (`0032`'s free-plan fallback) and 19 (`0034`'s retention) are green there too. Without
+(review analysis), 18 (`0032`'s free-plan fallback) and 19 (`0034`'s retention) are green there too; 185 there
+on 10 Oct 2026 with `0035`–`0036` and section 20 (review alerts). Without
 psql or Docker, that run used `node-pg` installed in a scratch folder. The local stack started on the default ports on this machine.
 
 Test accounts in that project: `linkstar.app1@gmail.com` (free plan) and `business@linkstar.test` (org
@@ -288,7 +289,13 @@ active-org functions · `0033` review analysis (phase 5): `google_review_analysi
 and the two `service_role` RPCs the analyzer uses (see "Review analysis" below) · `0034` retention by plan:
 `private.org_history_start()`, the date cut on the read policies of scans/rollups/review estimates/keywords
 and in `google_metrics_daily()`, the raw-scan purge, and the 30-day guard on `rebuild_today_rollup()`
-(see "Retention by plan" below).
+(see "Retention by plan" below) · `0035` the two new `notification_kind` values (`low_rating`,
+`review_keyword`) · `0036` review alerts: the columns in `notification_preferences`, the `*_enabled_at`
+trigger, and the new `pending_notifications()` (see "Review alerts" under "Team").
+
+**`0035`–`0036` are on the TEST project only** (pushed 10 Oct 2026, `rls_isolation.sql` 185 green).
+**Push them to production before merging the API or deploying the panel** that uses them: the panel
+selects the new columns, and `send-alerts.js` has templates for the new kinds.
 
 **Everything up to `0034` is applied in production** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
 16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026, `0028`–`0033` on 7 Oct 2026,
@@ -423,9 +430,10 @@ code path, the Supabase test account's email has to *be* the MP test buyer's.
 
 `memberships` + `invitations` (`0002`) are **people who log into the dashboard** — owner / admin /
 manager / viewer. `employees` (`0003`) are the waiter and the cashier: they never log in, they have no
-user, and they exist so a scan can be attributed to someone (`v_employee_leaderboard`). The "Equipo" tab
-of Settings renders **both**, members first, and each block says which is which — the word alone is
+user, and they exist so a scan can be attributed to someone (`v_employee_leaderboard`). The word alone is
 ambiguous in this product, and the phase 3 work was nearly built against the wrong table because of it.
+The "Equipo" tab of Settings rendered both until 10 Oct 2026; now it shows **only members** (plus the
+activity log), because without personal cards the employee ranking is always empty (decision 11).
 
 `0020` is what made members usable. Four things worth not undoing:
 
@@ -478,16 +486,66 @@ Three things that are load-bearing and easy to undo:
 - **Missing preferences mean defaults, not silence.** The function `left join`s `notification_preferences`;
   an inner join would mean a new account never receives anything until someone opens Settings.
 
-The settings screen is **Automatizaciones** (`pages/Automations/`, real since 6 Oct 2026, over
-`lib/notificationsApi.js`): the two switches, the idle-hours threshold and the recipient upsert
-`notification_preferences` straight through PostgREST, and "Últimos avisos enviados" reads
-`notification_log`. Both alerts are for **every plan** — a product decision, not an oversight; what the
-Business plan adds there are the AI/review automations, which render as "En desarrollo" cards with **no
-switch**, because a switch nothing executes is the exact thing that screen used to be. Owner/admin only:
-for a manager or viewer the RLS returns no row, which is indistinguishable from "never saved", so the
-screen shows a notice instead of the defaults — don't "simplify" that into rendering the form.
-`DEFAULT_PREFERENCES` in `notificationsApi.js` mirrors the `coalesce` defaults of
-`pending_notifications()`; change one, change both.
+**Review alerts** (`0035`/`0036`, 10 Oct 2026): `low_rating` (a new review with 1, 2 or 3★, the stars the
+customer picks) and `review_keyword` (a new review whose original text contains one of the customer's
+words, matched case- and accent-insensitively with `private.fold_text()`, so «lento» also finds «LENTOS»).
+**Every plan**, like Tapstar. Three rules, each easy to undo:
+- **They start off.** Unlike the scan alerts (where "no row = defaults"), these need explicit
+  activation.
+- **They only look at reviews created after activation.** A trigger stamps `*_enabled_at` when the
+  rule flips to on and ignores any value sent by the client.
+- **They are idempotent per (review, kind, recipient)** through `notification_log`.
+
+How they are built and sent:
+- Each has its own recipient list (`*_recipients`); an empty list falls back to the account's
+  `recipient_email`.
+- They read only reviews of fichas linked to a live sucursal (the `0025` rule), within the last 7 days.
+- The original text is used, not Google's translation (`private.review_original_text()`).
+- `0035` is only the two enum values, because a new value can't be used in the transaction that adds
+  it.
+- Mails: `lowRatingEmail` / `keywordAlertEmail` in `lib/mailer.js`, one per review and recipient.
+- Section 20 of `rls_isolation.sql` covers them (185 green on the test project, 10 Oct 2026).
+
+Two limits written down as pending:
+- **Up to a day of delay.** Reviews are read once a day by the `daily` job, so an alert can arrive up
+  to a day late. A Railway cron that runs only `sync-google` + `send-alerts` every hour would cut that
+  (`services/api/DEPLOY.md`).
+- **No per-location rules.** They need a migration.
+
+The settings screen is **Automatizaciones** (`pages/Automations/`, rebuilt on 10 Oct 2026 with Tapstar's
+structure). Top to bottom:
+1. **Location selector** ("Configurar automatizaciones de").
+2. **Business cards (IA):** "Responder reseñas anteriores", "Respuesta automática a reseñas" and
+   "Reseñas respondidas automáticamente".
+3. **The two review alerts.**
+4. **"Avisos por mail":** the scan alerts, with `SelectField` for the hours.
+
+There is no listing-protection card and no "Últimos avisos enviados" list any more (removed at
+Santiago's request on 10 Oct 2026):
+- The `profile_changed` mail still goes out for Business and is handled from Perfil.
+- `notification_log` is still written, because it is what keeps alerts from repeating; it just isn't
+  shown.
+
+How it behaves:
+- **Each card saves its own fields** ("Activar regla"): a partial upsert of `notification_preferences`
+  (`saveNotificationPreferences(orgId, patch)`).
+- **The alert and notice cards are owner/admin only.** For a manager or viewer the RLS returns no row,
+  which is indistinguishable from "never saved", so the screen shows a notice instead of the defaults.
+  Don't "simplify" that into rendering the form.
+- **`DEFAULT_PREFERENCES` in `notificationsApi.js` mirrors the defaults** of `pending_notifications()`
+  and the `0036` columns; change one, change both.
+
+**The partner's part — the three AI cards.** The backend of the replies with AI (phase 5) belongs to
+the partner:
+- **The contract is the header of `lib/automationsApi.js`:** the `/api/automations/...` routes, the
+  shape of the data, the per-location override and the reply permissions.
+- **The UI is complete on purpose, with no Próximamente.** Santiago asked for it, with the partner
+  implementing the routes. Until they exist, reads quietly fall back to defaults (or "—" in the
+  counter) and saves show the API's generic error.
+- **In free, these cards go behind `BusinessLock`** (texts in `automationLocks.js`, invented data in
+  `automationsSample.js`), and a viewer doesn't see them.
+- **What used to be here is gone:** the old "En desarrollo" section, including the monthly-PDF card,
+  which now lives in Informes.
 `lib/mailer.js` (customer-facing) is not `lib/email.js` (notifies *us* of an order or a contact
 message), but **both send through `send()`, the only function that knows about Resend** — Resend is the
 only mail provider in the project. Phase 3 shipped the invitation as a copyable link because there was no
@@ -718,7 +776,7 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
 - **`components/BusinessLock` is the second place a mock may render** (the first is `GoogleGate`), under
   the same conditions: blurred, `inert`, behind a veil that can't be closed, and with **invented** numbers
   (`*BusinessPreview.jsx` files), never the customer's own Business data — which a free account doesn't
-  even receive. It is per card (absolute overlay), and its button goes to Facturación. `useOrg().isBusiness`
+  even receive. It is per card (absolute overlay), and its button goes to Configuración → Plan. `useOrg().isBusiness`
   decides what it draws; the database decides what exists. Its lock copy lives in
   `pages/GoogleBusiness/businessLocks.js`. The `*Mockup.jsx` behind `GoogleGate` don't use it: they show
   the Business cards open, on every plan. It used to have a `fullPage`
@@ -731,11 +789,16 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
   connected gets the screen. It reuses `GoogleGate`'s background, veil and fixed layer (`GoogleGate.css`) and
   its rules: blurred, `inert`, can't be closed. The step illustrations are the screens' real blocks with
   invented data (`pages/Reports/reportsSample.js`, shared with the `*Mockup.jsx` behind), shrunk with
-  `transform` and with their `backdrop-filter` forced off (rule 2 of scroll performance). The price, trial and
+  `transform` and with their `backdrop-filter` forced off (rule 2 of scroll performance). The plan column is
+  `components/BusinessOffer`, the same card Configuración → Plan shows on free (`variant="card"`, which also
+  lists `features.highlights`). The price, trial and
   checkout mode come from `plans` (`useBusinessPlan()` in `lib/plans.js`): there is **no** per-location
   pricing or annual plan, so none of Tapstar's location slider or monthly/annual toggle. The button follows
-  `effectiveCheckoutMode()`: «Probar N días gratis» → `/alta/pago?plan=business` (disabled for
-  manager/viewer), or «Contactar con ventas» → `/panel/contacto` while `VITE_BUSINESS_CHECKOUT=off`. Step 3 of
+  `effectiveCheckoutMode()`: «Probar N días gratis» → `/alta/pago?plan=business` with `state.from`, so
+  `PlanCheckout`'s «Volver» returns to the screen it came from (disabled for
+  manager/viewer), or «Contactar con ventas» → `/panel/contacto` while `VITE_BUSINESS_CHECKOUT=off`. The
+  `max-height` / `max-width` rules that drop parts of the offer in `BusinessPitch.css` are scoped to
+  `.bpitch`, so they don't hide anything in Configuración. Step 3 of
   Sentimiento deliberately does not copy Tapstar's AI-summarized themes, which we don't have. **The modal
   has the same size in the three sections and on every step** — Siguiente/Atrás only change the orange
   column, the price never moves. The dialog is centered, so one pixel of height moves everything: it has a
@@ -1023,12 +1086,46 @@ split below before wiring anything — the shell is finished, the data mostly is
   `useOrg()` exposes `hasOrg` / `hasChosenPlan` / `hasAccess` / `canManageBilling`, which is what the guards,
   the billing tab and `SubscriptionBanner` read, and `isBusiness` (`BusinessLock` reads it; the real cut is
   `private.org_has_business()`).
-- Settings tabs live in the URL (`/panel/configuracion/:tab` — `local`, `equipo`, `facturacion`, `legal`),
-  which is what makes Devices' "Ver más" able to deep-link into "Gestión local". `SETTINGS_TAB_ALIASES`
-  keeps the old ids (`general`, `employees`, `locations`, `team`, `billing`) working.
+- Settings tabs live in the URL (`/panel/configuracion/:tab` — `plan`, `local`, `equipo`, `legal`; the
+  first one opens without `:tab`), which is what makes Devices' "Ver más" able to deep-link into "Gestión
+  local". `SETTINGS_TAB_ALIASES` keeps the old ids (`general`, `employees`, `locations`, `team`, `billing`,
+  and `facturacion`, which was Plan until 10 Oct 2026) working. Configuración is being rebuilt tab by tab
+  after Tapstar's (decided 10 Oct 2026): Plan · Gestión local · Respuestas IA · Equipo · Legal, each tab only
+  settings, no analytics from other screens. **Plan is done** (`pages/Settings/PlanTab.jsx`):
+  - "Tu plan" shows name, status, dates and usage against the plan's limits (`lib/planUsage.js`), counted the
+    way the database enforces them (locations and devices not deleted, members + pending invitations like
+    `TeamMembers`). Usage is owner/admin only, because a manager's RLS scope would undercount.
+  - Free gets `BusinessOffer variant="card"` plus a line to Enterprise.
+  - Paid gets the payment history and cancel. There is no "Cambiar plan" there: it led to `/alta/plan`, where
+    choosing free with a paid subscription still current raises `paid_plan_active` (`0032`). Downgrading means
+    cancelling.
+
+  State of the other tabs on 10 Oct 2026:
+  - **Gestión local — partly done.** Done: "Fichas de Google" first, then the "Sucursales" card, with the
+    list cleaned up (see the `pages/Locations/` bullet), the ficha → sucursal selector on `SelectField`,
+    and the stacking/portal fixes.
+    Pending:
+    - the Google card in Tapstar's shape ("Cuentas de Google conectadas": the account, "N de N locales
+      activos", one row per ficha) in our style;
+    - **sucursales created by activating a ficha**, decided with Santiago. The sucursales stay in the schema
+      (destination, scan attribution, rollups, plan limit, manager scope and the `0025` "only linked
+      fichas" rule all hang off them). Activating a ficha creates and links its sucursal (name, address,
+      `place_id`). Manual "Nuevo local" stays only for accounts without Google (or Instagram-only). It
+      needs a small RPC, because `createLocation` can't return the id (see `lib/catalogApi.js`).
+  - **Respuestas IA — not started.** Moves "Tonos de marca" and "Email de contacto para reseñas
+    negativas" out of Gestión local (where they still are) and adds "Idioma de las respuestas" (Tapstar).
+    All three belong to the partner's AI work, and the email's «Guardar» still saves nothing. The open
+    question for Santiago: build the UI with its contract documented in `lib/automationsApi.js` (like
+    the Automatizaciones cards), or mark them Próximamente.
+  - **Equipo — partly done.** Done: employees removed; members + activity log only. Pending: Tapstar's
+    header ("Equipo · 1/5" + «Invitar usuario») and an «Invitar usuario» modal like Tapstar's (email,
+    sucursales multi-select, a Ver/Editar permission matrix per section). Today's model is four roles
+    plus `membership_locations`; per-section permissions don't exist in the schema, so the matrix needs
+    a decision and a migration before any UI.
+  - **Legal — stays as it is.**
 - **No screen fabricates data any more.** The screens that read the database: `company` (reviews and
-  scans per sucursal, see the `pages/Company/` bullet), `devices`, `employees` / `locations` (embedded in `settings`), the whole `/alta`
-  onboarding, and the "Facturación" tab of `settings` (plan and status from `OrgContext`, history from
+  scans per sucursal, see the `pages/Company/` bullet), `devices`, `locations` (embedded in `settings`), the whole `/alta`
+  onboarding, and the "Plan" tab of `settings` (plan and status from `OrgContext`, history from
   `subscription_payments`), and `automations` (`notification_preferences` / `notification_log`, see
   "Alerts"). `profile` reads the logged-in user from `AuthContext`.
   The sections with no data source do **not** print numbers: `monthly-reports` (see "Informes
@@ -1127,9 +1224,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   Google flips no switch either way: the mock is a *drawing*, not a screen wired to data, so a connected
   account does not get a working section — somebody has to rewrite each one against the real data and
   delete the `*Mockup.jsx`. Budget that front-end work into phase 4 alongside the API work. What looks like
-  dead code and is not: the now-unused CSS in `Automations.css` (the design target
-  for when the data arrives), and `components/DateField/`, a working date picker with no caller yet — the
-  date-range filters of the reports screens are what it was built for. Neither gets swept in a dead-code
+  dead code and is not: `components/DateField/`, a working date picker with no caller yet — the
+  date-range filters of the reports screens are what it was built for. It doesn't get swept in a dead-code
   pass. (`components/PieChart/`, `lib/shares.js` and `lib/chartColors.js` used to be on this list; the
   recovered mocks import them again.)
 - **Scroll performance: the glass look is expensive, so the cheap frames are load-bearing.** The design is
@@ -1294,8 +1390,9 @@ split below before wiring anything — the shell is finished, the data mostly is
 - **Employees is marked "Próximamente", and the screen was deliberately NOT replaced by a placeholder.**
   Attributing a scan to a person needs personal cards; an expositor sits on a table and belongs to nobody.
   Cards aren't sold yet, so `v_employee_leaderboard` will stay empty — but the screen reads it for real,
-  so it keeps its markup and only carries a notice above it (in `Settings.jsx`'s "Equipo" tab, plus the
-  badge on the Devices teaser). When cards exist, delete the notice and it works.
+  so it keeps its markup. Since 10 Oct 2026 it is **not rendered anywhere** (it was embedded in Settings →
+  Equipo with a notice; Santiago asked to remove it there): the only trace in the panel is the badge on the
+  Devices teaser. When cards exist, give it a place again and it works.
 - **Employees are attributed only through a personal card** (decision 11, closed 6 Oct 2026, enforced by
   `0028`). An expositor sits on a table and belongs to nobody; since `scan_events` snapshots `employee_id`
   at scan time (invariant 1), a waiter assigned to a stand would be credited forever with what the table
@@ -1305,10 +1402,9 @@ split below before wiring anything — the shell is finished, the data mostly is
   employees already sitting on non-card devices — the scans they already earned stay as they were. In the
   Devices edit modal the "Empleado" selector only appears for `formFactor === 'nfc_card'` (from
   `v_device_performance.form_factor`); for anything else it explains why, and the save sends
-  `employee_id: null`. Cards are provisioned with `provision-devices.js … --form=nfc_card`. The copy in
-  Settings, the Employees empty state and the Devices teaser already said this and stayed; the "Nuevo
-  empleado" button only exists on the standalone Employees page, which isn't reachable — embedded in
-  Settings there is no create button.
+  `employee_id: null`. Cards are provisioned with `provision-devices.js … --form=nfc_card`. The Employees
+  empty state and the Devices teaser already said this and stayed; the Employees page itself isn't
+  reachable (see the bullet above).
 - **Locations are loaded by hand, and that is no longer provisional.** `LocationForm.jsx` creates *and*
   edits a branch through `locations_insert`/`locations_update` of `0014` and `enforce_plan_limit()` of
   `0007`. It used to be a dev-only modal behind `VITE_ENABLE_MANUAL_LOCATION`, because branches were
@@ -1321,12 +1417,28 @@ split below before wiring anything — the shell is finished, the data mostly is
   `instagramDestinationOf()` change with it. Saving a branch with no destination at all is allowed and
   warned about, on purpose; the list screen also counts them above the table, because the failure is
   invisible until somebody taps an expositor and nothing happens. Create/edit/delete are hidden from a
-  `manager`, who has no insert policy on `locations`.
-- `pages/Employees/` and `pages/Locations/` are reachable through `pages/Settings/Settings.jsx`, rendered
-  inside the "Equipo" and "Gestión local" tabs with an `embedded` prop that hides their own page header and
-  footer (Settings already has a `PageHeader`, and they'd otherwise show two titles and two footers). They
-  used to be orphaned — written, wired to real data, and unreachable. If you move them again, keep them
-  reachable from somewhere.
+  `manager`, who has no insert policy on `locations`. **Decided 10 Oct 2026, not built yet:** with Google
+  connected, activating a ficha will create its sucursal, and the manual form stays for accounts without
+  Google (see the Settings tabs bullet).
+- `pages/Locations/` is reachable through `pages/Settings/Settings.jsx`, rendered inside the "Gestión
+  local" tab (in a "Sucursales" card, **after** "Fichas de Google") with an `embedded` prop that hides its
+  own page header (Settings already has a `PageHeader`). It used to be orphaned — written, wired to real
+  data, and unreachable; if you move it again, keep it reachable. Since 10 Oct 2026 it is **only a list**:
+  no KPI strip, no card grid or view toggle, and four columns (sucursal, destinos, expositores, estado)
+  instead of eight, so it fits without horizontal scroll and stacks per row under 640px. Scans,
+  estimated reviews, conversion and rating left it — Settings doesn't repeat other screens' numbers; the
+  detail modal still shows them. **A sucursal has two destinations, not one**: each expositor has its
+  own `kind`, and one sucursal can have Google and Instagram expositores at once. "Destinos" shows a chip
+  per type (`linksOf()`): green when the link is set, amber only when there are expositores of that type
+  and no link, grey when unset and unused. The warning above the list and the "links faltantes primero"
+  sort use the same rule (`needsLinks()`). Sorting is by name, devices or missing links, with the panel's
+  `Select`. `pages/Employees/` is not rendered anywhere (see "Employees is
+  marked Próximamente").
+  Each `.settings-card` with `backdrop-filter` is its own stacking context, so a card whose `Select` opens
+  over the next card needs `settings-card--raised` (and `--top` when the card below has a menu too). The
+  flip side: a `position: fixed` modal rendered inside such a card can't rise above the cards outside it,
+  so `LocationsPage` portals its detail modal and `LocationForm` to `document.body` (`createPortal`, like
+  the logout confirm in `Sidebar`). Any new modal opened from inside a Settings card needs the same.
 - `pages/Company/` is the post-login landing (Mi Empresa), **rebuilt on reviews** in Oct 2026 with
   Tapstar's structure. Same recipe as the other Google sections: `Company.jsx` renders `GoogleGate` +
   `CompanyMockup.jsx` without a connection (so `company` is in `GOOGLE_GATED_SECTIONS`, and the
@@ -1370,8 +1482,8 @@ split below before wiring anything — the shell is finished, the data mostly is
       JSON snapshot needed);
     - send by Resend with a link and a new `notification_log` kind.
 - `pages/Settings/TeamMembers.jsx` + `lib/teamApi.js` are the members UI (invite by link, change role,
-  remove, revoke a pending invitation); `pages/Settings/ActivityLog.jsx` reads `audit_log`. Both live under
-  the "Equipo" tab, above the employees screen. See "Team" under Architecture before changing either — the
+  remove, revoke a pending invitation); `pages/Settings/ActivityLog.jsx` reads `audit_log`. They are the
+  whole "Equipo" tab. See "Team" under Architecture before changing either — the
   two meanings of "equipo" and the seat-counting rules are the parts that bite.
   `pages/Invitation/AcceptInvitation.jsx` is the redeem screen and is deliberately outside the `/panel`
   guards. It guards its own RPC call with a `useRef` latch: `accept_invitation()` is not usefully

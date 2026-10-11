@@ -500,7 +500,7 @@ export default function GooglePostComposer({
           <p className="gbp-hint gbpo-lead">Escribí vos el texto de la publicación.</p>
 
           {/* Sólo la tarjeta: las sugerencias con IA todavía no existen. En gratis
-              lleva a Facturación; en Business no tiene botón. */}
+              lleva a Configuración → Plan; en Business no tiene botón. */}
           <div className="gbpo-ai-card">
             <span className="gbpo-ai-card__icon"><Icon name={isBusiness ? 'sparkles' : 'lock'} size={20} /></span>
             <strong>Sugerencias con IA <SoonBadge /></strong>
@@ -510,7 +510,7 @@ export default function GooglePostComposer({
                 : 'Va a estar en el plan Business: la IA te va a proponer textos listos para publicar a partir de tu ficha y tu foto.'}
             </p>
             {!isBusiness && onNavigateSettings && (
-              <button type="button" className="gb-btn-primary" onClick={() => onNavigateSettings('facturacion')}>
+              <button type="button" className="gb-btn-primary" onClick={() => onNavigateSettings('plan')}>
                 Ver plan Business
               </button>
             )}

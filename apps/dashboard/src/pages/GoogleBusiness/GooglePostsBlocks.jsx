@@ -45,7 +45,7 @@ export function QuotaBanner({ quota, isBusiness, onNavigateSettings }) {
           : `Te queda ${left} publicación gratis este mes.`}
       </span>
       {onNavigateSettings && (
-        <button type="button" className="gbpo-quota__link" onClick={() => onNavigateSettings('facturacion')}>
+        <button type="button" className="gbpo-quota__link" onClick={() => onNavigateSettings('plan')}>
           Ver plan Business
         </button>
       )}

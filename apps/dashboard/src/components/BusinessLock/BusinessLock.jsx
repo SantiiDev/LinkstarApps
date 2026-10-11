@@ -40,7 +40,7 @@ export default function BusinessLock({ children, preview, title, description }) 
       <div className="block__veil">
         <p className="block__title">{title}</p>
         {description && <p className="block__desc">{description}</p>}
-        <button type="button" className="block__btn" onClick={() => navigate(settingsTabPath('facturacion'))}>
+        <button type="button" className="block__btn" onClick={() => navigate(settingsTabPath('plan'))}>
           Probar Business
         </button>
       </div>

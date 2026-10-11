@@ -3,9 +3,10 @@ import { supabase } from './supabaseClient';
 
 /*
  * El plan Business, leído de la tabla `plans` — la fuente de verdad del precio,
- * la prueba gratis y el modo de alta (ver «Pricing» en CLAUDE.md). Lo usa el
- * modal de ventas (components/BusinessPitch); el selector de planes y la landing
- * leen su propia lista completa.
+ * la prueba gratis y el modo de alta (ver «Pricing» en CLAUDE.md). Lo usa la
+ * oferta de Business (components/BusinessOffer: el modal de ventas y
+ * Configuración → Plan); el selector de planes y la landing leen su propia
+ * lista completa.
  *
  * Se pide una vez por pestaña: el precio no cambia mientras alguien navega, y el
  * modal aparece en tres secciones seguidas. Un error no se guarda, así el
@@ -20,7 +21,7 @@ function loadBusinessPlan() {
   if (!pending) {
     pending = supabase
       .from('plans')
-      .select('code, name, description, price_ars, trial_days, checkout_mode, max_locations, max_devices')
+      .select('code, name, description, price_ars, trial_days, checkout_mode, max_locations, max_devices, features')
       .eq('code', 'business')
       .maybeSingle()
       .then(({ data, error }) => {

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ALL_LOCATIONS } from '../../data/locations';
 import { useOrg } from '../../context/OrgContext';
 import {
@@ -14,8 +15,11 @@ import {
   fetchLocationRows,
   deleteLocation,
   googleDestinationOf,
+  instagramDestinationOf,
   catalogErrorMessage,
 } from '../../lib/catalogApi';
+import Icon from '../../components/Icon/Icon';
+import Select from '../../components/Select/Select';
 import LocationForm from './LocationForm';
 import './Locations.css';
 
@@ -39,6 +43,38 @@ function stat(value, suffix = '') {
 // fuente de los números (invariante 2), y la fila es lo que edita el formulario.
 // Se cruza además con v_device_performance/v_employee_leaderboard para armar
 // listas reales de dispositivos/empleados y la última actividad.
+/* Los dos destinos de una sucursal. Una sucursal no tiene UN destino: cada
+   expositor tiene su tipo (`devices.kind`) y resolve_scan() arma el link según
+   ese tipo — los de Google van a la reseña, los de Instagram al perfil, y una
+   sucursal puede tener de los dos a la vez. Por cada destino:
+     - `set`:   la sucursal tiene el link cargado (mismo cálculo que
+                LocationForm, que copia la cascada de resolve_scan);
+     - `count`: cuántos expositores de ese tipo tiene (sin los retirados);
+     - `missing`: hay expositores de ese tipo y no tienen a dónde ir. Es lo único
+                que se avisa: un link que ningún expositor usa no falta.
+   Un expositor con destino propio (`destination_url`) no depende de la
+   sucursal, pero v_device_performance no expone esa columna: se cuenta igual. */
+function linksOf(detail, devices) {
+  const live = devices.filter(d => d.status !== 'retired');
+  const google = Boolean(googleDestinationOf(detail));
+  const instagram = Boolean(instagramDestinationOf(detail));
+  const googleCount = live.filter(d => d.kind === 'google_review').length;
+  const instagramCount = live.filter(d => d.kind === 'instagram').length;
+  return {
+    google: { set: google, count: googleCount, missing: googleCount > 0 && !google },
+    instagram: { set: instagram, count: instagramCount, missing: instagramCount > 0 && !instagram },
+  };
+}
+
+/* Una sucursal que hay que arreglar: un tipo de expositor sin link, o ningún
+   destino cargado (sus expositores no llevarían a ningún lado). Sin la fila
+   cruda (`detail`) no se sabe y no se avisa. */
+function needsLinks(loc) {
+  if (!loc.detail) return false;
+  const { google, instagram } = loc.links;
+  return google.missing || instagram.missing || (!google.set && !instagram.set);
+}
+
 function mapLocationRow(row, { devicesByLocation, employeesByLocation, scansSeries, index, detail }) {
   const myDevices = devicesByLocation.get(row.location_id) || [];
   const myEmployees = employeesByLocation.get(row.location_id) || [];
@@ -65,7 +101,7 @@ function mapLocationRow(row, { devicesByLocation, employeesByLocation, scansSeri
     // La fila cruda, para el formulario de edición y para saber si la sucursal
     // tiene destino de escaneo cargado.
     detail: detail ?? null,
-    hasGoogleDestination: Boolean(googleDestinationOf(detail)),
+    links: linksOf(detail, myDevices),
     lastActivity: formatRelativeTime(lastScanAt),
     totalDevices: myDevices.length,
     activeDevices: myDevices.filter(d => d.status === 'active').length,
@@ -357,168 +393,39 @@ function LocationsEmpty({ hasAny, onClearFilters, onCreate }) {
   );
 }
 
-/* ─── Card View ─────────────────────────────────────────────── */
-function LocationCardGrid({ locations, hasAny, onSelect, onClearFilters, onCreate }) {
-  if (locations.length === 0) {
-    return (
-      <div className="loc-grid">
-        <LocationsEmpty hasAny={hasAny} onClearFilters={onClearFilters} onCreate={onCreate} />
-      </div>
-    );
-  }
+/* ─── Lista ─────────────────────────────────────────────────── */
+/* Una fila por sucursal, sin scroll horizontal. Hasta oct 2026 había además una
+   vista de tarjetas y la tabla tenía ocho columnas con escaneos, reseñas
+   estimadas, conversión y rating: datos de Mi Empresa y Dispositivos dentro de
+   Configuración, y una tabla de 780px que había que deslizar. Esta lista dice
+   sólo lo que se configura acá: la sucursal, qué links tiene cargados (Google,
+   Instagram o los dos, ver linksOf) y cuántos expositores tiene. Los números
+   siguen en el detalle (LocationModal). En celular cada fila se apila (CSS). */
+const LINK_LABELS = { google: 'Google', instagram: 'Instagram' };
+
+/* Un destino de la sucursal: cargado (verde), falta y hay expositores de ese
+   tipo esperándolo (ámbar), o sin cargar y sin expositores que lo usen (gris,
+   no es un problema). El número es cuántos expositores van a ese destino. */
+function LinkChip({ type, link }) {
+  const state = link.set ? 'ok' : link.missing ? 'missing' : 'unset';
+  const devices = link.count === 1 ? '1 expositor' : `${link.count} expositores`;
+  const title = link.set
+    ? `Link de ${LINK_LABELS[type]} cargado${link.count ? ` · ${devices}` : ''}`
+    : link.missing
+      ? `Falta el link de ${LINK_LABELS[type]}: ${devices} no llevan a ningún lado`
+      : `Sin link de ${LINK_LABELS[type]}`;
 
   return (
-    <div className="loc-grid">
-      {locations.map((loc) => {
-        const maxScans = Math.max(...loc.weeklyScans, 1);
-        const progress = pct(loc.totalReviews, loc.monthlyGoal);
-
-        return (
-          <div
-            key={loc.id}
-            className="loc-card"
-            onClick={() => onSelect(loc)}
-          >
-            {/* Accent stripe */}
-            <div
-              className="loc-card__accent"
-              style={{ background: `linear-gradient(to bottom, ${loc.color}, ${loc.color}44)` }}
-            />
-
-            <div className="loc-card__body">
-              {/* Top row */}
-              <div className="loc-card__top">
-                <div
-                  className="loc-card__icon-wrap"
-                  style={{ background: `${loc.color}18`, color: loc.color }}
-                >
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                    <circle cx="12" cy="10" r="3" />
-                  </svg>
-                </div>
-                <div className="loc-card__status-group">
-                  <span className={`loc-card__status loc-card__status--${loc.status}`}>
-                    <span className="loc-card__status-dot" />
-                    {loc.status === 'active' ? 'Operativa' : 'Cerrada'}
-                  </span>
-                  <span className="loc-card__rating">⭐ {stat(loc.avgRating)}</span>
-                </div>
-              </div>
-
-              {/* Name & address */}
-              <div className="loc-card__name">{loc.name}</div>
-              <div className="loc-card__address">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                  <circle cx="12" cy="10" r="3" />
-                </svg>
-                {loc.address}
-              </div>
-
-              {/* Manager */}
-              <div className="loc-card__manager">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                </svg>
-                {loc.manager}
-              </div>
-
-              {/* Goal progress */}
-              <div className="loc-card__goal">
-                <div className="loc-card__goal-header">
-                  <span className="loc-card__goal-label">Meta mensual</span>
-                  <span className="loc-card__goal-pct">{progress}%</span>
-                </div>
-                <div className="loc-card__goal-track">
-                  <div className="loc-card__goal-fill" style={{ width: `${progress}%` }} />
-                </div>
-              </div>
-
-              {/* Sparkline */}
-              <div className="loc-card__sparkline">
-                {loc.weeklyScans.map((v, i) => (
-                  <div
-                    key={i}
-                    className="loc-card__spark-bar"
-                    style={{ height: `max(2px, ${(v / maxScans) * 100}%)` }}
-                  />
-                ))}
-              </div>
-
-              {/* Resources row */}
-              <div className="loc-card__resources">
-                <div className="loc-card__resource">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" rx="1" /><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
-                  </svg>
-                  <span>{loc.activeDevices}/{loc.totalDevices}</span>
-                </div>
-                <div className="loc-card__resource">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-                  </svg>
-                  <span>{loc.totalEmployees}</span>
-                </div>
-                <div className="loc-card__resource">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  </svg>
-                  <span>{loc.zones.length} zonas</span>
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="loc-card__stats">
-                <div className="loc-card__stat">
-                  <span className="loc-card__stat-value loc-card__stat-value--orange">
-                    {loc.totalScans.toLocaleString()}
-                  </span>
-                  <span className="loc-card__stat-label">Escaneos</span>
-                </div>
-                <div className="loc-card__stat">
-                  <span className="loc-card__stat-value loc-card__stat-value--gold">
-                    {loc.totalReviews.toLocaleString()}
-                  </span>
-                  <span className="loc-card__stat-label">Reseñas (est.)</span>
-                </div>
-                <div className="loc-card__stat">
-                  <span className="loc-card__stat-value loc-card__stat-value--forest">
-                    {stat(loc.avgConversion, '%')}
-                  </span>
-                  <span className="loc-card__stat-label">Conversión</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="loc-card__footer">
-              <span className="loc-card__last-activity">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-                </svg>
-                {loc.lastActivity}
-              </span>
-              <button
-                className="loc-card__menu-btn"
-                onClick={e => { e.stopPropagation(); onSelect(loc); }}
-                aria-label="Ver detalle"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    <span className={`loc-link loc-link--${state}`} title={title}>
+      <Icon name={type === 'google' ? 'star' : 'instagram'} size={12} strokeWidth={2.2} />
+      {LINK_LABELS[type]}
+      {link.count > 0 && <span className="loc-link__count">{link.count}</span>}
+      {state === 'missing' && <span className="loc-link__flag">falta el link</span>}
+    </span>
   );
 }
 
-/* ─── Table View ────────────────────────────────────────────── */
 function LocationTable({ locations, hasAny, onSelect, onClearFilters, onCreate }) {
-  // Igual que en Dispositivos: la vista tabla se quedaba con el encabezado solo.
   if (locations.length === 0) {
     return (
       <div className="loc-table-wrap">
@@ -532,20 +439,16 @@ function LocationTable({ locations, hasAny, onSelect, onClearFilters, onCreate }
       <table className="loc-table">
         <thead>
           <tr>
-            <th>Ubicación</th>
+            <th>Sucursal</th>
+            <th>Destinos</th>
+            <th>Expositores</th>
             <th>Estado</th>
-            <th>Encargado</th>
-            <th>Dispositivos</th>
-            <th>Escaneos</th>
-            <th>Reseñas (estimado)</th>
-            <th>Conversión</th>
-            <th>Rating</th>
           </tr>
         </thead>
         <tbody>
           {locations.map(loc => (
             <tr key={loc.id} onClick={() => onSelect(loc)}>
-              <td>
+              <td className="loc-table__cell-main">
                 <div className="loc-table__location">
                   <div className="loc-table__icon" style={{ background: `${loc.color}18`, color: loc.color }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -553,28 +456,35 @@ function LocationTable({ locations, hasAny, onSelect, onClearFilters, onCreate }
                       <circle cx="12" cy="10" r="3" />
                     </svg>
                   </div>
-                  <div>
+                  <div className="loc-table__text">
                     <div className="loc-table__name">{loc.name}</div>
-                    <div className="loc-table__address">{loc.address}</div>
+                    <div className="loc-table__address">
+                      {[loc.address, loc.city].filter(v => v && v !== '—').join(' · ') || '—'}
+                    </div>
                   </div>
                 </div>
               </td>
-              <td>
+              <td data-label="Destinos">
+                {/* Sin la fila cruda (fetchLocationRows falló) no sabemos qué links
+                    tiene: "—", no "sin cargar", que sería afirmar algo que no leímos. */}
+                {!loc.detail ? '—' : (
+                  <div className="loc-links">
+                    <LinkChip type="google" link={loc.links.google} />
+                    <LinkChip type="instagram" link={loc.links.instagram} />
+                  </div>
+                )}
+              </td>
+              <td data-label="Expositores">
+                <span className="loc-table__devices-count">
+                  {loc.activeDevices} <span className="loc-table__devices-sep">activos de</span> {loc.totalDevices}
+                </span>
+              </td>
+              <td data-label="Estado">
                 <span className={`loc-table__badge-status loc-table__badge-status--${loc.status}`}>
                   <span className="loc-table__badge-dot" />
                   {loc.status === 'active' ? 'Operativa' : 'Cerrada'}
                 </span>
               </td>
-              <td>{loc.manager}</td>
-              <td>
-                <span className="loc-table__devices-count">
-                  {loc.activeDevices} <span className="loc-table__devices-sep">/</span> {loc.totalDevices}
-                </span>
-              </td>
-              <td><span className="loc-table__stat--orange">{loc.totalScans.toLocaleString()}</span></td>
-              <td><span className="loc-table__stat--gold">{loc.totalReviews.toLocaleString()}</span></td>
-              <td><span className="loc-table__stat--forest">{stat(loc.avgConversion, '%')}</span></td>
-              <td><span className="loc-table__rating-cell">⭐ {stat(loc.avgRating)}</span></td>
             </tr>
           ))}
         </tbody>
@@ -594,12 +504,24 @@ const FILTER_TABS = [
   { id: 'active',   label: 'Operativas' },
 ];
 
+/* Se ordena por lo que muestra la lista. Antes era por reseñas, escaneos,
+   conversión y rating, columnas que ya no están acá (ver LocationTable). */
 const SORT_OPTIONS = [
-  { value: 'totalReviews', label: 'Por reseñas' },
-  { value: 'totalScans',   label: 'Por escaneos' },
-  { value: 'avgConversion',label: 'Por conversión' },
-  { value: 'avgRating',    label: 'Por rating' },
+  { value: 'name',        label: 'Nombre (A–Z)' },
+  { value: 'devices',     label: 'Más expositores' },
+  { value: 'destination', label: 'Links faltantes primero' },
 ];
+
+const SORTERS = {
+  name: (a, b) => a.name.localeCompare(b.name, 'es'),
+  devices: (a, b) => b.totalDevices - a.totalDevices || a.name.localeCompare(b.name, 'es'),
+  // Las que les falta un link arriba: son las que hay que arreglar. Sin la fila
+  // cruda (`detail`) no se sabe, y van al final.
+  destination: (a, b) => {
+    const rank = (l) => (!l.detail ? 2 : needsLinks(l) ? 0 : 1);
+    return rank(a) - rank(b) || a.name.localeCompare(b.name, 'es');
+  },
+};
 
 // `embedded`: la página se renderiza dentro de la pestaña "Gestión local" de
 // Configuración, que ya trae su propio PageHeader. En ese modo se ocultan el
@@ -611,8 +533,7 @@ export default function LocationsPage({ embedded = false }) {
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
   const [filter, setFilter]     = useState('all');
-  const [sort, setSort]         = useState('totalReviews');
-  const [viewMode, setViewMode] = useState('grid');
+  const [sort, setSort]         = useState('name');
   const [selected, setSelected] = useState(null);
   /* null = cerrado · { location: null } = alta · { location } = edición */
   const [editing, setEditing]   = useState(null);
@@ -729,11 +650,9 @@ export default function LocationsPage({ embedded = false }) {
   // Sólo se cuentan las que tienen fila cruda: si fetchLocationRows() falló, el
   // campo viene vacío para todas y avisar "ninguna tiene destino" sería mentir
   // sobre un dato que no llegamos a leer.
-  const missingDestinationCount = locations.filter(l => l.detail && !l.hasGoogleDestination).length;
+  const missingDestinationCount = locations.filter(needsLinks).length;
   const totalActive    = locations.filter(l => l.status === 'active').length;
   const totalDevices   = locations.reduce((s, l) => s + l.totalDevices, 0);
-  const totalReviews   = locations.reduce((s, l) => s + l.totalReviews, 0);
-  const totalScans     = locations.reduce((s, l) => s + l.totalScans, 0);
 
   /* Filtered + sorted list */
   const displayed = useMemo(() => {
@@ -752,7 +671,7 @@ export default function LocationsPage({ embedded = false }) {
       return matchSearch && matchFilter;
     });
 
-    list = [...list].sort((a, b) => (b[sort] ?? 0) - (a[sort] ?? 0));
+    list = [...list].sort(SORTERS[sort] ?? SORTERS.name);
     return list;
   }, [locations, search, filter, sort]);
 
@@ -799,28 +718,9 @@ export default function LocationsPage({ embedded = false }) {
       </div>
       )}
 
-      {/* ── Stats Strip ── */}
-      <div className="loc-stats">
-        {[
-          { key: 'total',    icon: 'map',     label: 'Total sucursales',  value: locations.length, color: 'navy' },
-          { key: 'active',   icon: 'check',   label: 'Operativas',        value: totalActive,           color: 'forest' },
-          { key: 'scans',    icon: 'scan',     label: 'Escaneos totales',  value: totalScans.toLocaleString(), color: 'orange' },
-          { key: 'reviews',  icon: 'star',     label: 'Reseñas totales (estimado)', value: totalReviews.toLocaleString(), color: 'gold' },
-        ].map((s, i) => (
-          <div key={s.key} className="loc-stat-card" style={{ animationDelay: `${i * 0.07}s` }}>
-            <div className={`loc-stat-icon loc-stat-icon--${s.color}`}>
-              {s.icon === 'map'   && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>}
-              {s.icon === 'check' && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>}
-              {s.icon === 'scan'  && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8.32a7.43 7.43 0 0 1 0 7.36" /><path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58" /><path d="M12.91 4.1a16.1 16.1 0 0 1 0 15.8" /><path d="M16.37 2a20.16 20.16 0 0 1 0 20" /></svg>}
-              {s.icon === 'star'  && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>}
-            </div>
-            <div className="loc-stat-body">
-              <span className="loc-stat-value">{s.value}</span>
-              <span className="loc-stat-label">{s.label}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Las cuatro tarjetas que iban acá (total, operativas, escaneos y reseñas
+          estimadas) se sacaron en oct 2026: Configuración no repite números de
+          otras pantallas. */}
 
       {/* ── Toolbar ── */}
       <div className="loc-toolbar">
@@ -838,19 +738,6 @@ export default function LocationsPage({ embedded = false }) {
           />
         </div>
 
-        {/* El alta también vive acá, no sólo en el encabezado: esta pantalla se
-            renderiza embebida dentro de Configuración → Gestión local, y en ese
-            modo el encabezado propio no se dibuja. Con el botón sólo arriba, la
-            ruta por la que realmente se entra no tenía forma de crear nada. */}
-        {canEdit && (
-          <button className="loc-toolbar__new" onClick={() => setEditing({ location: null })}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Nueva sucursal
-          </button>
-        )}
-
         {/* Filter tabs */}
         <div className="loc-filters">
           {FILTER_TABS.map(tab => (
@@ -864,40 +751,28 @@ export default function LocationsPage({ embedded = false }) {
           ))}
         </div>
 
-        {/* Sort */}
-        <select
-          className="loc-sort"
-          value={sort}
-          onChange={e => setSort(e.target.value)}
-        >
-          {SORT_OPTIONS.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-
-        {/* View toggle */}
-        <div className="loc-view-toggle">
-          <button
-            className={`loc-view-btn ${viewMode === 'grid' ? 'loc-view-btn--active' : ''}`}
-            onClick={() => setViewMode('grid')}
-            aria-label="Vista grilla"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
-              <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
-            </svg>
-          </button>
-          <button
-            className={`loc-view-btn ${viewMode === 'table' ? 'loc-view-btn--active' : ''}`}
-            onClick={() => setViewMode('table')}
-            aria-label="Vista tabla"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
+        {/* Orden: el Select del panel, no el <select> nativo, que abría el menú
+            del sistema operativo. */}
+        <div className="loc-sort">
+          <span className="loc-sort__icon"><Icon name="trend" size={14} /></span>
+          <Select
+            value={sort}
+            onChange={setSort}
+            options={SORT_OPTIONS}
+            triggerClassName="ls-select-field ls-select-field--block ls-select-field--icon"
+          />
         </div>
 
+        {/* El alta también vive acá, no sólo en el encabezado: esta pantalla se
+            renderiza embebida dentro de Configuración → Gestión local, y en ese
+            modo el encabezado propio no se dibuja. Con el botón sólo arriba, la
+            ruta por la que realmente se entra no tenía forma de crear nada. */}
+        {canEdit && (
+          <button className="loc-toolbar__new" onClick={() => setEditing({ location: null })}>
+            <Icon name="plus" size={14} strokeWidth={2.5} />
+            Nueva sucursal
+          </button>
+        )}
       </div>
 
       {actionError && <p className="loc-action-error" role="alert">{actionError}</p>}
@@ -909,39 +784,42 @@ export default function LocationsPage({ embedded = false }) {
       {missingDestinationCount > 0 && (
         <p className="loc-action-warn">
           {missingDestinationCount === 1
-            ? 'Hay 1 sucursal sin destino de reseña cargado.'
-            : `Hay ${missingDestinationCount} sucursales sin destino de reseña cargado.`}
-          {' '}Sus expositores no llevan a tu ficha de Google todavía —
-          {canEdit ? ' abrila y completá el link para dejar una reseña.' : ' pedile al propietario de la cuenta que lo complete.'}
+            ? 'A 1 sucursal le falta un link.'
+            : `A ${missingDestinationCount} sucursales les falta un link.`}
+          {' '}Tienen expositores de Google o de Instagram sin a dónde llevar, o ningún destino cargado —
+          {canEdit ? ' abrila y completá el link de reseña o el de Instagram.' : ' pedile al propietario de la cuenta que lo complete.'}
         </p>
       )}
 
       {/* ── Content ── */}
-      {viewMode === 'grid'
-        ? <LocationCardGrid locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} onCreate={canEdit ? () => setEditing({ location: null }) : undefined} />
-        : <LocationTable    locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} onCreate={canEdit ? () => setEditing({ location: null }) : undefined} />
-      }
+      <LocationTable locations={displayed} hasAny={locations.length > 0} onSelect={setSelected} onClearFilters={clearFilters} onCreate={canEdit ? () => setEditing({ location: null }) : undefined} />
 
-      {/* ── Footer ── */}
-      {/* ── Modal ── */}
-      {selected && (
+      {/* ── Modales ──
+          Van al <body> con un portal. Embebida en Configuración, esta página
+          vive dentro de una tarjeta con backdrop-filter y z-index (la de
+          Sucursales, settings-card--raised): eso es un contexto de apilado, y
+          un position: fixed adentro no puede quedar por encima de lo que esté
+          fuera de la tarjeta — el modal se veía detrás de las Fichas de Google. */}
+      {selected && createPortal(
         <LocationModal
           location={selected}
           canEdit={canEdit}
           onClose={() => setSelected(null)}
           onEdit={loc => { if (loc.detail) setEditing({ location: loc.detail }); }}
           onDelete={handleDelete}
-        />
+        />,
+        document.body
       )}
 
       {/* ── Alta / edición ── */}
-      {editing && (
+      {editing && createPortal(
         <LocationForm
           organizationId={org?.organization_id}
           location={editing.location}
           onClose={() => setEditing(null)}
           onSaved={handleSaved}
-        />
+        />,
+        document.body
       )}
     </div>
   );

@@ -109,15 +109,17 @@ export const GOOGLE_GATED_SECTIONS = new Set([
 ]);
 
 /* Pestañas de Configuración: van en la URL para poder enlazar directo a una
- * (Dispositivos enlaza a la de ubicaciones, por ejemplo). Los alias son los
- * nombres viejos, de cuando Equipo y Gestión local eran secciones propias. */
-export const SETTINGS_TABS = ['local', 'equipo', 'facturacion', 'legal'];
+ * (Dispositivos enlaza a la de ubicaciones, por ejemplo). La primera es la que
+ * se abre sin :tab. Los alias son los nombres viejos: de cuando Equipo y Gestión
+ * local eran secciones propias, y `facturacion`, que era Plan hasta oct 2026. */
+export const SETTINGS_TABS = ['plan', 'local', 'equipo', 'legal'];
 export const SETTINGS_TAB_ALIASES = {
   general: 'local',
   locations: 'local',
   employees: 'equipo',
   team: 'equipo',
-  billing: 'facturacion',
+  billing: 'plan',
+  facturacion: 'plan',
 };
 
 export function settingsTabPath(tab) {

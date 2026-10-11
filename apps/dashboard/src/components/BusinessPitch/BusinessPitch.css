@@ -364,24 +364,27 @@
    achica sola. Con poca altura, además, se van soltando partes en orden de
    importancia, igual que en GoogleGate. Nunca se tocan los pasos, el precio ni
    el botón. Cada consulta depende sólo de la ventana, nunca del paso: así el
-   modal sigue midiendo lo mismo al pasar de uno a otro. */
+   modal sigue midiendo lo mismo al pasar de uno a otro.
+
+   Las partes de la oferta van con `.bpitch` adelante: BusinessOffer también se
+   usa suelta en Configuración → Plan, y ahí no hay alto fijo que cuidar. */
 @media (max-height: 720px) {
   .bpitch__desc,
-  .bpitch__plan-desc {
+  .bpitch .bpitch__plan-desc {
     display: none;
   }
 }
 
 @media (max-height: 620px) {
   .bpitch__art,
-  .bpitch__features {
+  .bpitch .bpitch__features {
     display: none;
   }
 }
 
 @media (max-height: 500px) {
-  .bpitch__billing,
-  .bpitch__fine {
+  .bpitch .bpitch__billing,
+  .bpitch .bpitch__fine {
     display: none;
   }
 }
@@ -428,7 +431,7 @@
     margin-top: 0;
   }
 
-  .bpitch__offer {
+  .bpitch .bpitch__offer {
     padding: 1.25rem 1.5rem 1.25rem;
   }
 }
@@ -457,28 +460,28 @@
   }
 
   .bpitch__desc,
-  .bpitch__plan-desc,
-  .bpitch__features,
-  .bpitch__billing {
+  .bpitch .bpitch__plan-desc,
+  .bpitch .bpitch__features,
+  .bpitch .bpitch__billing {
     display: none;
   }
 
-  .bpitch__trial,
-  .bpitch__price {
+  .bpitch .bpitch__trial,
+  .bpitch .bpitch__price {
     margin-top: 0.6rem;
   }
 
-  .bpitch__amount {
+  .bpitch .bpitch__amount {
     font-size: 1.7rem;
   }
 
-  .bpitch__cta {
+  .bpitch .bpitch__cta {
     margin-top: 0.9rem;
   }
 }
 
 @media (max-width: 640px) and (max-height: 700px) {
-  .bpitch__fine {
+  .bpitch .bpitch__fine {
     display: none;
   }
 }
