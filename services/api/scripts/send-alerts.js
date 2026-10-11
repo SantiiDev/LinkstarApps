@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { supabase } from '../lib/supabase.js';
-import { send, deviceIdleEmail, weeklySummaryEmail } from '../lib/mailer.js';
+import { DASHBOARD_URL } from '../lib/config.js';
+import { send, deviceIdleEmail, weeklySummaryEmail, lowRatingEmail, keywordAlertEmail } from '../lib/mailer.js';
 
 /* Ejecutor de las alertas de la fase 7 que no dependen de Google.
  *
@@ -27,6 +28,9 @@ import { send, deviceIdleEmail, weeklySummaryEmail } from '../lib/mailer.js';
 const TEMPLATES = {
   device_idle: deviceIdleEmail,
   weekly_summary: weeklySummaryEmail,
+  // Las de reseñas (0036): una por reseña y destinatario; arrancan apagadas.
+  low_rating: lowRatingEmail,
+  review_keyword: keywordAlertEmail,
 };
 
 async function main() {
@@ -60,6 +64,7 @@ async function main() {
     const mail = build({
       organizationName: row.organization_name,
       payload: row.payload ?? {},
+      dashboardUrl: DASHBOARD_URL,
     });
 
     if (dryRun) {

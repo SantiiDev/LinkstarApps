@@ -212,6 +212,64 @@ export function profileChangedEmail({ organizationName, payload }) {
   };
 }
 
+/* Alertas de reseñas (0036): valoración baja y palabras clave. El texto viene de
+ * Google y lo escribió un cliente, así que se escapa todo. El fragmento ya es el
+ * original (sin el «Translated by Google»), recortado a 300 caracteres en SQL. */
+function reviewQuote(payload) {
+  const stars = payload.star_rating ? '★'.repeat(payload.star_rating) + '☆'.repeat(5 - payload.star_rating) : '';
+  const who = payload.reviewer_name ? escapeHtml(payload.reviewer_name) : 'Un cliente';
+  const excerpt = payload.excerpt
+    ? `<p style="margin:8px 0 0;font-style:italic;">“${escapeHtml(payload.excerpt)}${payload.excerpt.length >= 300 ? '…' : ''}”</p>`
+    : '<p style="margin:8px 0 0;color:#8a93a6;">Sin texto, sólo las estrellas.</p>';
+  return `
+    <div style="margin:0 0 12px;padding:14px 16px;border-radius:10px;background:#f6f7fb;">
+      <div style="color:${BRAND};font-size:16px;letter-spacing:1px;">${stars}</div>
+      <div style="margin-top:4px;font-size:13px;color:#8a93a6;">${who}${payload.location_name ? ` · ${escapeHtml(payload.location_name)}` : ''}</div>
+      ${excerpt}
+    </div>`;
+}
+
+function reviewsCta(dashboardUrl) {
+  return dashboardUrl ? { href: new URL('/panel/resenas', dashboardUrl).toString(), label: 'Responder en Linkstar' } : null;
+}
+
+export function lowRatingEmail({ organizationName, payload, dashboardUrl }) {
+  const stars = payload.star_rating ?? '';
+  const place = payload.location_name ? ` en ${payload.location_name}` : '';
+  return {
+    subject: `Nueva reseña de ${stars}★${place}`,
+    html: layout({
+      heading: `Entró una reseña de ${stars} estrella${stars === 1 ? '' : 's'}`,
+      body: `
+        ${reviewQuote(payload)}
+        <p style="margin:0;">Responderla pronto y con calma es lo que más ayuda: quien lea tus reseñas
+        va a ver cómo lo resolviste.</p>`,
+      cta: reviewsCta(dashboardUrl),
+    }),
+    text: `Nueva reseña de ${stars}★${place}: "${payload.excerpt || 'sin texto'}". `
+      + `Respondela desde Reseñas en LinkstarApp. — ${organizationName}`,
+  };
+}
+
+export function keywordAlertEmail({ organizationName, payload, dashboardUrl }) {
+  const terms = (payload.matched_terms ?? []).map((t) => `«${t}»`);
+  const list = terms.length > 1 ? `${terms.slice(0, -1).join(', ')} y ${terms.at(-1)}` : terms[0] || 'una palabra que elegiste';
+  const place = payload.location_name ? ` en ${payload.location_name}` : '';
+  return {
+    subject: `Una reseña${place} menciona ${list}`,
+    html: layout({
+      heading: `Una reseña menciona ${escapeHtml(list)}`,
+      body: `
+        ${reviewQuote(payload)}
+        <p style="margin:0;">Te avisamos porque ${terms.length > 1 ? 'son palabras' : 'es una palabra'} que
+        pediste vigilar en Automatizaciones.</p>`,
+      cta: reviewsCta(dashboardUrl),
+    }),
+    text: `Una reseña${place} menciona ${list}: "${payload.excerpt || ''}". `
+      + `Mirala desde Reseñas en LinkstarApp. — ${organizationName}`,
+  };
+}
+
 /* Invitación al equipo.
  *
  * La fase 3 la resolvió con un link que quien invita copia y manda por donde

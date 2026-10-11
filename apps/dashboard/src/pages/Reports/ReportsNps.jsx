@@ -3,6 +3,7 @@ import { useOrg } from '../../context/OrgContext';
 import { useGoogleConnection } from '../../lib/googleApi';
 import ReportsNpsMockup from './ReportsNpsMockup';
 import ReportsNpsScreen from './ReportsNpsScreen';
+import { NpsPitch } from './ReportsPitches';
 
 /*
  * NPS — como Tapstar, sale del TEXTO de las reseñas, no de una encuesta.
@@ -13,9 +14,12 @@ import ReportsNpsScreen from './ReportsNpsScreen';
  * cada tema, y con eso se calcula el puntaje — sin tocar el camino del tap a
  * Google.
  *
- *   sin Google conectado → GoogleGate con ReportsNpsMockup de fondo: sin la
- *                          conexión no hay reseñas que leer.
- *   conectado            → ReportsNpsScreen, sobre v_review_analysis. También
+ *   plan gratis          → NpsPitch (el modal de ventas de Business) con
+ *                          ReportsNpsMockup de fondo, esté o no conectada la
+ *                          ficha: es una sección de Business.
+ *   Business sin Google  → GoogleGate con la misma maqueta: sin la conexión no
+ *                          hay reseñas que leer.
+ *   Business conectado   → ReportsNpsScreen, sobre v_review_analysis. También
  *                          en 'needs_reauth': lo ya analizado se sigue
  *                          mostrando, con un aviso para reconectar.
  *
@@ -23,9 +27,17 @@ import ReportsNpsScreen from './ReportsNpsScreen';
  * criterio que Sentimiento).
  */
 export default function ReportsNps({ onNavigateSettings }) {
-  const { org } = useOrg();
+  const { org, isBusiness } = useOrg();
   const google = useGoogleConnection(org?.organization_id);
   const status = google.connection?.status;
+
+  if (!isBusiness) {
+    return (
+      <NpsPitch>
+        <ReportsNpsMockup />
+      </NpsPitch>
+    );
+  }
 
   if (!google.loading && (status === 'active' || status === 'needs_reauth')) {
     return <ReportsNpsScreen google={google} onNavigateSettings={onNavigateSettings} />;

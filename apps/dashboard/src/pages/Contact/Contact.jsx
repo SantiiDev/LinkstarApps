@@ -11,8 +11,8 @@ import './Contact.css';
  * llega sin saber de qué cuenta es. La pantalla lo dice para que no sea una
  * sorpresa.
  *
- * Se llega desde el sidebar y desde el "¿Necesitás ayuda? Escribinos" de la
- * barra superior, que antes abría un mailto. */
+ * Se llega desde el sidebar. La barra superior tenía un "¿Necesitás ayuda?
+ * Escribinos" que también traía acá; se sacó en oct 2026. */
 
 const SUPPORT_EMAIL = 'linkstar.app1@gmail.com';
 

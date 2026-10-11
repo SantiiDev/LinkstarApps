@@ -1460,6 +1460,100 @@ select pg_temp.check('rebuild_today_rollup rechaza un día anterior al piso de 3
 select pg_temp.check('… y sigue reconstruyendo ayer',
   pg_temp.rebuild_hint(current_date - 1) = 'ok');
 
+-- =========================================================================
+-- 20. Alertas de reseñas: valoración baja y palabras clave (0035/0036)
+-- =========================================================================
+-- Reseñas de Bar Uno a esta altura (todas con created_time = now(), que en una
+-- transacción es siempre el mismo instante):
+--   9b..03  Echesortu (vinculada)  5★  «Muy buena atención, pero tardaron mucho.»
+--   9b..04  Pichincha (vinculada)  2★  ídem
+--   9b..01  ficha 9a..01, SIN vincular, 4★
+-- Se suman tres para los casos de borde.
+insert into public.google_reviews
+  (id, organization_id, google_location_id, review_id, star_rating, comment, created_time, updated_time) values
+  -- Anterior a la activación: no tiene que avisar aunque sea de 1★.
+  ('9b000000-0000-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000001',
+   '9a000000-0000-0000-0000-000000000002', 'r5', 1, 'Lento y sucio', now() - interval '1 hour', now()),
+  -- De una ficha sin vincular: tampoco.
+  ('9b000000-0000-0000-0000-000000000006', 'aaaaaaaa-0000-0000-0000-000000000001',
+   '9a000000-0000-0000-0000-000000000001', 'r6', 1, 'LENTO', now(), now()),
+  -- Traducida por Google: la palabra se busca en el original.
+  ('9b000000-0000-0000-0000-000000000007', 'aaaaaaaa-0000-0000-0000-000000000001',
+   '9a000000-0000-0000-0000-000000000003', 'r7', 3,
+   E'(Translated by Google) Slow service\n\n(Original)\nAtención lentísima, los mozos LENTOS', now(), now());
+
+create or replace function pg_temp.pending_for(p_kind text)
+returns table (entity_id uuid, recipient_email text, payload jsonb)
+language sql as $$
+  select entity_id, recipient_email, payload
+    from public.pending_notifications()
+   where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001'
+     and kind::text = p_kind;
+$$;
+
+select pg_temp.check('Apagadas por defecto: ninguna alerta de reseñas pendiente',
+  (select count(*) from pg_temp.pending_for('low_rating')) = 0
+  and (select count(*) from pg_temp.pending_for('review_keyword')) = 0);
+
+-- La activa Ana desde el panel, con dos destinatarios en valoración baja.
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+update public.notification_preferences
+   set low_rating_enabled = true,
+       low_rating_stars = '{1,2}',
+       low_rating_recipients = '{alertas@bar-uno.test,dueno@bar-uno.test}',
+       keyword_alert_enabled = true,
+       keyword_alert_terms = '{lento}',
+       keyword_alert_recipients = '{alertas@bar-uno.test}'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check('Al activarlas, la base anota desde cuándo',
+  (select low_rating_enabled_at = now() and keyword_alert_enabled_at = now()
+     from public.notification_preferences where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001'));
+
+-- El cliente no puede correr «desde cuándo» para atrás.
+update public.notification_preferences
+   set low_rating_enabled_at = now() - interval '30 days'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check('Un enabled_at mandado desde el cliente se ignora',
+  (select low_rating_enabled_at = now()
+     from public.notification_preferences where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001'));
+
+do $$
+begin
+  update public.notification_preferences set low_rating_stars = '{4}'
+   where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+  raise exception 'FALLA: se guardó 4★ como valoración baja';
+exception
+  when check_violation then
+    raise notice '  OK   Valoración baja sólo acepta 1, 2 y 3 estrellas';
+end $$;
+reset role;
+
+select pg_temp.check('Valoración baja: la de 2★ de Pichincha, una vez por destinatario',
+  (select count(*) from pg_temp.pending_for('low_rating')) = 2
+  and (select count(distinct entity_id) from pg_temp.pending_for('low_rating')) = 1
+  and (select bool_and(entity_id = '9b000000-0000-0000-0000-000000000004') from pg_temp.pending_for('low_rating')));
+select pg_temp.check('… y no la anterior a la activación ni la de la ficha sin vincular',
+  not exists (select 1 from pg_temp.pending_for('low_rating')
+               where entity_id in ('9b000000-0000-0000-0000-000000000005', '9b000000-0000-0000-0000-000000000006')));
+
+select pg_temp.check('Palabra clave: encuentra «LENTOS» en el original de la traducida, sin mayúsculas ni tildes',
+  (select count(*) from pg_temp.pending_for('review_keyword')) = 1
+  and (select entity_id = '9b000000-0000-0000-0000-000000000007'
+              and payload -> 'matched_terms' = '["lento"]'::jsonb
+              and payload ->> 'excerpt' = 'Atención lentísima, los mozos LENTOS'
+         from pg_temp.pending_for('review_keyword')));
+
+select public.record_notification('aaaaaaaa-0000-0000-0000-000000000001', 'low_rating',
+  'alertas@bar-uno.test', '9b000000-0000-0000-0000-000000000004', '{}');
+select pg_temp.check('Una vez registrada, no se repite para ese destinatario (y sigue para el otro)',
+  (select count(*) from pg_temp.pending_for('low_rating')) = 1
+  and (select recipient_email from pg_temp.pending_for('low_rating')) = 'dueno@bar-uno.test');
+
+update public.notification_preferences set low_rating_enabled = false
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check('Apagada, no avisa',
+  (select count(*) from pg_temp.pending_for('low_rating')) = 0);
+
 do $$ begin
   raise notice '';
   raise notice '=== Todos los tests de aislamiento pasaron ===';

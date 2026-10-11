@@ -60,6 +60,19 @@
   box-shadow: var(--glass-shadow);
 }
 
+/* Una tarjeta con un menú desplegable (Select) que se abre sobre la siguiente.
+   Cada .settings-card con backdrop-filter es su propio contexto de apilado, así
+   que el z-index del menú no alcanza: la tarjeta de abajo, pintada después, lo
+   tapaba. Si dos tarjetas seguidas tienen menú, la de arriba va con --top. */
+.settings-card--raised {
+  position: relative;
+  z-index: 2;
+}
+
+.settings-card--raised.settings-card--top {
+  z-index: 3;
+}
+
 /* ── Card header: icon box + title/subtitle + action ── */
 .settings-card__head {
   display: flex;
@@ -469,12 +482,130 @@
   padding-top: 0.5rem;
 }
 
-/* ── Billing ── */
+/* ── Plan ── */
+.settings-plan-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.settings-plan-name {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-navy);
+}
+
 .settings-plan-badges {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin-bottom: 0.9rem;
+}
+
+/* Uso contra los límites del plan: cuatro casillas en fila, dos por fila en
+   celular. La barra es un div con ancho: sin transición, no hay nada que
+   animar en una pantalla de ajustes. */
+.settings-usage {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.settings-usage__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  background: var(--color-light);
+}
+
+.settings-usage__label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.settings-usage__value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-usage__value small {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.settings-usage__bar {
+  display: block;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(26, 38, 57, 0.08);
+  overflow: hidden;
+}
+
+.settings-usage__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-forest);
+}
+
+.settings-usage__item--full .settings-usage__bar > span {
+  background: var(--color-orange);
+}
+
+.settings-usage__note {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-orange);
+}
+
+/* La oferta de Business en gratis: una tarjeta angosta y centrada, como la de
+   Tapstar. Los estilos de adentro son los del modal de ventas (BusinessOffer). */
+.settings-plan-offer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Doble clase: el padding lo pone .bpitch__offer, y la regla de .settings-card
+   para celular (más abajo) se lo volvería a sumar. */
+.settings-card.settings-plan-offer__card {
+  width: 100%;
+  max-width: 420px;
+  padding: 0;
+}
+
+.settings-plan-enterprise {
+  margin-top: 1rem;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+
+.settings-plan-offer .settings-plan-enterprise {
+  margin-top: 0;
+  text-align: center;
+}
+
+.settings-plan-enterprise a {
+  color: var(--color-orange);
+  font-weight: 700;
+}
+
+.settings-plan-enterprise a:hover {
+  text-decoration: underline;
 }
 
 .settings-badge {
@@ -511,13 +642,6 @@
 .settings-plan-detail--muted {
   font-weight: 500;
   color: var(--color-text-secondary);
-}
-
-.settings-plan-actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 1.25rem;
 }
 
 .settings-invoices {
@@ -725,15 +849,8 @@
     justify-content: center;
   }
 
-  .settings-plan-actions {
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-
-  .settings-plan-actions > * {
-    flex: 1 1 100%;
-    justify-content: center;
-    text-align: center;
+  .settings-usage {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .settings-danger-card {

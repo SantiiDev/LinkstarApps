@@ -167,6 +167,38 @@ export const googlePostSchema = z
   })
   .refine((p) => p.topicType === 'STANDARD' || p.event, { message: 'Las ofertas y los eventos necesitan título y fechas' });
 
+// IA de Publicaciones (lib/postWriter.js): proponer textos o retocar uno. Los
+// detalles van como contexto y pueden estar a medio cargar, así que acá todo es
+// opcional; lo obligatorio lo valida el POST de publicar. Los ajustes son una
+// lista cerrada: el pedido al modelo se arma con ellos, nunca con texto libre.
+export const POST_AI_TWEAKS = ['closer', 'formal', 'emojis', 'shorter'];
+export const googlePostAiSchema = z
+  .object({
+    mode: z.enum(['suggest', 'tweak']),
+    topicType: z.enum(['STANDARD', 'EVENT', 'OFFER']),
+    hint: z.string().trim().max(300).optional(),
+    instructions: z.string().trim().max(300).optional(),
+    mediaUrl: httpUrl.optional(),
+    event: z
+      .object({
+        title: z.string().trim().max(58).optional(),
+        startDate: isoDate.optional(),
+        startTime: hhmm.optional(),
+        endDate: isoDate.optional(),
+        endTime: hhmm.optional(),
+      })
+      .optional(),
+    offer: z
+      .object({
+        couponCode: z.string().trim().max(58).optional(),
+        termsConditions: z.string().trim().max(5000).optional(),
+      })
+      .optional(),
+    text: z.string().trim().max(1500).optional(),
+    tweak: z.enum(POST_AI_TWEAKS).optional(),
+  })
+  .refine((b) => b.mode !== 'tweak' || (b.text && b.tweak), { message: 'Falta el texto o el ajuste' });
+
 // Middleware genérico: valida req.body contra un schema de Zod. 400 con el
 // primer error legible si falla, y reemplaza req.body por los datos ya
 // parseados/coercionados (trim, etc.) si pasa.

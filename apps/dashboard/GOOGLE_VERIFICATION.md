@@ -94,8 +94,12 @@ hace falta ese y no uno más chico. Texto sugerido (los revisores leen en inglé
 > owner. Reviews of locations the owner did not select are never stored.
 > On the paid plan, the text and star rating of each review (never the
 > reviewer's name) are sent to Anthropic's Claude API to classify sentiment and
-> topics shown to that same owner; Anthropic processes them on our behalf and
-> does not use them for training.
+> topics shown to that same owner. Also on the paid plan, only when the owner
+> asks the AI to suggest or rewrite a post, the location's name, primary
+> category, description and city are sent to the same API, together with the
+> photo and details the owner entered for that post; the result is a draft
+> that is published only if the owner clicks "Publicar ahora". Anthropic
+> processes this data on our behalf and does not use it for training.
 > business.manage is the only scope that grants access to the Account
 > Management, Business Information, Performance and My Business (reviews and
 > posts) APIs; there is no narrower read-only scope for reviews, and replying,
@@ -139,7 +143,7 @@ se declara y no se ve en el video es el motivo de rechazo más común.
 | 6 | **Reseñas**: la bandeja con las reseñas de Linkstar. Abrir una, escribir una respuesta y tocar **Publicar en Google**. Después mostrar la respuesta en Google Maps, en otra pestaña. | "Reviews of the linked location. The owner writes a reply and publishes it. We only post when the owner clicks this button. Here is the same reply on Google Maps." |
 | 7 | **Google Business → Métricas**: tarjetas y gráfico del período. | "Performance metrics of the linked location: views, calls, direction requests and website clicks." |
 | 8 | **Google Business → Perfil**: cambiar algo inocuo (por ejemplo, una frase de la descripción), **Guardar cambios**, y volver a dejarlo como estaba. | "The owner can edit the profile from here. We only write when the owner saves a change." |
-| 9 | **Google Business → Publicaciones**: **Nueva publicación**, publicarla y después **borrarla**. | "Posts are created and deleted only by the owner." |
+| 9 | **Google Business → Publicaciones**: **Nueva publicación**; en «Qué contar», **Generar sugerencias** (si la cuenta es Business) y elegir una; publicarla y después **borrarla**. | "On the paid plan the owner can ask the AI for a draft: the location's name, category, description and the post's photo are sent to Anthropic's Claude API. It's only a draft — posts are created and deleted only by the owner." |
 | 10 | (Si la IA está encendida y la cuenta es Business) **Reportes → Sentimiento**. | "On the paid plan, review text and rating, never the reviewer's name, are sent to Anthropic's Claude API to classify sentiment and topics for this owner. It is not used for training." |
 | 11 | **Configuración → Fichas de Google → Desconectar**. Mostrar que las reseñas desaparecen del panel. | "Disconnecting revokes our access at Google and deletes the stored locations and reviews immediately." |
 

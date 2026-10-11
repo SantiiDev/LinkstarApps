@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
-import BusinessLock from '../../components/BusinessLock/BusinessLock';
 import { useOrg } from '../../context/OrgContext';
 import {
   DEFAULT_RANGE, filterAnalysis, sentimentCounts, sentimentSeries, keywordStats, locationStats,
 } from '../../lib/reviewInsights';
-import ReportsSentimentMockup from './ReportsSentimentMockup';
 import { SentimentDistribution, SentimentEvolution, SentimentKeywords, ComplaintsByLocation } from './SentimentBlocks';
 import { ReauthNotice, AnalysisEmptyState, AnalysisToolbar } from './ReviewAnalysisShared';
 import { useReviewAnalysis } from './useReviewAnalysis';
@@ -26,8 +24,9 @@ import './Reports.css';
  * lo muestra mejor (de −100 a +100). Lo que sí sigue, y Tapstar no tiene, es
  * «Dónde se concentran las quejas», sólo con varias sucursales.
  *
- * Es de Business. En gratis se ve la maqueta detrás de BusinessLock y no se pide
- * nada: la base igual no se lo mandaría (RLS de google_review_analysis).
+ * Es de Business: a esta pantalla sólo llega una cuenta Business. En gratis,
+ * ReportsSentiment muestra el modal de ventas y no se pide nada: la base igual
+ * no se lo mandaría (RLS de google_review_analysis).
  */
 
 const header = (
@@ -39,8 +38,8 @@ const header = (
 );
 
 export default function ReportsSentimentScreen({ google, onNavigateSettings, onNavigateSection }) {
-  const { org, isBusiness } = useOrg();
-  const data = useReviewAnalysis(org?.organization_id, { enabled: isBusiness });
+  const { org } = useOrg();
+  const data = useReviewAnalysis(org?.organization_id);
   const [locationId, setLocationId] = useState('all');
   const [range, setRange] = useState(DEFAULT_RANGE);
   const [mode, setMode] = useState('count');
@@ -56,20 +55,6 @@ export default function ReportsSentimentScreen({ google, onNavigateSettings, onN
       byLocation: locationStats(rows, data.nameOf),
     };
   }, [data.rows, data.nameOf, locationId, range, mode]);
-
-  if (!isBusiness) {
-    return (
-      <div className="reports-page">
-        {header}
-        <BusinessLock
-          title="El análisis de sentimiento es del plan Business"
-          description="Cada reseña con texto se analiza con IA: tono positivo, neutro o negativo, cómo se mueve con el tiempo y las palabras que más se repiten. Abajo, un ejemplo con datos inventados."
-          preview={<ReportsSentimentMockup showHeader={false} />}
-          fullPage
-        />
-      </div>
-    );
-  }
 
   if (data.error || data.loading || !data.rows.length || !data.linked.length) {
     return (

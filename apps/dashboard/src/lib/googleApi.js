@@ -21,7 +21,7 @@ import { requireOrg } from './dashboardApi';
  * vía API, responde reseñas y pide "Actualizar ahora".
  */
 
-async function authHeaders() {
+export async function authHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Sesión vencida');
   return {
@@ -34,7 +34,7 @@ async function authHeaders() {
  * mostrar: el panel publicado puede estar arriba mientras el API todavía no
  * (el API se despliega después), y "TypeError: Failed to fetch" en pantalla no
  * le dice nada a nadie. */
-async function apiFetch(path, options, fallbackMessage) {
+export async function apiFetch(path, options, fallbackMessage) {
   let response;
   try {
     response = await fetch(`${API_URL}${path}`, options);
@@ -530,6 +530,36 @@ export async function createGooglePost(googleLocationId, post) {
     { method: 'POST', headers: await authHeaders(), body: JSON.stringify(post) },
     'Google no aceptó la publicación'
   );
+}
+
+/* IA de Publicaciones (Business): POST …/posts/ai. Devuelven borradores, nunca
+   publican. `context` es { topicType, event?, offer?, mediaUrl? }: lo que se
+   cargó en el compositor (ver postAiContext en GooglePostComposer). `hint` es de
+   qué se trata; `instructions`, cómo escribirlo (tono, largo, qué destacar). */
+export async function suggestPostTexts(googleLocationId, context, { hint, instructions } = {}) {
+  const body = await apiFetch(
+    `/api/google/locations/${encodeURIComponent(googleLocationId)}/posts/ai`,
+    {
+      method: 'POST',
+      headers: await authHeaders(),
+      body: JSON.stringify({ ...context, mode: 'suggest', hint: hint || undefined, instructions: instructions || undefined }),
+    },
+    'No pudimos escribir las sugerencias'
+  );
+  return body.suggestions ?? [];
+}
+
+export async function tweakPostText(googleLocationId, context, text, tweak, instructions) {
+  const body = await apiFetch(
+    `/api/google/locations/${encodeURIComponent(googleLocationId)}/posts/ai`,
+    {
+      method: 'POST',
+      headers: await authHeaders(),
+      body: JSON.stringify({ ...context, mode: 'tweak', text, tweak, instructions: instructions || undefined }),
+    },
+    'No pudimos retocar el texto'
+  );
+  return body.text;
 }
 
 export async function deleteGooglePost(googleLocationId, postName) {

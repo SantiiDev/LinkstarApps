@@ -49,8 +49,23 @@
 }
 
 .gfichas__select {
+  flex: 0 0 15rem;
+  min-width: 0;
+}
+
+.gfichas__pill {
   flex: none;
-  min-width: 13rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: var(--radius-badge);
+  background: var(--color-light);
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.gfichas__pill--linked {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--color-forest);
 }
 
 .gfichas__msg {
@@ -127,6 +142,10 @@
   }
 
   .gfichas__select {
-    min-width: 0;
+    flex-basis: auto;
+  }
+
+  .gfichas__pill {
+    align-self: flex-start;
   }
 }

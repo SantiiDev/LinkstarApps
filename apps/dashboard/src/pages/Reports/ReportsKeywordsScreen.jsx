@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
-import BusinessLock from '../../components/BusinessLock/BusinessLock';
 import { useOrg } from '../../context/OrgContext';
 import { fetchReviewsByIds } from '../../lib/googleApi';
 import { DEFAULT_RANGE, filterAnalysis, keywordStats, keywordSummary } from '../../lib/reviewInsights';
-import ReportsKeywordsMockup from './ReportsKeywordsMockup';
 import {
   KEYWORDS_PER_COLUMN, KeywordsHint, KeywordsSummary, KeywordColumns, KeywordReviewsPanel, KeywordRanking,
 } from './KeywordsBlocks';
@@ -28,7 +26,8 @@ import './Reports.css';
  * de a REVIEWS_PAGE por página (fetchReviewsByIds), y cada página se guarda: ir y
  * volver no la vuelve a pedir.
  *
- * Es de Business, como Sentimiento: en gratis, la maqueta detrás de BusinessLock.
+ * Es de Business, como Sentimiento: a esta pantalla sólo llega una cuenta
+ * Business (en gratis, ReportsKeywords muestra el modal de ventas).
  */
 
 const REVIEWS_PAGE = 5;
@@ -47,9 +46,9 @@ function reviewIdsOf(keyword) {
 }
 
 export default function ReportsKeywordsScreen({ google, onNavigateSettings }) {
-  const { org, isBusiness } = useOrg();
+  const { org } = useOrg();
   const orgId = org?.organization_id;
-  const data = useReviewAnalysis(orgId, { enabled: isBusiness });
+  const data = useReviewAnalysis(orgId);
   const [locationId, setLocationId] = useState('all');
   const [range, setRange] = useState(DEFAULT_RANGE);
   const [rankPage, setRankPage] = useState(0);
@@ -113,20 +112,6 @@ export default function ReportsKeywordsScreen({ google, onNavigateSettings }) {
     // El panel está abajo de las columnas: se baja hasta él para que la
     // respuesta al toque no quede fuera de la vista.
     requestAnimationFrame(() => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-  }
-
-  if (!isBusiness) {
-    return (
-      <div className="reports-page">
-        {header}
-        <BusinessLock
-          title="Las palabras clave de tus reseñas son del plan Business"
-          description="Una IA lee cada reseña con texto y saca los términos que más repiten tus clientes, separando los que vienen con elogios de los que vienen con quejas. Abajo, un ejemplo con datos inventados."
-          preview={<ReportsKeywordsMockup showHeader={false} />}
-          fullPage
-        />
-      </div>
-    );
   }
 
   if (data.error || data.loading || !data.rows.length || !data.linked.length) {

@@ -7,6 +7,10 @@ import Anthropic from '@anthropic-ai/sdk';
  * que el análisis se encendiera en producción (Gemini sólo corrió en pruebas
  * locales del 7/10, nunca en Railway).
  *
+ * Lo usan el análisis de reseñas (lib/reviewAnalysis.js) y la escritura de
+ * publicaciones (lib/postWriter.js). El segundo manda además una foto: por eso
+ * se acepta `content` (bloques de imagen + texto) en lugar de `prompt`.
+ *
  * La respuesta está atada al esquema con structured outputs
  * (output_config.format): el modelo no puede devolver otra forma, diga lo que
  * diga la reseña.
@@ -47,7 +51,10 @@ function getClient() {
   return client;
 }
 
-export async function generateJson({ system, prompt, schema, model = analysisModel() }) {
+/* `prompt` es un texto; `content`, una lista de bloques (por ejemplo una imagen
+ * { type: 'image', source: { type: 'url', url } } seguida de uno de texto). Se
+ * pasa uno de los dos. */
+export async function generateJson({ system, prompt, content, schema, model = analysisModel(), effort = 'low' }) {
   if (!isClaudeConfigured()) throw new Error('ANTHROPIC_API_KEY no está configurada');
 
   let response;
@@ -56,10 +63,10 @@ export async function generateJson({ system, prompt, schema, model = analysisMod
       model,
       max_tokens: MAX_TOKENS,
       system,
-      messages: [{ role: 'user', content: prompt }],
-      // Clasificar una reseña es una tarea corta: poco razonamiento alcanza y
-      // abarata cada llamada.
-      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+      messages: [{ role: 'user', content: content ?? prompt }],
+      // Clasificar una reseña o escribir un texto corto: poco razonamiento
+      // alcanza y abarata cada llamada.
+      output_config: { effort, format: { type: 'json_schema', schema } },
     });
   } catch (err) {
     if (err instanceof Anthropic.APIError) {
@@ -74,7 +81,7 @@ export async function generateJson({ system, prompt, schema, model = analysisMod
   // reintenta: el mismo texto va a volver a declinarse.
   if (response.stop_reason === 'refusal') {
     const category = response.stop_details?.category ?? 'sin categoría';
-    throw Object.assign(new Error(`Claude no analizó la reseña (refusal: ${category})`), { code: 'model_refusal' });
+    throw Object.assign(new Error(`Claude declinó el pedido (refusal: ${category})`), { code: 'model_refusal' });
   }
   if (response.stop_reason === 'max_tokens') {
     throw Object.assign(new Error('Claude se quedó sin tokens antes de terminar el JSON'), { code: 'model_max_tokens' });
