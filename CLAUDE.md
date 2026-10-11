@@ -165,10 +165,11 @@ to `.env`, don't rename them away.
   `GOOGLE_REDIRECT_URI` must match the console entry byte for byte, port included; locally that is
   `PORT` (3001), and `lib/googleOAuth.js` warns at boot if they differ. Losing `GOOGLE_TOKEN_ENC_KEY`
   makes every stored refresh token unreadable — every customer has to reconnect. `ANTHROPIC_API_KEY` /
-  `ANTHROPIC_MODEL` (optional, default `claude-haiku-5-5`) power the review analysis of phase 5;
-  without the key the Google sync works the same and reviews simply stay pending. The provider that
-  receives the review text is named in the panel's privacy policy, so the key and the policy move together
-  (see "Review analysis").
+  `ANTHROPIC_MODEL` (optional, default `claude-haiku-5-5`) power the review analysis of phase 5 and,
+  since 11 Oct 2026, the AI drafts of Publicaciones (`lib/postWriter.js`); without the key the Google
+  sync works the same, reviews simply stay pending, and the post AI answers 503. The provider that
+  receives the review text and the ficha data is named in the panel's privacy policy, so the key and the
+  policy move together (see "Review analysis").
   `DASHBOARD_URL` is optional too (defaults to the *second* entry of `FRONTEND_URL`) and is where the
   subscription returns from Mercado Pago — it cannot be `FRONTEND_URL`, which points at the sales site.
   `FRONTEND_URL` is **comma-separated**: this one service serves both frontends, so CORS needs both
@@ -535,8 +536,9 @@ How it behaves:
 - **`DEFAULT_PREFERENCES` in `notificationsApi.js` mirrors the defaults** of `pending_notifications()`
   and the `0036` columns; change one, change both.
 
-**The partner's part — the three AI cards.** The backend of the replies with AI (phase 5) belongs to
-the partner:
+**The three AI cards.** The backend of the replies with AI (phase 5) was assigned to the partner; on
+11 Oct 2026 Santiago said nothing was built outside the repo and it is ours to build (it needs
+migrations — rules, brand tone, an auto-reply flag). "The partner" below is history:
 - **The contract is the header of `lib/automationsApi.js`:** the `/api/automations/...` routes, the
   shape of the data, the per-location override and the reply permissions.
 - **The UI is complete on purpose, with no Próximamente.** Santiago asked for it, with the partner
@@ -878,13 +880,30 @@ Análisis SEO on 7 Oct 2026 (below). With that, no connected account sees a gate
   The composer (`GooglePostComposer.jsx`, since 10 Oct 2026) follows Tapstar's steps: Tipo → Foto →
   **Detalles** (Oferta and Evento only: title, dates, and coupon/link/terms for an offer or optional times
   for an event — an offer is sent without times) → Qué contar → Revisar (`stepsFor()` in
-  `googlePostsModel.js`). «Qué contar» is a choice: the AI-suggestions card (UI only, Próximamente — same
-  rule as Reviews' AI reply; locked with «Ver plan Business» on free) or «Escribir yo mismo», which jumps
-  straight to Revisar. Revisar has the text, «Insertar variable» (inserts at the cursor the ficha's real
-  name, city, address, phone or website, read live with `fetchGoogleProfile()` — the profile route returns
-  `city` for this), the AI quick tweaks (UI only, Próximamente), the action button, and «Programar» /
-  «Programar para» disabled with Próximamente (decision #16), next to a Google-style preview with a
-  phone/desktop toggle. Unlike Tapstar, photos are allowed on every plan.
+  `googlePostsModel.js`). «Qué contar» is a choice: the AI-suggestions card (two optional fields — «¿De
+  qué se trata?» and «Instrucciones», how to write it, which also apply to the quick tweaks — then
+  «Generar sugerencias» → 3 texts to pick from; locked with «Ver plan Business» on free) or «Escribir yo mismo»,
+  which jumps straight to Revisar. Revisar has the text, «Insertar variable» (inserts at the cursor the
+  ficha's real name, city, address, phone or website, read live with `fetchGoogleProfile()` — the profile
+  route returns `city` for this), the AI quick tweaks (Más cercano / Más formal / Usar emojis / Más corto,
+  with a one-level «Deshacer»), the action button, and «Programar» / «Programar para» disabled with
+  Próximamente (decision #16), next to a Google-style preview with a phone/desktop toggle. Unlike
+  Tapstar, photos are allowed on every plan.
+- **The post AI** (11 Oct 2026) is `POST /api/google/locations/:id/posts/ai` (`routes/googleProfile.js`,
+  `mode: 'suggest' | 'tweak'`) over `lib/postWriter.js`. It only returns drafts — Google is read (the
+  ficha, for context), never written — so "we never publish on our own" still holds. Business and the
+  same rule as publishing, both decided in SQL by `google_location_write_target(..., p_require_business
+  => true)`; the photo must be in the org's own `google-post-media` folder (`assertOwnMedia`, shared with
+  the publish route), because Claude fetches it by URL. Claude receives the ficha's name, category,
+  description and city, the photo, the post details and the hint — exactly what Privacy §3.2 and the
+  `GOOGLE_VERIFICATION.md` justification list; sending anything else means editing both first. Tweaks
+  are a closed list (`POST_AI_TWEAKS` in `lib/validation.js` = `AI_TWEAKS` ids in the panel). Own rate
+  limit, 30 / 15 min per IP. Measured on 11 Oct 2026 with `claude-haiku-5-5`: ~930 input / ~375 output
+  tokens per suggestion request without a photo (≈ US$0.0003; a photo adds roughly 1,000–1,600 input
+  tokens), so cost is not what the limit protects — it caps abuse and the shared Google quota (each
+  request also reads the ficha once). Event dates go to the model already written with the weekday
+  (`spanishDate()`): left to itself it called a Saturday "viernes". `lib/claude.js`' `generateJson()`
+  takes `content` blocks (image + text) and an `effort` for this.
 - `googleRequest()` retries 429/5xx for GET/PUT/PATCH/DELETE but **never for POST**: retrying a create
   after a slow answer would publish the post twice.
 - **SEO Local → Análisis SEO** (7 Oct 2026, structure copied from Tapstar's redesign, screenshots in the
@@ -1011,7 +1030,9 @@ stars), `topics` from a **closed list** (`atencion`, `calidad`, `precio`, `esper
   the scope justification in `apps/dashboard/GOOGLE_VERIFICATION.md`). The analysis moved from Gemini to
   Claude on 8 Oct 2026, before it was ever switched on in production. A review sent to a provider the
   policy doesn't name is exactly what Google's verification checks this page for, so changing provider
-  again means editing those three places first.
+  again means editing those three places first. Since 11 Oct 2026 §3.2 covers two uses — the review
+  analysis and the post drafts (see "Google Business Profile — the screens") — and so does the
+  justification.
 
 ### Retention by plan — what each plan shows and what we keep (`0034`, decision 3)
 
@@ -1057,14 +1078,16 @@ split below before wiring anything — the shell is finished, the data mostly is
 - **Contact** (Oct 2026): `components/ContactForm` is the ventas contact form (same fields, validation
   and copy) posting to `POST /api/contact` through `lib/contactApi.js`. It renders in two places: the
   public landing (`#contact`, linked from the navbar and the footer, for people without an account) and
-  `/panel/contacto` (`pages/Contact`), reached from the sidebar and from the topbar's "¿Necesitás ayuda?
-  Escribinos", which used to be a `mailto`. Inside the panel the form is prefilled from the session and
+  `/panel/contacto` (`pages/Contact`), reached from the sidebar (the topbar's "¿Necesitás ayuda?
+  Escribinos" link was removed on 11 Oct 2026, with the bell next to it). Inside the panel the form is prefilled from the session and
   appends a `— Enviado desde el panel · Organización: … (id) · Plan: …` line to the message, so a support
   request arrives knowing which account it's about; the screen says so. There is **no** browser-side
   fallback and no mail key in the bundle; if the API doesn't answer, the form shows the support address
   instead.
 - `AppShell` is the parent route of everything under `/panel`: it renders the sidebar + topbar once and
-  the section into its `<Outlet />`. It derives the active section from `useLocation()` (never from its
+  the section into its `<Outlet />`. Since 11 Oct 2026 the topbar exists **only under 640px** (menu button
+  + logo); its height is `--app-topbar-h` in `index.css` (0 on desktop, 52px on mobile), which
+  `GoogleGate` and `BusinessPitch` read to place their fixed layer — change the bar, change the variable. It derives the active section from `useLocation()` (never from its
   own state, or a deep link would leave the wrong sidebar item marked). Resetting the scroll to the top on
   every pathname change is `ScrollToTop` in `App.jsx`, for **every** route: in an SPA the browser keeps
   the scroll, and the landing's footer link to `/privacidad` used to open the policy scrolled to its end.
@@ -1162,7 +1185,7 @@ split below before wiring anything — the shell is finished, the data mostly is
   be dismissed, breaks the rule. Three mechanics that are not decorative:
   **(a)** the section scrolls normally (the mock runs past behind) but the modal does not — it is
   `position: fixed` over the content area, offset by the sidebar width (264px, 88px under 1024, 0 under
-  640, where the topbar also grows 44px → 52px), because the sidebar must stay visible and clickable as the
+  640, where the 52px mobile topbar appears — `--app-topbar-h`), because the sidebar must stay visible and clickable as the
   only way out; **(b)** the modal never scrolls inside and is never cut: it has no `max-height`, its layer
   is `overflow: hidden` (with `auto`, one pixel of overflow turned the layer into a scroller and the wheel
   moved the modal instead of the page behind it), and a ladder of `max-height` media queries drops the
@@ -1201,6 +1224,11 @@ split below before wiring anything — the shell is finished, the data mostly is
   Tonos de marca) are **frontend only**: the AI replies (rest of phase 5) are being built separately,
   "Guardar tono" is disabled, and the data shape the backend should store is documented at the top of that
   file. Free sees the AI button locked plus a "Probar Business" card, never a fake remaining-replies count.
+  «Compartir» (11 Oct 2026, every plan) opens `ReviewShareModal.jsx`: an Instagram image (story 9:16 or
+  post 1:1) drawn in the browser by `lib/reviewImage.js` — no API, nothing stored — with the author as
+  «Nombre I.» (`shortAuthorName`) and no Linkstar mark (both product decisions). «Compartir» uses the
+  Web Share API with files when the browser supports it (the phone's share sheet, where Instagram is);
+  «Descargar imagen» always.
   "Actualizar" (owner/admin) uses `useGoogleSyncRequest()`, the same hook as Gestión local's "Actualizar
   ahora". The header counts mix two sources on purpose (Google's per-ficha total and average vs. the
   answered/unanswered split of the rows actually read). `reviews` stays in `GOOGLE_GATED_SECTIONS`, so
@@ -1269,7 +1297,12 @@ split below before wiring anything — the shell is finished, the data mostly is
 - **`lib/viewMemory.js` — the last view of a screen, kept in memory** (`recall(userId, key)` /
   `remember(key, value)`). Mi Empresa (`useCompanyOverview.js`) and Devices (`useDevicesData.js`) show
   what they last showed immediately and refetch behind it, so coming back from another section doesn't
-  flash "Cargando…"; a failed refetch keeps what was there. It is per user — a different user in the same
+  flash "Cargando…"; a failed refetch keeps what was there. Since 11 Oct 2026 the screens that read
+  Google live do the same — Perfil and Publicaciones through the hook `lib/useRememberedData.js`
+  (keys `google:fichas:<org>`, `google:profile:<ficha>`, shared with the post composer's «Insertar
+  variable», and `google:posts:<ficha>`), Análisis SEO by hand (`google:seo:<org>`, because «Volver a
+  analizar» passes `fresh`) — so "Leyendo tu ficha en Google…" shows only on the first visit in the tab;
+  Google is still re-read on every visit, behind. It is per user — a different user in the same
   tab wipes it, because what each one sees depends on their role. Keys carry the org id. Not
   `localStorage`: it is lost on reload, on purpose. Both screens also keep their filters in a module-level
   variable per org. The other half of the "Cargando" fix lives in the contexts: `OrgContext` and the

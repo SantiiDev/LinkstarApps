@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
 import BusinessLock from '../../components/BusinessLock/BusinessLock';
+import { useAuth } from '../../context/AuthContext';
 import { useOrg } from '../../context/OrgContext';
 import { fetchSeoAudit } from '../../lib/googleApi';
+import { recall, remember } from '../../lib/viewMemory';
 import {
   MissingTermsCard,
   MissingTermsPreview,
@@ -53,7 +55,11 @@ const header = (
 export default function GoogleSeoLocalScreen({ google, onNavigateSection }) {
   const { org } = useOrg();
   const orgId = org?.organization_id;
-  const [data, setData] = useState(null);
+  const userId = useAuth().user?.id ?? null;
+  // El último análisis queda recordado (lib/viewMemory): al volver se ve al
+  // instante y se relee por detrás, en vez de «Analizando tu ficha…» cada vez.
+  const memoryKey = `google:seo:${orgId}`;
+  const [data, setData] = useState(() => (orgId ? recall(userId, memoryKey) ?? null : null));
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -63,16 +69,19 @@ export default function GoogleSeoLocalScreen({ google, onNavigateSection }) {
     if (!orgId) return;
     setError(null);
     if (fresh) setRefreshing(true);
+    const known = recall(userId, memoryKey);
     try {
       const result = await fetchSeoAudit(orgId, { fresh });
+      remember(memoryKey, result);
       setData(result);
     } catch (err) {
       console.error('No se pudo cargar el análisis SEO:', err);
-      setError(err.message || 'No pudimos analizar tu ficha. Probá recargar la página.');
+      // Con un análisis ya en pantalla, una relectura fallida no lo tapa.
+      if (!known || fresh) setError(err.message || 'No pudimos analizar tu ficha. Probá recargar la página.');
     } finally {
       setRefreshing(false);
     }
-  }, [orgId]);
+  }, [orgId, userId, memoryKey]);
 
   useEffect(() => { load(); }, [load]);
 

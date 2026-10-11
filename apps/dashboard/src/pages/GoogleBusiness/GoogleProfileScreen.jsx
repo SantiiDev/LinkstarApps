@@ -4,6 +4,7 @@ import Icon from '../../components/Icon/Icon';
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
 import BusinessLock from '../../components/BusinessLock/BusinessLock';
 import { useOrg } from '../../context/OrgContext';
+import { useRememberedData } from '../../lib/useRememberedData';
 import {
   fetchGoogleLocations,
   fetchGoogleProfile,
@@ -309,35 +310,23 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
   const { org } = useOrg();
   const orgId = org?.organization_id;
 
-  const [fichas, setFichas] = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
+  const [picked, setPicked] = useState(null);
   const [editing, setEditing] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
 
-  useEffect(() => {
-    if (!orgId) return;
-    fetchGoogleLocations(orgId)
-      .then((rows) => {
-        const linked = rows.filter((f) => f.location_id);
-        setFichas(linked);
-        setSelected((prev) => prev ?? linked[0]?.id ?? null);
-      })
-      .catch((err) => {
-        console.error('No se pudieron leer las fichas:', err);
-        setError('No pudimos cargar tus fichas.');
-      });
-  }, [orgId]);
-
-  const loadProfile = useCallback(() => {
-    if (!selected) return;
-    setData(null);
-    setError(null);
-    fetchGoogleProfile(selected).then(setData).catch((err) => setError(err.message));
-  }, [selected]);
-
-  useEffect(() => { loadProfile(); }, [loadProfile]);
+  // Fichas y ficha quedan recordadas (lib/useRememberedData): al volver a Perfil
+  // se ve lo último leído al instante y Google se relee por detrás, en vez de
+  // «Leyendo tu ficha en Google…» en cada visita. Misma clave que el compositor
+  // de Publicaciones, que usa la ficha para «Insertar variable».
+  const fichasState = useRememberedData(orgId ? `google:fichas:${orgId}` : null, () => fetchGoogleLocations(orgId));
+  const fichas = fichasState.data ? fichasState.data.filter((f) => f.location_id) : null;
+  const selected = picked ?? fichas?.[0]?.id ?? null;
+  const profileState = useRememberedData(selected ? `google:profile:${selected}` : null, () => fetchGoogleProfile(selected));
+  const data = profileState.data;
+  const loadProfile = profileState.reload;
+  const error = fichasState.error
+    ? 'No pudimos cargar tus fichas.'
+    : profileState.error?.message ?? null;
 
   const header = (
     <PageHeader eyebrow="Google Business" title="Perfil de negocio" subtitle="Gestioná la información de tu ficha de Google" />
@@ -378,7 +367,7 @@ export default function GoogleProfileScreen({ google, onNavigateSettings }) {
       <ProfileToolbar
         options={options}
         selected={selected}
-        onSelect={setSelected}
+        onSelect={setPicked}
         onEdit={data?.canEdit ? () => setEditing(true) : null}
       />
 

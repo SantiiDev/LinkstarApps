@@ -35,7 +35,7 @@
    modal entre es trabajo de las consultas por alto de abajo. */
 .ggate__layer {
   position: fixed;
-  top: 44px;
+  top: var(--app-topbar-h);
   right: 0;
   bottom: 0;
   left: 264px;
@@ -266,12 +266,11 @@
   }
 }
 
-/* De 640 para abajo el sidebar es un cajón fuera de pantalla y la barra de
-   arriba mide 52px (ver AppShell.css y Sidebar.css). */
+/* De 640 para abajo el sidebar es un cajón fuera de pantalla y aparece la barra
+   de arriba con el botón del menú (--app-topbar-h, ver index.css y AppShell.css). */
 @media (max-width: 640px) {
   .ggate__layer {
     left: 0;
-    top: 52px;
     padding: 0.75rem;
   }
 

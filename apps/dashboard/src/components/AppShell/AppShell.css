@@ -27,76 +27,38 @@
   animation: fadeIn var(--transition-base) both;
 }
 
+/* Sólo en móvil (ver el media query de abajo): de 641px para arriba el sidebar
+   está siempre a la vista y la barra no tiene nada que mostrar. */
 .app-shell__topbar {
   position: sticky;
   top: 0;
   z-index: 90;
-  display: flex;
+  display: none;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
-  height: 44px;
-  padding: 0 2rem;
+  height: var(--app-topbar-h);
+  padding: 0 1rem;
   background: linear-gradient(90deg, rgba(245, 133, 41, 0.1), rgba(245, 158, 11, 0.06));
   border-bottom: 1px solid rgba(255, 255, 255, 0.6);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
 
-.app-shell__contact {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+.app-shell__brand {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
   color: var(--color-navy);
-  opacity: 0.8;
-  transition: opacity var(--transition-base);
+  user-select: none;
 }
 
-.app-shell__contact:hover {
-  opacity: 1;
+.app-shell__brand-dot {
   color: var(--color-orange);
-}
-
-.app-shell__topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.app-shell__icon-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.6);
-  color: var(--color-navy);
-  transition: all var(--transition-base);
-}
-
-.app-shell__icon-btn:hover {
-  background: var(--color-white);
-  color: var(--color-orange);
-}
-
-.app-shell__icon-dot {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-orange);
-  border: 1.5px solid var(--color-white);
 }
 
 /* Botón hamburguesa: sólo existe en móvil, donde el sidebar está fuera de pantalla. */
 .app-shell__nav-toggle {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 36px;
@@ -114,56 +76,13 @@
 }
 
 .app-shell__content {
-  min-height: calc(100vh - 44px);
-  min-height: calc(100dvh - 44px);
-}
-
-/* El teléfono sólo se muestra cuando hay lugar; abajo de 640px queda "Ayuda",
-   que sigue siendo el mismo enlace y no come toda la barra. */
-.app-shell__contact-short {
-  display: none;
-}
-
-@media (max-width: 768px) {
-  .app-shell__topbar {
-    padding: 0 1rem;
-  }
-
-  .app-shell__contact {
-    font-size: 0.68rem;
-    min-width: 0;
-  }
-
-  .app-shell__contact svg {
-    flex-shrink: 0;
-  }
+  min-height: calc(100vh - var(--app-topbar-h));
+  min-height: calc(100dvh - var(--app-topbar-h));
 }
 
 @media (max-width: 640px) {
-  .app-shell__nav-toggle {
-    display: flex;
-  }
-
-  /* La barra crece para alojar un target táctil cómodo. */
   .app-shell__topbar {
-    height: 52px;
-  }
-
-  .app-shell__content {
-    min-height: calc(100vh - 52px);
-    min-height: calc(100dvh - 52px);
-  }
-
-  .app-shell__contact-full {
-    display: none;
-  }
-
-  .app-shell__contact-short {
-    display: inline;
-  }
-
-  .app-shell__contact {
-    font-size: 0.75rem;
+    display: flex;
   }
 }
 

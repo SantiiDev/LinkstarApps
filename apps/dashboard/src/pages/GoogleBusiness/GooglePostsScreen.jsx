@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import GoogleConnect from '../../components/GoogleConnect/GoogleConnect';
 import { useOrg } from '../../context/OrgContext';
+import { useRememberedData } from '../../lib/useRememberedData';
 import { deleteGooglePost, fetchGoogleLocations, fetchGooglePosts, fetchPostQuota } from '../../lib/googleApi';
 import { PostsList, PostsToolbar, QuotaBanner } from './GooglePostsBlocks';
 import GooglePostComposer from './GooglePostComposer';
@@ -40,49 +41,36 @@ export default function GooglePostsScreen({ google, onNavigateSettings }) {
   const { org, isBusiness } = useOrg();
   const orgId = org?.organization_id;
 
-  const [fichas, setFichas] = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [posts, setPosts] = useState(null);
-  const [canEdit, setCanEdit] = useState(false);
-  const [quota, setQuota] = useState(null);
-  const [error, setError] = useState(null);
+  const [picked, setPicked] = useState(null);
+  const [actionError, setActionError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
-  useEffect(() => {
-    if (!orgId) return;
-    fetchGoogleLocations(orgId)
-      .then((rows) => {
-        const linked = rows.filter((f) => f.location_id);
-        setFichas(linked);
-        setSelected((prev) => prev ?? linked[0]?.id ?? null);
-      })
-      .catch(() => setError('No pudimos cargar tus fichas.'));
-  }, [orgId]);
-
-  const load = useCallback(() => {
-    if (!selected) return;
-    setPosts(null);
-    setError(null);
-    Promise.all([fetchGooglePosts(selected), fetchPostQuota(orgId)])
-      .then(([result, q]) => {
-        setPosts(result.posts);
-        setCanEdit(result.canEdit);
-        setQuota(q);
-      })
-      .catch((err) => setError(err.message));
-  }, [selected, orgId]);
-
-  useEffect(() => { load(); }, [load]);
+  // Recordado entre visitas (lib/useRememberedData): se muestra lo último leído
+  // y Google se relee por detrás, sin «Leyendo tus publicaciones…» cada vez.
+  const fichasState = useRememberedData(orgId ? `google:fichas:${orgId}` : null, () => fetchGoogleLocations(orgId));
+  const fichas = fichasState.data ? fichasState.data.filter((f) => f.location_id) : null;
+  const selected = picked ?? fichas?.[0]?.id ?? null;
+  const postsState = useRememberedData(selected ? `google:posts:${selected}` : null, async () => {
+    const [result, quota] = await Promise.all([fetchGooglePosts(selected), fetchPostQuota(orgId)]);
+    return { posts: result.posts, canEdit: result.canEdit, quota };
+  });
+  const posts = postsState.data?.posts ?? null;
+  const canEdit = Boolean(postsState.data?.canEdit);
+  const quota = postsState.data?.quota ?? null;
+  const load = postsState.reload;
+  const error = actionError
+    ?? (fichasState.error ? 'No pudimos cargar tus fichas.' : postsState.error?.message ?? null);
 
   async function remove(post) {
     if (!window.confirm('¿Borrar esta publicación de tu ficha de Google? No se puede deshacer.')) return;
     setDeleting(post.name);
+    setActionError(null);
     try {
       await deleteGooglePost(selected, post.name);
       load();
     } catch (err) {
-      setError(err.message);
+      setActionError(err.message);
     } finally {
       setDeleting(null);
     }
@@ -127,7 +115,7 @@ export default function GooglePostsScreen({ google, onNavigateSettings }) {
       {reauthNotice}
 
       <QuotaBanner quota={quota} isBusiness={isBusiness} onNavigateSettings={onNavigateSettings} />
-      <PostsToolbar options={options} selected={selected} onSelect={setSelected} />
+      <PostsToolbar options={options} selected={selected} onSelect={(id) => { setPicked(id); setActionError(null); }} />
 
       {notice && <p className="gbp-saved" role="status">{notice}</p>}
       {error && <p className="gbm-error" role="alert">{error}</p>}

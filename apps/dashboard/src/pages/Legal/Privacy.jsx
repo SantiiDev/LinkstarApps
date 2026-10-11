@@ -9,8 +9,10 @@ import './Legal.css';
  *
  * La sección 3 tiene que coincidir con lo que el panel hace con la ficha: la
  * verificación de Google la compara con la app. El proveedor de IA de la 3.2
- * es el que analiza las reseñas en services/api (fase 5); si se cambia de
- * proveedor, se cambia acá antes de cargar su clave.
+ * es el que analiza las reseñas (services/api/lib/reviewAnalysis.js) y escribe
+ * los borradores de publicaciones (lib/postWriter.js); si se cambia de
+ * proveedor o se le manda un dato nuevo, se cambia acá antes, y también en
+ * GOOGLE_VERIFICATION.md.
  *
  * Tiene que ser PÚBLICA y estar fuera de los guards de /panel. No es una
  * preferencia: la pantalla de consentimiento de Google exige una URL de
@@ -30,9 +32,9 @@ import './Legal.css';
  * la fecha de abajo.
  */
 
-const UPDATED = '8 de octubre de 2026';
+const UPDATED = '11 de octubre de 2026';
 
-/* La casilla real, la misma que usa el topbar del panel. NO usar
+/* La casilla real, la misma que ofrece la sección Contacto del panel. NO usar
  * soporte@linkstar.com.ar: ese dominio nunca se registró (es lo que vino a
  * arreglar la 0021). Una política de privacidad con un correo de contacto que
  * rebota es motivo de rechazo en la verificación de Google, además de dejar sin
@@ -130,24 +132,37 @@ export default function Privacy() {
             <li><strong>El conteo total y el puntaje promedio de esas fichas</strong> — se leen una vez por día para estimar cuántas reseñas nuevas generaron tus expositores. Google no avisa cuando entra una reseña, así que la diferencia día a día es la única forma de medirlo.</li>
             <li><strong>Responder reseñas en tu nombre</strong> — sólo cuando vos (o alguien de tu equipo con permiso) escribe una respuesta y la publica desde el panel. Nunca publicamos nada por nuestra cuenta.</li>
             <li><strong>Las métricas de tus fichas vinculadas</strong> — visualizaciones, llamadas, solicitudes de cómo llegar, visitas a tu web y las búsquedas con las que te encontraron, día por día, para mostrarte su evolución.</li>
-            <li><strong>Los datos de la ficha</strong> — descripción, teléfonos, web, horarios, atributos, servicios, fotos y publicaciones, que se leen cuando abrís el panel para mostrártelos y para calcular el análisis de SEO local. Sólo los modificamos cuando vos (o alguien de tu equipo con permiso) edita un dato o crea o borra una publicación desde el panel. Las fotos que subís para una publicación se guardan en nuestro almacenamiento con una dirección pública, porque Google las descarga desde ahí.</li>
+            <li><strong>Los datos de la ficha</strong> — descripción, teléfonos, web, horarios, atributos, servicios, fotos y publicaciones, que se leen cuando abrís el panel para mostrártelos, para calcular el análisis de SEO local y, si lo pedís, para escribir publicaciones con IA (punto 3.2). Sólo los modificamos cuando vos (o alguien de tu equipo con permiso) edita un dato o crea o borra una publicación desde el panel. Las fotos que subís para una publicación se guardan en nuestro almacenamiento con una dirección pública, porque Google las descarga desde ahí.</li>
             <li><strong>Los cambios que Google hace en tu ficha por su cuenta</strong> — en el plan Business, una vez por día comparamos tu ficha con la versión que Google propone, te avisamos si cambió algo y te dejamos revertirlo. Nunca lo revertimos sin que vos lo pidas.</li>
           </ul>
 
-          <h3>3.2 Análisis de reseñas con inteligencia artificial</h3>
+          <h3>3.2 Inteligencia artificial</h3>
           <p>
-            En el plan Business, el panel te muestra el tono de tus reseñas, los temas que mencionan y
-            las palabras que más se repiten. Para eso enviamos <strong>el texto y el puntaje</strong> de
-            cada reseña de tus fichas vinculadas a <strong>Anthropic</strong>, el proveedor del modelo
-            de inteligencia artificial Claude, que la clasifica y nos devuelve el resultado. Guardamos ese
-            resultado junto a la reseña, así cada una se analiza una sola vez.
+            En el plan Business, el panel usa el modelo de inteligencia artificial Claude, de{' '}
+            <strong>Anthropic</strong>, para dos cosas. En el plan gratis no se le envía nada.
+          </p>
+          <p>
+            <strong>Análisis de reseñas.</strong> El panel te muestra el tono de tus reseñas, los temas
+            que mencionan, las palabras que más se repiten y un NPS estimado a partir del texto. Para eso
+            enviamos <strong>el texto y el puntaje</strong> de cada reseña de tus fichas vinculadas, y
+            Anthropic nos devuelve la clasificación. Guardamos ese resultado junto a la reseña, así cada
+            una se analiza una sola vez.
           </p>
           <ul>
             <li><strong>No enviamos el nombre ni la foto de quien escribió la reseña</strong>, ni ningún dato tuyo o de tu cuenta.</li>
             <li>Las reseñas que sólo tienen estrellas, sin texto, no se envían.</li>
-            <li>En el plan gratis no se envía ninguna reseña.</li>
-            <li>Anthropic trata ese texto por nuestra cuenta y sólo para darnos el resultado; según sus condiciones comerciales, no lo usa para entrenar sus modelos.</li>
           </ul>
+          <p>
+            <strong>Escribir publicaciones.</strong> Cuando vos (o alguien de tu equipo con permiso) le
+            pedís a la IA que proponga o retoque el texto de una publicación, enviamos el nombre, el
+            rubro, la descripción y la ciudad de la ficha, la foto que subiste para esa publicación, sus
+            detalles (título, fechas, cupón) y lo que escribiste. Sólo se envía cuando lo pedís, y lo que
+            vuelve es un borrador: no se publica nada hasta que lo publicás vos.
+          </p>
+          <p>
+            En los dos casos, Anthropic trata esos datos por nuestra cuenta y sólo para darnos el
+            resultado; según sus condiciones comerciales, no los usa para entrenar sus modelos.
+          </p>
 
           <h3>3.3 Uso limitado</h3>
           <p>
@@ -192,7 +207,7 @@ export default function Privacy() {
             <li><strong>Mercado Pago</strong> — cobro de los planes pagos.</li>
             <li><strong>Resend</strong> — envío de correos (invitaciones a tu equipo y avisos), cuando el envío está activado.</li>
             <li><strong>Google</strong> — únicamente si conectás tu ficha, y sólo en esa dirección.</li>
-            <li><strong>Anthropic</strong> — análisis del texto de las reseñas con inteligencia artificial, sólo en el plan Business y sólo como se explica en el punto 3.2.</li>
+            <li><strong>Anthropic</strong> — inteligencia artificial para analizar el texto de las reseñas y para escribir borradores de publicaciones, sólo en el plan Business y sólo como se explica en el punto 3.2.</li>
           </ul>
           <p>
             También los entregaríamos si nos lo exigiera una autoridad competente por una vía legal

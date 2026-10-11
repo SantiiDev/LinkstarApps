@@ -300,6 +300,85 @@
   color: #b7791f;
 }
 
+/* «¿De qué se trata?» e «Instrucciones»: a lo ancho de la tarjeta, alineados a
+   la izquierda. */
+.gbpo-ai-card__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: min(100%, 480px);
+  margin-top: 0.35rem;
+  text-align: left;
+}
+
+.gbpo-ai-card__fields textarea {
+  resize: none;
+}
+
+.gbpo-ai-card__count {
+  align-self: flex-end;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.gbpo-ai-card .gb-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.gbpo-ai-card .gbm-error {
+  margin: 0;
+}
+
+/* Las sugerencias: una tarjeta por texto, se elige tocándola. */
+.gbpo-suggestions {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+
+.gbpo-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.95rem 1.05rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(26, 38, 57, 0.12);
+  background: var(--color-white);
+  text-align: left;
+  transition: border-color var(--transition-base), background var(--transition-base);
+}
+
+.gbpo-suggestion:hover:not(:disabled) {
+  border-color: var(--color-orange);
+  background: rgba(245, 133, 41, 0.04);
+}
+
+.gbpo-suggestion:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.gbpo-suggestion__text {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--color-navy);
+  white-space: pre-line;
+}
+
+.gbpo-suggestion__use {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  align-self: flex-end;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--color-orange);
+}
+
 .gbpo-or {
   display: flex;
   align-items: center;
@@ -522,9 +601,39 @@
   color: var(--color-text-secondary);
 }
 
+.gbpo-tweak:hover:not(:disabled) {
+  border-color: var(--color-orange);
+  color: var(--color-orange);
+}
+
 .gbpo-tweak:disabled {
   opacity: 0.7;
   cursor: default;
+}
+
+/* El ajuste en curso no se apaga como los demás: es el que está trabajando. */
+.gbpo-tweak--busy:disabled {
+  opacity: 1;
+  border-color: var(--color-orange);
+  color: var(--color-orange);
+}
+
+.gbpo-tweak--undo {
+  border-style: dashed;
+  color: var(--color-navy);
+}
+
+.gbpo-tweaks__plan {
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.14);
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #b7791f;
+}
+
+.gbpo-tweaks .gbm-error {
+  margin: 0;
 }
 
 .gbpo-schedule-field span {
@@ -761,15 +870,42 @@
   gap: 0.6rem;
 }
 
+/* «Atrás»: botón secundario del mismo alto que «Siguiente» (gb-btn-primary),
+   con borde, para que el par se lea como dos botones y no como un enlace suelto. */
 .gbpo-back {
-  padding: 0.5rem 0.25rem;
-  font-size: 0.82rem;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1.15rem;
+  border-radius: var(--radius-button);
+  border: 1px solid rgba(26, 38, 57, 0.15);
+  background: var(--color-white);
+  font-size: 0.8rem;
+  font-weight: 700;
   color: var(--color-navy);
+  transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base);
 }
 
 .gbpo-back:hover {
+  border-color: var(--color-orange);
   color: var(--color-orange);
+  background: rgba(245, 133, 41, 0.04);
+}
+
+/* El selector del botón de acción, con el mismo aspecto que los campos de
+   texto de al lado (.gbp-input input): blanco, borde gris, letra normal. */
+.gbpo-select {
+  padding: 0.6rem 0.8rem;
+  font-size: inherit;
+  line-height: inherit;
+  border-radius: 0.7rem;
+  border-color: rgba(26, 38, 57, 0.15);
+  background: #fff;
+  font-weight: 400;
+}
+
+.gbpo-cta {
+  align-items: end;
 }
 
 .gbpo-nav .gb-btn-primary:disabled {

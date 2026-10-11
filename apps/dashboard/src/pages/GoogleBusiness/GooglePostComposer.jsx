@@ -5,10 +5,13 @@ import SoonBadge from '../../components/SoonBadge/SoonBadge';
 import {
   createGooglePost,
   fetchGoogleProfile,
+  suggestPostTexts,
+  tweakPostText,
   uploadPostImage,
   POST_IMAGE_MAX_BYTES,
   POST_IMAGE_TYPES,
 } from '../../lib/googleApi';
+import { useRememberedData } from '../../lib/useRememberedData';
 import { ComposerHeader, PostTypePicker } from './GooglePostsBlocks';
 import { AI_TWEAKS, CTA_OPTIONS, POST_TEXT_MAX, PROFILE_VARIABLES, stepsFor } from './googlePostsModel';
 
@@ -18,10 +21,15 @@ import { AI_TWEAKS, CTA_OPTIONS, POST_TEXT_MAX, PROFILE_VARIABLES, stepsFor } fr
  *   Tipo → Foto → [Detalles] → Qué contar → Revisar
  *
  * «Detalles» (título, fechas, cupón) sólo existe para Oferta y Evento. «Qué
- * contar» es una elección: las sugerencias con IA (Próximamente: la IA la arma
- * el mismo trabajo que las respuestas de Reseñas) o «Escribir yo mismo», que
- * salta directo a Revisar. Revisar tiene el texto, las variables de la ficha, el
- * botón de acción y la vista previa.
+ * contar» es una elección: las sugerencias con IA o «Escribir yo mismo», que
+ * salta directo a Revisar. Revisar tiene el texto, las variables de la ficha, los
+ * ajustes rápidos con IA, el botón de acción y la vista previa.
+ *
+ * La IA (sugerencias y ajustes rápidos) es de Business y sólo escribe
+ * borradores: POST …/posts/ai (services/api/lib/postWriter.js) devuelve texto y
+ * nada se publica sin «Publicar ahora». Claude recibe la ficha, la foto y los
+ * detalles cargados (declarado en la política de privacidad, 3.2). En gratis se
+ * ve con candado y lleva a Configuración → Plan; el corte real está en el API.
  *
  * Diferencias con Tapstar, a propósito:
  *   - La foto es para todos los planes (Tapstar la bloquea en su plan gratis).
@@ -94,6 +102,31 @@ function toRequest(draft) {
   return body;
 }
 
+/* Lo que la IA recibe como contexto de la publicación (googlePostAiSchema en
+   services/api/lib/validation.js): sólo lo cargado, sin campos vacíos. */
+function postAiContext(draft) {
+  const context = { topicType: draft.topicType };
+  if (draft.mediaUrl) context.mediaUrl = draft.mediaUrl;
+  if (draft.topicType !== 'STANDARD') {
+    const withTimes = draft.topicType === 'EVENT';
+    const event = {
+      title: draft.eventTitle.trim(),
+      startDate: draft.startDate,
+      endDate: draft.endDate,
+      startTime: withTimes ? draft.startTime : '',
+      endTime: withTimes ? draft.endTime : '',
+    };
+    context.event = Object.fromEntries(Object.entries(event).filter(([, v]) => v));
+  }
+  if (draft.topicType === 'OFFER') {
+    const offer = { couponCode: draft.couponCode.trim(), termsConditions: draft.termsConditions.trim() };
+    context.offer = Object.fromEntries(Object.entries(offer).filter(([, v]) => v));
+  }
+  return context;
+}
+
+const EMPTY_AI = { hint: '', instructions: '', loading: false, suggestions: [], error: null };
+
 /* Qué le falta a «Detalles» para seguir; null si está completo. */
 function detailsProblem(draft) {
   if (draft.topicType === 'STANDARD') return null;
@@ -136,7 +169,9 @@ function StepNav({ onBack, children }) {
   return (
     <div className="gbpo-nav">
       {onBack ? (
-        <button type="button" className="gbpo-back" onClick={onBack}>← Atrás</button>
+        <button type="button" className="gbpo-back" onClick={onBack}>
+          <Icon name="arrowLeft" size={15} /> Atrás
+        </button>
       ) : <span />}
       <div className="gbpo-nav__right">{children}</div>
     </div>
@@ -278,12 +313,22 @@ export default function GooglePostComposer({
   const [dragging, setDragging] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState(null);
-  // Datos de cada ficha para las variables, leídos al entrar a Revisar.
-  const [profiles, setProfiles] = useState({});
   const fileRef = useRef(null);
   const textRef = useRef(null);
   // Dónde estaba el cursor del texto: tocar el menú de variables le saca el foco.
   const caret = useRef(null);
+  // IA (Business): sugerencias de «Qué contar» y ajustes rápidos de Revisar.
+  const [ai, setAi] = useState(EMPTY_AI);
+  const [tweaking, setTweaking] = useState(null); // id del ajuste en curso
+  const [tweakError, setTweakError] = useState(null);
+  const [undoText, setUndoText] = useState(null); // el texto de antes del último ajuste
+
+  // Las sugerencias son de una ficha: al cambiar de ficha ya no valen (lo que
+  // escribió la persona, sí).
+  useEffect(() => {
+    setAi((a) => ({ ...EMPTY_AI, hint: a.hint, instructions: a.instructions }));
+    setUndoText(null);
+  }, [googleLocationId]);
 
   const steps = stepsFor(draft.topicType);
   const step = steps[index].id;
@@ -292,17 +337,16 @@ export default function GooglePostComposer({
   const next = () => { setError(null); setIndex((i) => i + 1); };
   const back = () => { setError(null); setIndex((i) => i - 1); };
 
-  const profile = profiles[googleLocationId];
-  useEffect(() => {
-    if (step !== 'review' || !googleLocationId || profiles[googleLocationId]) return;
-    setProfiles((p) => ({ ...p, [googleLocationId]: { status: 'loading' } }));
-    fetchGoogleProfile(googleLocationId)
-      .then((data) => setProfiles((p) => ({ ...p, [googleLocationId]: { status: 'ok', data: data.profile } })))
-      .catch((err) => {
-        console.error('No se pudieron leer los datos de la ficha:', err);
-        setProfiles((p) => ({ ...p, [googleLocationId]: { status: 'error' } }));
-      });
-  }, [step, googleLocationId, profiles]);
+  // Los datos de la ficha para las variables, leídos al entrar a Revisar. Misma
+  // clave recordada que Perfil (lib/useRememberedData): si ya se leyó la ficha
+  // en esta pestaña, el menú está listo al instante.
+  const fichaState = useRememberedData(
+    step === 'review' && googleLocationId ? `google:profile:${googleLocationId}` : null,
+    () => fetchGoogleProfile(googleLocationId)
+  );
+  const profile = fichaState.data
+    ? { status: 'ok', data: fichaState.data.profile }
+    : { status: fichaState.error ? 'error' : 'loading' };
 
   async function handleFile(file) {
     if (!file) return;
@@ -341,6 +385,48 @@ export default function GooglePostComposer({
     caret.current = { start: e.target.selectionStart, end: e.target.selectionEnd };
   };
 
+  async function suggest() {
+    setAi((a) => ({ ...a, loading: true, error: null }));
+    try {
+      const suggestions = await suggestPostTexts(googleLocationId, postAiContext(draft), {
+        hint: ai.hint.trim(),
+        instructions: ai.instructions.trim(),
+      });
+      setAi((a) => ({ ...a, loading: false, suggestions }));
+    } catch (err) {
+      setAi((a) => ({ ...a, loading: false, error: err.message }));
+    }
+  }
+
+  function pickSuggestion(text) {
+    set({ summary: text.slice(0, POST_TEXT_MAX) });
+    setUndoText(null);
+    caret.current = null;
+    go('review');
+  }
+
+  async function applyTweak(tweakId) {
+    const before = draft.summary;
+    setTweaking(tweakId);
+    setTweakError(null);
+    try {
+      const text = await tweakPostText(googleLocationId, postAiContext(draft), before, tweakId, ai.instructions.trim());
+      set({ summary: text.slice(0, POST_TEXT_MAX) });
+      setUndoText(before);
+      caret.current = null;
+    } catch (err) {
+      setTweakError(err.message);
+    } finally {
+      setTweaking(null);
+    }
+  }
+
+  function undoTweak() {
+    set({ summary: undoText });
+    setUndoText(null);
+    caret.current = null;
+  }
+
   async function publish() {
     setPublishing(true);
     setError(null);
@@ -349,6 +435,9 @@ export default function GooglePostComposer({
       setDraft(EMPTY_DRAFT);
       setIndex(0);
       caret.current = null;
+      setAi(EMPTY_AI);
+      setUndoText(null);
+      setTweakError(null);
       onPublished();
     } catch (err) {
       setError(err.message);
@@ -497,24 +586,76 @@ export default function GooglePostComposer({
       {step === 'content' && (
         <>
           <h4 className="gbpo-question">¿Qué querés contar?</h4>
-          <p className="gbp-hint gbpo-lead">Escribí vos el texto de la publicación.</p>
+          <p className="gbp-hint gbpo-lead">
+            {isBusiness ? 'Pedile una propuesta a la IA o escribilo vos.' : 'Escribí vos el texto de la publicación.'}
+          </p>
 
-          {/* Sólo la tarjeta: las sugerencias con IA todavía no existen. En gratis
-              lleva a Configuración → Plan; en Business no tiene botón. */}
-          <div className="gbpo-ai-card">
-            <span className="gbpo-ai-card__icon"><Icon name={isBusiness ? 'sparkles' : 'lock'} size={20} /></span>
-            <strong>Sugerencias con IA <SoonBadge /></strong>
-            <p>
-              {isBusiness
-                ? 'Pronto la IA te va a proponer textos listos para publicar a partir de tu ficha y tu foto.'
-                : 'Va a estar en el plan Business: la IA te va a proponer textos listos para publicar a partir de tu ficha y tu foto.'}
-            </p>
-            {!isBusiness && onNavigateSettings && (
-              <button type="button" className="gb-btn-primary" onClick={() => onNavigateSettings('plan')}>
-                Ver plan Business
+          {isBusiness ? (
+            <div className="gbpo-ai-card">
+              <span className="gbpo-ai-card__icon"><Icon name="sparkles" size={20} /></span>
+              <strong>Sugerencias con IA</strong>
+              <p>
+                Te proponemos textos listos para publicar a partir de tu ficha
+                {draft.mediaUrl ? ' y tu foto' : ''}{draft.topicType !== 'STANDARD' ? ' y los detalles que cargaste' : ''}.
+                Después los podés editar.
+              </p>
+              <div className="gbpo-ai-card__fields">
+                <label className="gbp-input">
+                  <span>¿De qué se trata? <em>opcional</em></span>
+                  <input
+                    maxLength={300}
+                    placeholder="Ej: llegó el menú de otoño"
+                    value={ai.hint}
+                    onChange={(e) => setAi((a) => ({ ...a, hint: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !ai.loading) { e.preventDefault(); suggest(); } }}
+                  />
+                </label>
+                {/* Cómo escribirlo. También vale para los ajustes rápidos de Revisar. */}
+                <label className="gbp-input">
+                  <span>Instrucciones <em>opcional</em></span>
+                  <textarea
+                    rows={2}
+                    maxLength={300}
+                    placeholder="Ej: tono informal, corto, sin emojis, mencioná que hay mesas afuera"
+                    value={ai.instructions}
+                    onChange={(e) => setAi((a) => ({ ...a, instructions: e.target.value }))}
+                  />
+                  <small className="gbpo-ai-card__count">{ai.instructions.length} / 300</small>
+                </label>
+              </div>
+              <button type="button" className="gb-btn-primary" onClick={suggest} disabled={ai.loading}>
+                <Icon name="sparkles" size={15} />
+                {ai.loading ? 'Escribiendo…' : ai.suggestions.length ? 'Generar otras' : 'Generar sugerencias'}
               </button>
-            )}
-          </div>
+              {ai.error && <p className="gbm-error" role="alert">{ai.error}</p>}
+            </div>
+          ) : (
+            <div className="gbpo-ai-card">
+              <span className="gbpo-ai-card__icon"><Icon name="lock" size={20} /></span>
+              <strong>Sugerencias con IA</strong>
+              <p>
+                Es parte del plan Business: la IA te propone textos listos para publicar a partir de tu ficha y tu foto.
+              </p>
+              {onNavigateSettings && (
+                <button type="button" className="gb-btn-primary" onClick={() => onNavigateSettings('plan')}>
+                  Ver plan Business
+                </button>
+              )}
+            </div>
+          )}
+
+          {isBusiness && ai.suggestions.length > 0 && (
+            <ul className="gbpo-suggestions" aria-label="Sugerencias">
+              {ai.suggestions.map((text, i) => (
+                <li key={`${i}-${text.slice(0, 20)}`}>
+                  <button type="button" className="gbpo-suggestion" onClick={() => pickSuggestion(text)} disabled={ai.loading}>
+                    <span className="gbpo-suggestion__text">{text}</span>
+                    <span className="gbpo-suggestion__use">Usar este texto <Icon name="arrowRight" size={13} /></span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
 
           <div className="gbpo-or"><span>o</span></div>
 
@@ -543,7 +684,7 @@ export default function GooglePostComposer({
                   maxLength={POST_TEXT_MAX}
                   placeholder="Escribí el texto que van a ver tus clientes…"
                   value={draft.summary}
-                  onChange={(e) => { set({ summary: e.target.value }); rememberCaret(e); }}
+                  onChange={(e) => { set({ summary: e.target.value }); rememberCaret(e); setUndoText(null); }}
                   onSelect={rememberCaret}
                 />
               </label>
@@ -555,22 +696,43 @@ export default function GooglePostComposer({
               <VariablesMenu profile={profile} onInsert={insertVariable} />
 
               <div className="gbpo-tweaks">
-                <span className="gbpo-tweaks__label"><b>IA</b> · Ajustes rápidos <SoonBadge /></span>
+                <span className="gbpo-tweaks__label">
+                  <b>IA</b> · Ajustes rápidos{!isBusiness && <span className="gbpo-tweaks__plan">Business</span>}
+                </span>
                 <div className="gbpo-tweaks__chips">
                   {AI_TWEAKS.map((t) => (
-                    <button key={t} type="button" className="gbpo-tweak" disabled>
-                      {!isBusiness && <Icon name="lock" size={11} />}
-                      {t}
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`gbpo-tweak${tweaking === t.id ? ' gbpo-tweak--busy' : ''}`}
+                      onClick={() => applyTweak(t.id)}
+                      disabled={!isBusiness || !draft.summary.trim() || Boolean(tweaking)}
+                    >
+                      {isBusiness ? <Icon name="sparkles" size={11} /> : <Icon name="lock" size={11} />}
+                      {tweaking === t.id ? 'Retocando…' : t.label}
                     </button>
                   ))}
+                  {undoText !== null && (
+                    <button type="button" className="gbpo-tweak gbpo-tweak--undo" onClick={undoTweak} disabled={Boolean(tweaking)}>
+                      <Icon name="history" size={11} /> Deshacer
+                    </button>
+                  )}
                 </div>
+                {tweakError && <p className="gbm-error" role="alert">{tweakError}</p>}
               </div>
 
               {!isOffer && (
-                <div className="gbp-grid-2">
-                  <label className="gbp-input"><span>Botón de acción <em>opcional</em></span>
-                    <Select value={draft.ctaType} onChange={(v) => set({ ctaType: v })} options={CTA_OPTIONS} />
-                  </label>
+                <div className="gbp-grid-2 gbpo-cta">
+                  {/* div y no label: un <label> alrededor del Select le pasaba los
+                      clics de la etiqueta al disparador y abría el menú. */}
+                  <div className="gbp-input"><span>Botón de acción <em>opcional</em></span>
+                    <Select
+                      value={draft.ctaType}
+                      onChange={(v) => set({ ctaType: v })}
+                      options={CTA_OPTIONS}
+                      triggerClassName="ls-select-field ls-select-field--block gbpo-select"
+                    />
+                  </div>
                   {draft.ctaType && draft.ctaType !== 'CALL' && (
                     <label className="gbp-input"><span>Enlace del botón</span>
                       <input type="url" placeholder="https://" value={draft.ctaUrl} onChange={(e) => set({ ctaUrl: e.target.value })} />

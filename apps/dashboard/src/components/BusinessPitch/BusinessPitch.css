@@ -23,9 +23,9 @@
        para que la ilustración tampoco salte de tamaño entre pasos. */
 .bpitch {
   width: min(980px, 100%);
-  /* 44px de la barra de arriba y 2rem del padding de la capa (GoogleGate.css). */
-  height: min(640px, calc(100vh - 44px - 2rem));
-  height: min(640px, calc(100dvh - 44px - 2rem));
+  /* La barra de arriba (sólo en móvil) y 2rem del padding de la capa (GoogleGate.css). */
+  height: min(640px, calc(100vh - var(--app-topbar-h) - 2rem));
+  height: min(640px, calc(100dvh - var(--app-topbar-h) - 2rem));
   margin: auto;
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);

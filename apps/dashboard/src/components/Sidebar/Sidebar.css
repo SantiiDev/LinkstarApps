@@ -147,9 +147,12 @@
   grid-template-rows: 1fr;
 }
 
+/* El padding de abajo deja lugar a la sombra del subítem activo, que si no la
+   corta el `overflow: hidden` (necesario para la animación de abrir/cerrar). */
 .sidebar__subnav-inner {
   min-height: 0;
   overflow: hidden;
+  padding: 0.15rem 0 0.4rem;
 }
 
 .sidebar__subitem {
@@ -185,10 +188,18 @@
   background: var(--color-light);
 }
 
-.sidebar__subitem--active {
-  color: var(--color-orange);
-  background: rgba(245, 133, 41, 0.08);
+/* El mismo recuadro naranja que los ítems principales (.sidebar__item--active),
+   con la sombra un poco más chica porque el subítem es más bajo. */
+.sidebar__subitem--active,
+.sidebar__subitem--active:hover {
+  color: var(--color-white);
+  background: linear-gradient(135deg, var(--color-orange), var(--color-gold));
+  box-shadow: 0 3px 10px rgba(245, 133, 41, 0.32);
   font-weight: 700;
+}
+
+.sidebar__subitem--active::before {
+  opacity: 0.9;
 }
 
 .sidebar__divider {

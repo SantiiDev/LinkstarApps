@@ -4,7 +4,9 @@ import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 import { assertGoogleConfigured } from '../lib/googleOAuth.js';
 import { accessTokenForOrg } from '../lib/googleAccess.js';
-import { validateBody, googleProfileUpdateSchema, googlePostSchema } from '../lib/validation.js';
+import { validateBody, googleProfileUpdateSchema, googlePostSchema, googlePostAiSchema } from '../lib/validation.js';
+import { isClaudeConfigured } from '../lib/claude.js';
+import { suggestPosts, tweakPost } from '../lib/postWriter.js';
 import {
   formatAddress,
   getAttributes,
@@ -31,6 +33,7 @@ const router = Router();
  *   POST   /api/google/profile/changes/:id/accept      «está bien así»
  *   GET    /api/google/locations/:id/posts             publicaciones (en vivo)
  *   POST   /api/google/locations/:id/posts             publicar (cupo en gratis)
+ *   POST   /api/google/locations/:id/posts/ai          textos con IA (Business, sólo borradores)
  *   DELETE /api/google/locations/:id/posts?name=…      borrar una publicación
  *   GET    /api/google/seo?org=…                       Análisis SEO (lib/seoAudit.js)
  *
@@ -47,6 +50,8 @@ const readLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 120, standardHeade
 // Escribir en la ficha de un cliente consume la cuota de Google del proyecto,
 // que es compartida entre todas las organizaciones.
 const writeLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false });
+// Cada pedido a la IA es una llamada paga a Claude (más una lectura de la ficha).
+const aiLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
 const RPC_ERRORS = {
   ficha_inexistente: [404, 'No encontramos esa ficha. Puede que ya no esté vinculada a una sucursal'],
@@ -297,6 +302,15 @@ router.post('/api/google/profile/changes/:changeId/:action', writeLimiter, requi
 
 const MEDIA_BUCKET = 'google-post-media';
 
+/* La foto tiene que ser nuestra, de la carpeta de esta organización: si no, el
+   endpoint serviría para publicar cualquier imagen de internet en la ficha de un
+   cliente (o, en la IA, para hacerle descargar a Claude cualquier URL). */
+function assertOwnMedia(mediaUrl, organizationId) {
+  if (!mediaUrl) return;
+  const prefix = `${process.env.SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${organizationId}/`;
+  if (!mediaUrl.startsWith(prefix)) throw badRequest('La foto tiene que subirse desde el panel');
+}
+
 function toGoogleDate(iso) {
   const [year, month, day] = iso.split('-').map(Number);
   return { year, month, day };
@@ -369,14 +383,7 @@ router.post(
       assertGoogleConfigured();
       requireUuid(req.params.id, 'Ficha');
       const target = await writeTarget(req.user.id, req.params.id);
-
-      // La foto tiene que ser nuestra, de la carpeta de esta organización: si no,
-      // el endpoint serviría para publicar cualquier imagen de internet en la
-      // ficha de un cliente.
-      if (req.body.mediaUrl) {
-        const prefix = `${process.env.SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${target.organization_id}/`;
-        if (!req.body.mediaUrl.startsWith(prefix)) throw badRequest('La foto tiene que subirse desde el panel');
-      }
+      assertOwnMedia(req.body.mediaUrl, target.organization_id);
 
       const { data: reserved, error: reserveError } = await supabase.rpc('google_post_reserve', {
         p_user: req.user.id,
@@ -407,6 +414,46 @@ router.post(
         });
       }
       sendError(res, err, 'Google no aceptó la publicación', 'Error publicando en Google');
+    }
+  }
+);
+
+/* IA de Publicaciones (lib/postWriter.js): `suggest` propone textos, `tweak`
+   retoca el que ya está escrito. Business, y la misma regla que publicar
+   (google_location_write_target con p_require_business). Sólo devuelve
+   borradores: a Google se le lee la ficha, nunca se le escribe. */
+router.post(
+  '/api/google/locations/:id/posts/ai',
+  aiLimiter,
+  requireAuth(supabase),
+  validateBody(googlePostAiSchema),
+  async (req, res) => {
+    try {
+      if (!isClaudeConfigured()) {
+        return res.status(503).json({ error: 'La IA no está disponible en este momento' });
+      }
+      assertGoogleConfigured();
+      requireUuid(req.params.id, 'Ficha');
+      const target = await writeTarget(req.user.id, req.params.id, true);
+      assertOwnMedia(req.body.mediaUrl, target.organization_id);
+
+      const accessToken = await accessTokenForOrg(target.organization_id);
+      const ficha = await getLocationProfile(accessToken, target.google_location);
+
+      // Lo que falle del lado de Claude (cuota, una negativa, un JSON cortado) se
+      // loguea entero y al panel le llega el texto genérico de sendError.
+      const { mode, hint, instructions, text, tweak, mediaUrl: imageUrl, ...post } = req.body;
+      try {
+        if (mode === 'suggest') {
+          const suggestions = await suggestPosts({ ficha, post, hint, instructions, imageUrl });
+          return res.json({ suggestions });
+        }
+        return res.json({ text: await tweakPost({ ficha, post, text, tweak, instructions, imageUrl }) });
+      } catch (err) {
+        throw new Error(`Claude no pudo escribir la publicación: ${err.message}`, { cause: err });
+      }
+    } catch (err) {
+      sendError(res, err, 'No pudimos escribir el texto con IA', 'Error en la IA de publicaciones');
     }
   }
 );

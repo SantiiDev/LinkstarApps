@@ -74,8 +74,14 @@ export const PROFILE_VARIABLES = [
   { id: 'website', label: 'Página web', valueOf: (p) => p.websiteUri },
 ];
 
-/* «IA · Ajustes rápidos»: sólo los botones, Próximamente (la IA la arma el
-   mismo trabajo que las respuestas de Reseñas). */
-export const AI_TWEAKS = ['Más cercano', 'Más formal', 'Usar emojis'];
+/* «IA · Ajustes rápidos» de Revisar (Business): retocan el texto escrito con
+   POST …/posts/ai. Los ids son la lista cerrada que acepta el API
+   (POST_AI_TWEAKS en services/api/lib/validation.js); se cambian juntos. */
+export const AI_TWEAKS = [
+  { id: 'closer', label: 'Más cercano' },
+  { id: 'formal', label: 'Más formal' },
+  { id: 'emojis', label: 'Usar emojis' },
+  { id: 'shorter', label: 'Más corto' },
+];
 
 export const POST_TEXT_MAX = 1500;

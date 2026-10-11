@@ -532,6 +532,36 @@ export async function createGooglePost(googleLocationId, post) {
   );
 }
 
+/* IA de Publicaciones (Business): POST …/posts/ai. Devuelven borradores, nunca
+   publican. `context` es { topicType, event?, offer?, mediaUrl? }: lo que se
+   cargó en el compositor (ver postAiContext en GooglePostComposer). `hint` es de
+   qué se trata; `instructions`, cómo escribirlo (tono, largo, qué destacar). */
+export async function suggestPostTexts(googleLocationId, context, { hint, instructions } = {}) {
+  const body = await apiFetch(
+    `/api/google/locations/${encodeURIComponent(googleLocationId)}/posts/ai`,
+    {
+      method: 'POST',
+      headers: await authHeaders(),
+      body: JSON.stringify({ ...context, mode: 'suggest', hint: hint || undefined, instructions: instructions || undefined }),
+    },
+    'No pudimos escribir las sugerencias'
+  );
+  return body.suggestions ?? [];
+}
+
+export async function tweakPostText(googleLocationId, context, text, tweak, instructions) {
+  const body = await apiFetch(
+    `/api/google/locations/${encodeURIComponent(googleLocationId)}/posts/ai`,
+    {
+      method: 'POST',
+      headers: await authHeaders(),
+      body: JSON.stringify({ ...context, mode: 'tweak', text, tweak, instructions: instructions || undefined }),
+    },
+    'No pudimos retocar el texto'
+  );
+  return body.text;
+}
+
 export async function deleteGooglePost(googleLocationId, postName) {
   const params = new URLSearchParams({ name: postName });
   return apiFetch(
