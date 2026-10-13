@@ -102,6 +102,7 @@ const LIST_TITLES = {
   all: 'Todas las reseñas',
   answered: 'Reseñas respondidas',
   pending: 'Reseñas no respondidas',
+  auto: 'Respondidas automáticamente',
 };
 
 /* «Anterior / Siguiente» y «Mostrando 16–30 de 146 reseñas». */
@@ -210,9 +211,21 @@ function AiUpsell() {
   );
 }
 
+/* De dónde salió la respuesta publicada (0037). Sin dato (respondida en Google,
+ * o antes de la 0037) no se dice nada. */
+const REPLY_SOURCE_LABELS = {
+  auto: 'Respondida automáticamente',
+  ai_assisted: 'Escrita con IA',
+};
+
+/* `onGenerate` pide un borrador a la IA (Business); sin él (la maqueta) el
+ * botón queda deshabilitado. `aiDraft` dice si lo que está en el cuadro salió
+ * de la IA: el botón pasa a «Generar otra». `onOpenTone` sólo llega a quien
+ * puede guardar tonos (owner/admin en Business). */
 export function ReviewDetail({
-  review, sentiment: sentimentProp = null, showBranch, canReply, isBusiness,
+  review, sentiment: sentimentProp = null, replySource = null, showBranch, canReply, isBusiness,
   draft, onDraft, editing, onEdit, onCancelEdit, onPublish, publishing, replyError,
+  onGenerate, generating = false, aiDraft = false,
   onOpenTone, onShare, onBack,
 }) {
   const navigate = useNavigate();
@@ -251,7 +264,7 @@ export function ReviewDetail({
             )}
           </span>
         </div>
-        {canReply && (
+        {onOpenTone && (
           <button type="button" className="reviews-btn reviews-btn--primary reviews-detail__tone" onClick={onOpenTone}>
             <Icon name="palette" size={15} /> Crear tono de marca
           </button>
@@ -275,17 +288,49 @@ export function ReviewDetail({
 
       {review.reply_comment && !editing && (
         <div className="reviews-detail__reply">
-          <span className="reviews-detail__label">Tu respuesta</span>
+          <span className="reviews-detail__label">
+            Tu respuesta
+            {REPLY_SOURCE_LABELS[replySource] && (
+              <span className={`reviews-reply-source reviews-reply-source--${replySource}`}>
+                <Icon name="sparkles" size={11} /> {REPLY_SOURCE_LABELS[replySource]}
+              </span>
+            )}
+          </span>
           <p>{review.reply_comment}</p>
           {canReply && (
-            <button type="button" className="reviews-detail__edit" onClick={onEdit}>Editar respuesta</button>
+            <div className="reviews-detail__reply-actions">
+              <button type="button" className="reviews-btn reviews-btn--ghost reviews-btn--sm" onClick={onEdit}>
+                <Icon name="pen" size={13} /> Editar respuesta
+              </button>
+            </div>
           )}
         </div>
       )}
 
       {showReplyBox && (
         <div className="reviews-detail__compose">
-          <label className="reviews-detail__label" htmlFor="review-reply">Respuesta</label>
+          {/* Editando una respuesta ya publicada: se dice, y «Cancelar» queda a
+              mano arriba del cuadro (vuelve a la publicada sin tocar Google). */}
+          <div className="reviews-detail__compose-head">
+            <label className="reviews-detail__label" htmlFor="review-reply">
+              {editing ? 'Editando tu respuesta' : 'Respuesta'}
+            </label>
+            {editing && (
+              <button
+                type="button"
+                className="reviews-btn reviews-btn--ghost reviews-btn--sm"
+                onClick={onCancelEdit}
+                disabled={publishing || generating}
+              >
+                <Icon name="close" size={13} strokeWidth={2.5} /> Cancelar
+              </button>
+            )}
+          </div>
+          {editing && (
+            <p className="reviews-detail__editing-hint">
+              Al publicar, reemplaza la respuesta que hoy se ve en Google.
+            </p>
+          )}
           <textarea
             id="review-reply"
             value={draft}
@@ -297,12 +342,18 @@ export function ReviewDetail({
           {replyError && <p className="reviews-error" role="alert">{replyError}</p>}
 
           <div className="reviews-detail__actions">
-            {/* La IA la conecta el backend de la fase 5; hasta entonces el botón
-                se ve, pero no hace nada en Business y lleva a Configuración → Plan en
-                gratis. */}
+            {/* Business: un borrador de la IA con el tono de marca, que la
+                persona revisa antes de publicar (POST …/reply/ai). Gratis: lleva
+                a Configuración → Plan. */}
             {isBusiness ? (
-              <button type="button" className="reviews-btn reviews-btn--ai" disabled title="Próximamente">
-                <Icon name="sparkles" size={15} /> Generar respuesta con IA <span className="reviews-soon">Próximamente</span>
+              <button
+                type="button"
+                className="reviews-btn reviews-btn--ai"
+                onClick={onGenerate}
+                disabled={!onGenerate || generating || publishing}
+              >
+                <Icon name="sparkles" size={15} />
+                {generating ? 'Escribiendo…' : aiDraft ? 'Generar otra' : 'Generar respuesta con IA'}
               </button>
             ) : (
               <button type="button" className="reviews-btn reviews-btn--ai reviews-btn--locked" onClick={() => navigate(settingsTabPath('plan'))}>
@@ -313,17 +364,12 @@ export function ReviewDetail({
               type="button"
               className="reviews-btn reviews-btn--send"
               onClick={onPublish}
-              disabled={!draft.trim() || publishing}
+              disabled={!draft.trim() || publishing || generating}
             >
-              <Icon name="send" size={14} /> {publishing ? 'Publicando…' : 'Publicar en Google'}
+              <Icon name="send" size={14} />
+              {publishing ? 'Publicando…' : editing ? 'Actualizar en Google' : 'Publicar en Google'}
             </button>
           </div>
-
-          {editing && (
-            <button type="button" className="reviews-detail__edit" onClick={onCancelEdit} disabled={publishing}>
-              Cancelar edición
-            </button>
-          )}
 
           {!isBusiness && <AiUpsell />}
         </div>

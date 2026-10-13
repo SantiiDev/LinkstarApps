@@ -1,47 +1,43 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon/Icon';
-import Select from '../../components/Select/Select';
 import Switch from '../../components/Switch/Switch';
+import { useOrg } from '../../context/OrgContext';
+import { fetchLocationRows } from '../../lib/catalogApi';
+import {
+  EMPTY_TONE,
+  fetchReplyTones,
+  replySettingsErrorMessage,
+  saveReplyTone,
+  TONE_INSTRUCTIONS_MAX,
+  TONE_KINDS,
+  TONE_MAX_CUSTOM_EMOJIS,
+  TONE_SIGNATURE_MAX,
+} from '../../lib/replySettingsApi';
 import { settingsTabPath } from '../../lib/routes';
 import '../../components/FormModal/FormModal.css';
 import './BrandToneModal.css';
 
 /*
- * Tono de marca: cómo tiene que escribir la IA las respuestas a las reseñas.
+ * Tono de marca: cómo escribe la IA las respuestas a las reseñas (0037), con la
+ * estructura del modal de Tapstar.
  *
- * SÓLO FRONTEND por ahora. Las respuestas con IA son el resto de la fase 5 y
- * las está haciendo otra persona; todavía no hay tabla donde guardar esto, así
- * que el formulario funciona entero en pantalla y «Guardar tono» queda
- * deshabilitado. Cuando exista el backend, lo que se guarda es exactamente
- * DEFAULT_BRAND_TONE con lo que se cargó:
+ *   1. Para qué reseñas: Positivas (4–5★) o Críticas (1–3★). Si no hay tono
+ *      crítico, la IA usa el positivo.
+ *   2. A qué locales: «Todos los locales» (por defecto) o una lista. El tono de
+ *      un local tiene prioridad sobre el de todos. Un local que ya tiene un tono
+ *      del mismo tipo aparece deshabilitado: la base no deja dos.
+ *   3. La consigna libre, la firma (se agrega al final de cada respuesta) y los
+ *      emojis.
  *
- *   {
- *     location_id:  uuid | null,     null = el tono global; uno por local pisa al global
- *     instructions: string (≤ 500),  la consigna libre («agradecé siempre y…»)
- *     signature:    string,          se agrega al final de cada respuesta generada
- *     emojis: {
- *       enabled: boolean,
- *       mode:    'auto' | 'custom',  auto = la IA elige; custom = sólo los de `custom`
- *       amount:  'moderate' | 'few', moderate = 2–4, few = 1–2 (sólo en auto)
- *       custom:  string[],           los emojis elegidos (sólo en custom)
- *     },
- *   }
+ * Guarda con save_review_reply_tone (lib/replySettingsApi.js). Lo usa la IA
+ * tanto en el borrador de Reseñas como en la respuesta automática.
  *
  * Se abre desde el detalle de una reseña («Crear tono de marca») y desde
- * Configuración → Gestión local → Tonos de marca («+ Añadir tono»); en el
- * segundo caso recibe `locationOptions` y deja elegir a qué local aplica.
+ * Configuración → Gestión local → Tonos de marca («+ Añadir tono» y «Editar»).
+ * Sólo lo abre quien puede guardarlo: owner/admin en Business.
  */
-
-const BRAND_TONE_MAX = 500;
-const MAX_CUSTOM_EMOJIS = 10;
-
-const DEFAULT_BRAND_TONE = {
-  location_id: null,
-  instructions: '',
-  signature: '',
-  emojis: { enabled: false, mode: 'auto', amount: 'moderate', custom: [] },
-};
 
 /* Los emojis de lo que se escribió, o null si hay algo que no es un emoji
  * (letras, números, signos). Se separa por grafema y no por carácter: un emoji
@@ -57,11 +53,21 @@ function emojisIn(value) {
   return parts;
 }
 
+/* Lo primero libre de un tipo: «Todos los locales» si nadie lo tiene, si no el
+ * primer local sin tono de ese tipo. null si el tipo ya está cubierto entero. */
+function firstFreeScope(kind, tones, locations) {
+  const sameKind = tones.filter((t) => t.kind === kind);
+  if (!sameKind.some((t) => t.applies_to_all)) return { kind, applies_to_all: true, location_ids: [] };
+  const taken = new Set(sameKind.flatMap((t) => t.location_ids));
+  const free = locations.find((l) => !taken.has(l.value));
+  return free ? { kind, applies_to_all: false, location_ids: [free.value] } : null;
+}
+
 /* Dos botones excluyentes, como los de Tapstar. */
-function SegmentedChoice({ label, value, options, onChange }) {
+function SegmentedChoice({ label, value, options, onChange, large = false }) {
   return (
     <div className="tone-choice">
-      <span className="tone-choice__label">{label}</span>
+      {label && <span className="tone-choice__label">{label}</span>}
       <div className="tone-choice__options" role="radiogroup" aria-label={label}>
         {options.map((opt) => (
           <button
@@ -69,7 +75,7 @@ function SegmentedChoice({ label, value, options, onChange }) {
             type="button"
             role="radio"
             aria-checked={value === opt.value}
-            className={`tone-choice__btn${value === opt.value ? ' tone-choice__btn--active' : ''}`}
+            className={`tone-choice__btn${large ? ' tone-choice__btn--large' : ''}${value === opt.value ? ' tone-choice__btn--active' : ''}`}
             onClick={() => onChange(opt.value)}
           >
             {opt.label}
@@ -80,35 +86,141 @@ function SegmentedChoice({ label, value, options, onChange }) {
   );
 }
 
-export default function BrandToneModal({ onClose, locationOptions = null }) {
+/* Una fila con checkbox real (como la lista de locales de Tapstar). */
+function CheckRow({ checked, disabled, onChange, label, aside, highlighted = false }) {
+  return (
+    <label className={`tone-check${checked ? ' tone-check--on' : ''}${highlighted ? ' tone-check--all' : ''}${disabled ? ' tone-check--disabled' : ''}`}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <span className="tone-check__box" aria-hidden="true">{checked && <Icon name="check" size={12} strokeWidth={3} />}</span>
+      <span className="tone-check__label">{label}</span>
+      {aside && <span className="tone-check__aside">{aside}</span>}
+    </label>
+  );
+}
+
+export default function BrandToneModal({ onClose, onSaved, tone: initialTone = null, fromSettings = false }) {
   const navigate = useNavigate();
-  const [tone, setTone] = useState(DEFAULT_BRAND_TONE);
+  const { org } = useOrg();
+  const orgId = org?.organization_id;
+  const editing = Boolean(initialTone?.id);
+  const initialId = initialTone?.id ?? null;
+  const isNew = !initialTone;
+
+  const [tone, setTone] = useState(() => ({ ...EMPTY_TONE, ...initialTone, emojis: { ...EMPTY_TONE.emojis, ...initialTone?.emojis } }));
   const [emojiDraft, setEmojiDraft] = useState('');
+  const [locations, setLocations] = useState(null);
+  const [others, setOthers] = useState([]);   // los demás tonos, para saber qué está tomado
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
   const { emojis } = tone;
+
+  useEffect(() => {
+    if (!orgId) return undefined;
+    let cancelled = false;
+    Promise.all([fetchLocationRows(orgId), fetchReplyTones(orgId)])
+      .then(([rows, tones]) => {
+        if (cancelled) return;
+        const options = rows.map((l) => ({ value: l.id, label: l.name }));
+        const rest = tones.filter((t) => t.id !== initialId);
+        setLocations(options);
+        setOthers(rest);
+        // Un tono nuevo arranca en lo primero libre: positivas antes que
+        // críticas, y «Todos los locales» antes que un local. Si todo está
+        // cubierto queda como está y el aviso de abajo lo explica.
+        if (isNew) {
+          const scope = firstFreeScope('positive', rest, options) ?? firstFreeScope('critical', rest, options);
+          if (scope) setTone((prev) => ({ ...prev, ...scope }));
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('No se pudieron cargar los locales o los tonos:', err);
+        setLocations([]);
+        setError('No pudimos cargar tus locales. Cerrá y volvé a intentar.');
+      });
+    return () => { cancelled = true; };
+  }, [orgId, initialId, isNew]);
 
   const set = (patch) => setTone((prev) => ({ ...prev, ...patch }));
   const setEmojis = (patch) => setTone((prev) => ({ ...prev, emojis: { ...prev.emojis, ...patch } }));
 
+  // Lo que ya está tomado por otro tono del MISMO tipo.
+  const sameKind = others.filter((t) => t.kind === tone.kind);
+  const allTaken = sameKind.some((t) => t.applies_to_all);
+  const takenLocations = new Set(sameKind.flatMap((t) => (t.applies_to_all ? [] : t.location_ids)));
+
+  /* Al cambiar de tipo, si lo elegido ya está tomado en el otro tipo, se pasa a
+     lo primero libre de ése (si hay). */
+  function changeKind(kind) {
+    setTone((prev) => {
+      const sameKind = others.filter((t) => t.kind === kind);
+      const takenAll = sameKind.some((t) => t.applies_to_all);
+      const taken = new Set(sameKind.flatMap((t) => t.location_ids));
+      const clash = prev.applies_to_all ? takenAll : prev.location_ids.some((id) => taken.has(id));
+      const scope = clash || (!prev.applies_to_all && !prev.location_ids.length)
+        ? firstFreeScope(kind, others, locations ?? [])
+        : null;
+      return { ...prev, kind, ...(scope ?? {}) };
+    });
+  }
+
+  function toggleAll(checked) {
+    if (checked) set({ applies_to_all: true, location_ids: [] });
+    else set({ applies_to_all: false });
+  }
+
+  function toggleLocation(id, checked) {
+    setTone((prev) => {
+      const next = new Set(prev.location_ids);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return { ...prev, applies_to_all: false, location_ids: [...next] };
+    });
+  }
+
   const draftEmojis = emojisIn(emojiDraft);
   const draftInvalid = emojiDraft.trim() !== '' && !draftEmojis;
-  const isFull = emojis.custom.length >= MAX_CUSTOM_EMOJIS;
+  const isFull = emojis.custom.length >= TONE_MAX_CUSTOM_EMOJIS;
 
   function addEmoji() {
     if (!draftEmojis || isFull) return;
-    const next = [...new Set([...emojis.custom, ...draftEmojis])].slice(0, MAX_CUSTOM_EMOJIS);
+    const next = [...new Set([...emojis.custom, ...draftEmojis])].slice(0, TONE_MAX_CUSTOM_EMOJIS);
     setEmojis({ custom: next });
     setEmojiDraft('');
   }
 
-  // Desde Configuración el aviso de «tonos por local» sobra: ya está ahí.
-  const fromSettings = Boolean(locationOptions);
+  // Lo que todavía choca con otro tono (al cambiar de tipo, por ejemplo).
+  const conflict = tone.applies_to_all
+    ? allTaken
+    : tone.location_ids.some((id) => takenLocations.has(id));
+  const noScope = !tone.applies_to_all && tone.location_ids.length === 0;
+  // Tono nuevo y no queda nada libre en ninguno de los dos tipos.
+  const allCovered = !editing && locations !== null
+    && !firstFreeScope('positive', others, locations) && !firstFreeScope('critical', others, locations);
+  const canSave = !saving && locations !== null && !conflict && !noScope;
 
-  return (
+  async function save() {
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await saveReplyTone(orgId, tone);
+      onSaved?.();
+    } catch (err) {
+      console.error('No se pudo guardar el tono:', err);
+      setError(replySettingsErrorMessage(err));
+      setSaving(false);
+    }
+  }
+
+  // Portal: desde Configuración el modal se abre dentro de una tarjeta de vidrio
+  // (contexto de apilamiento propio), y sin portal quedaría debajo de las demás.
+  return createPortal(
     <div className="fmodal-overlay tone-modal-overlay" onClick={onClose}>
-      <div className="fmodal tone-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Crear tono">
+      <div className="fmodal tone-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={editing ? 'Editar tono' : 'Crear tono'}>
         <div className="fmodal__header">
           <div>
-            <h3 className="fmodal__title">Crear tono</h3>
+            <h3 className="fmodal__title">{editing ? 'Editar tono' : 'Crear tono'}</h3>
             <p className="tone-modal__subtitle">Definí cómo la IA se comunica en tus respuestas.</p>
           </div>
           <button className="fmodal__close" onClick={onClose} aria-label="Cerrar" type="button">
@@ -117,30 +229,70 @@ export default function BrandToneModal({ onClose, locationOptions = null }) {
         </div>
 
         <div className="fmodal__body">
-          {fromSettings && (
-            <label className="fmodal__field">
-              <span className="fmodal__label">Aplica a</span>
-              <Select
-                value={tone.location_id ?? 'all'}
-                onChange={(v) => set({ location_id: v === 'all' ? null : v })}
-                options={[{ value: 'all', label: 'Todos los locales' }, ...locationOptions]}
-                triggerClassName="ls-select-field ls-select-field--block"
-              />
-            </label>
-          )}
+          <div className="tone-section">
+            <span className="tone-section__title"><Icon name="star" size={15} /> ¿Para qué reseñas es este tono?</span>
+            <SegmentedChoice
+              large
+              value={tone.kind}
+              onChange={changeKind}
+              options={TONE_KINDS}
+            />
+            <span className="tone-section__hint">
+              Podés tener dos tonos por ámbito: uno para agradecer y otro para responder a quien no quedó contento.
+              Si no creás el de reseñas críticas, se usa el positivo.
+            </span>
+          </div>
+
+          <div className="tone-section">
+            <span className="tone-section__title"><Icon name="pin" size={15} /> ¿A qué locales se aplica este tono?</span>
+            {locations === null ? (
+              <span className="tone-section__hint">Cargando locales…</span>
+            ) : (
+              <>
+                <CheckRow
+                  highlighted
+                  checked={tone.applies_to_all}
+                  disabled={allTaken && !tone.applies_to_all}
+                  onChange={toggleAll}
+                  label="Todos los locales"
+                  aside={allTaken ? 'ya hay uno de este tipo' : 'por defecto'}
+                />
+                {locations.length > 0 && (
+                  <>
+                    <span className="tone-section__hint">o elegí locales concretos:</span>
+                    <div className="tone-check-list">
+                      {locations.map((loc) => {
+                        const taken = takenLocations.has(loc.value);
+                        const checked = !tone.applies_to_all && tone.location_ids.includes(loc.value);
+                        return (
+                          <CheckRow
+                            key={loc.value}
+                            checked={checked}
+                            disabled={taken && !checked}
+                            onChange={(on) => toggleLocation(loc.value, on)}
+                            label={loc.label}
+                            aside={taken ? 'ya tiene tono' : null}
+                          />
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
 
           <label className="fmodal__field">
             <span className="fmodal__label">Describí cómo querés que responda nuestro sistema</span>
             <textarea
               className="tone-modal__textarea"
               value={tone.instructions}
-              onChange={(e) => set({ instructions: e.target.value.slice(0, BRAND_TONE_MAX) })}
+              onChange={(e) => set({ instructions: e.target.value.slice(0, TONE_INSTRUCTIONS_MAX) })}
               placeholder="Quiero que el sistema agradezca siempre al cliente por la reseña y lo invite a volver"
               rows={4}
-              maxLength={BRAND_TONE_MAX}
-              autoFocus
+              maxLength={TONE_INSTRUCTIONS_MAX}
             />
-            <span className="tone-modal__counter">{tone.instructions.length} / {BRAND_TONE_MAX}</span>
+            <span className="tone-modal__counter">{tone.instructions.length} / {TONE_INSTRUCTIONS_MAX}</span>
           </label>
 
           <div className="tone-modal__signature">
@@ -153,7 +305,7 @@ export default function BrandToneModal({ onClose, locationOptions = null }) {
               value={tone.signature}
               onChange={(e) => set({ signature: e.target.value })}
               placeholder='Ej: "— Equipo Linkstar" / "Saludos cordiales" / "Atentamente,"'
-              maxLength={120}
+              maxLength={TONE_SIGNATURE_MAX}
             />
           </div>
 
@@ -207,7 +359,7 @@ export default function BrandToneModal({ onClose, locationOptions = null }) {
                       <span className="tone-modal__emoji-error" role="alert">Sólo se aceptan emojis, sin letras, números ni signos.</span>
                     )}
                     {isFull && (
-                      <span className="tone-choice__label">Llegaste al máximo de {MAX_CUSTOM_EMOJIS} emojis.</span>
+                      <span className="tone-choice__label">Llegaste al máximo de {TONE_MAX_CUSTOM_EMOJIS} emojis.</span>
                     )}
                     {emojis.custom.length > 0 && (
                       <ul className="tone-modal__chips">
@@ -231,9 +383,16 @@ export default function BrandToneModal({ onClose, locationOptions = null }) {
             )}
           </div>
 
-          <p className="tone-modal__soon">
-            <Icon name="info" size={14} /> Guardar el tono llega junto con las respuestas con IA. Por ahora podés ver cómo va a funcionar.
-          </p>
+          {conflict && (
+            <p className="fmodal__warn">
+              {allCovered
+                ? 'Ya tenés tonos positivos y críticos para todos tus locales. Para cambiar uno, editalo desde Configuración → Gestión local.'
+                : tone.applies_to_all
+                ? 'Ya hay un tono de este tipo para todos los locales. Editá ese, o elegí locales concretos.'
+                : 'Alguno de los locales elegidos ya tiene un tono de este tipo.'}
+            </p>
+          )}
+          {error && <p className="fmodal__error" role="alert">{error}</p>}
 
           {!fromSettings && (
             <button
@@ -241,18 +400,19 @@ export default function BrandToneModal({ onClose, locationOptions = null }) {
               className="tone-modal__settings-link"
               onClick={() => { onClose(); navigate(settingsTabPath('local')); }}
             >
-              <Icon name="pin" size={14} /> ¿Tonos distintos por local? Gestionalos en Configuración <Icon name="externalLink" size={13} />
+              <Icon name="pin" size={14} /> Ver todos tus tonos en Configuración <Icon name="externalLink" size={13} />
             </button>
           )}
         </div>
 
         <div className="fmodal__footer tone-modal__footer">
           <button type="button" className="fmodal__btn fmodal__btn--ghost" onClick={onClose}>Cancelar</button>
-          <button type="button" className="fmodal__btn fmodal__btn--primary" disabled title="Próximamente">
-            Guardar tono
+          <button type="button" className="fmodal__btn fmodal__btn--primary" onClick={save} disabled={!canSave}>
+            {saving ? 'Guardando…' : 'Guardar tono'}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

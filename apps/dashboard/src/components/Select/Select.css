@@ -188,6 +188,12 @@
   vertical-align: middle;
 }
 
+.ls-select__check {
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  color: var(--color-forest);
+}
+
 .ls-select__option--disabled:has(.ls-select__soon) {
   opacity: 1;
   color: var(--color-text-secondary);

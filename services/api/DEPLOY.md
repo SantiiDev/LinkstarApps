@@ -4,12 +4,13 @@
 también en **`https://l.linkstarapp.com`**, que es el dominio grabado en los NFC e impreso en los QR
 (`/d/<public_id>`). El código no mira el host: los dos dominios apuntan al mismo contenedor.
 
-Son **dos servicios** de Railway construidos con la misma imagen:
+Son **tres servicios** de Railway construidos con la misma imagen:
 
 | Servicio | Qué corre | Cuándo |
 |---|---|---|
 | `api` | `node server.js` (el `CMD` del Dockerfile) | Siempre encendido |
 | `daily` | `npm run daily` → `rebuild-rollups` + `sync-google` + `send-alerts` (`scripts/daily.js`) | Cron, una vez por día |
+| `hourly` | `npm run hourly` → `sync-google --only-reviews` + `send-alerts` de reseñas (`scripts/hourly.js`) | Cron, cada hora |
 
 Lo que ya está en el repo: `services/api/Dockerfile`, `.dockerignore` en la raíz y
 `scripts/daily.js`. **No hay `railway.json` a propósito:** Railway deprecó «Config as Code» (los
@@ -82,6 +83,9 @@ En **Variables**, con **Raw Editor** podés pegar todo junto. **`PORT` no se def
 | `RESEND_API_KEY` | De resend.com → API Keys (paso 7). Si todavía no está, dejala vacía: los mails se simulan en el log |
 | `RESEND_FROM` | `Linkstar <avisos@linkstarapp.com>` cuando el dominio esté verificado en Resend |
 | `SALES_NOTIFY_EMAIL` | `linkstar.app1@gmail.com`: a dónde llegan los avisos de pedidos y consultas. Obligatoria: salen por Resend, y sin ella no tienen destinatario |
+| `ANTHROPIC_API_KEY` | De console.anthropic.com. Sin ella no hay análisis de reseñas, ni borradores con IA, ni respuesta automática (la cola espera) |
+| `ANTHROPIC_MODEL` | Opcional; por defecto `claude-haiku-5-5` |
+| `REPLY_ALLOWED_LOCATIONS` | **Vacía en producción.** Es un seguro del proyecto de pruebas (ver `.env.example`) |
 
 Generá la clave de cifrado con:
 
@@ -127,23 +131,35 @@ El certificado lo emite Railway solo, en unos minutos.
    - **Custom Start Command:** `npm run daily`.
    - **Cron Schedule:** `0 11 * * *`, todos los días a las 11:00 UTC (08:00 en Argentina).
 3. **Variables:** agregá `RAILWAY_DOCKERFILE_PATH=services/api/Dockerfile` y las que usan los jobs:
-   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, las cuatro `GOOGLE_*`, `RESEND_API_KEY`, `RESEND_FROM`
-   y `DASHBOARD_URL`. Para no copiarlas dos veces: **Project Settings → Shared Variables**, y en cada
-   servicio «Add shared variable». O referencialas desde el servicio `api` con `${{api.SUPABASE_URL}}`.
+   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, las cuatro `GOOGLE_*`, `RESEND_API_KEY`, `RESEND_FROM`,
+   `DASHBOARD_URL` y **`ANTHROPIC_API_KEY`** (el análisis de reseñas y las respuestas automáticas
+   corren dentro de `sync-google`: sin la clave, el daily los saltea). Para no copiarlas dos veces:
+   **Project Settings → Shared Variables**, y en cada servicio «Add shared variable». O referencialas
+   desde el servicio `api` con `${{api.SUPABASE_URL}}`.
 4. Para probarlo sin esperar al día siguiente: en el servicio `daily`, **Deployments → Run now** (o
    el botón de ejecutar el cron). El log tiene que terminar en `✓ Job diario completo.`.
 
-El job corre siempre los dos pasos: si Google falla, las alertas por escaneos salen igual, y la
+El job corre siempre los tres pasos: si Google falla, las alertas por escaneos salen igual, y la
 corrida queda marcada en rojo para que se vea.
 
-> **Posible más adelante: alertas de reseñas más rápidas.** Las alertas de valoración baja y de
-> palabras clave (migración 0036) salen del mismo `daily`, así que una reseña de 1★ puede avisarse
-> hasta un día después. Para acortarlo alcanza con un tercer servicio, `hourly`, igual que `daily`
-> pero con **Custom Start Command** `node scripts/sync-google.js && node scripts/send-alerts.js` y
-> **Cron Schedule** `0 * * * *`. Gasta poca cuota de Google (las reseñas se leen sólo desde la última
-> que ya está guardada) y casi nada de Railway. No hace falta tocar código ni la base: la lógica de qué
-> avisar y el registro anti-repetidos ya están en SQL. Después, cambiar en Automatizaciones el texto
-> que dice que se revisa una vez por día.
+## 4b. El servicio `hourly` (cron)
+
+Lo que hace que la respuesta automática «Inmediata» y las alertas de reseñas (0036) tarden menos de
+una hora y no hasta un día. Lee **sólo reseñas** (sin métricas ni protección de la ficha, que siguen
+en el daily), responde lo que manden las reglas automáticas (0037) y manda sólo las dos alertas de
+reseñas: el resumen semanal se queda en el daily, porque corriendo cada hora saldría cada 6 días.
+
+1. Igual que `daily` (paso 4): **New → GitHub Repo →** el mismo repo, nombre `hourly`, Root Directory
+   y Railway Config File vacíos, sin healthcheck.
+2. **Custom Start Command:** `npm run hourly`. **Cron Schedule:** `0 * * * *`.
+3. **Variables:** las mismas que `daily`, por referencia a `api` (`${{api.ANTHROPIC_API_KEY}}`…).
+4. Probarlo con **Run now**: el log termina en `✓ Job horario completo.`.
+
+Costo: corre unos segundos por hora, así que en Railway son centavos por mes. Cuota de Google: unos
+pocos pedidos por ficha y por hora (las reseñas se leen sólo desde la última guardada). Con ~100
+clientes conviene pedirle a Google más cuota por minuto, que es un trámite gratis. Pueden coincidir
+con el daily o con un «Actualizar ahora»: no responde dos veces, porque el candado de la cola está en
+la base (0037).
 
 ## 5. Verificar
 

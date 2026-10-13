@@ -387,6 +387,28 @@
   color: var(--color-navy);
 }
 
+/* De dónde salió la respuesta publicada (0037), al lado de «Tu respuesta». */
+.reviews-reply-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: var(--radius-badge);
+  font-size: 0.66rem;
+  font-weight: 700;
+  vertical-align: middle;
+  background: rgba(245, 133, 41, 0.1);
+  border: 1px solid rgba(245, 133, 41, 0.3);
+  color: var(--color-orange);
+}
+
+.reviews-reply-source--ai_assisted {
+  background: rgba(27, 42, 74, 0.06);
+  border-color: rgba(27, 42, 74, 0.18);
+  color: var(--color-navy);
+}
+
 .reviews-detail__reply p {
   margin: 0;
   padding: 0.8rem 1rem;
@@ -399,21 +421,41 @@
   white-space: pre-wrap;
 }
 
-.reviews-detail__edit {
-  margin-top: 0.5rem;
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-}
-
-.reviews-detail__edit:hover {
-  color: var(--color-orange);
+/* «Editar respuesta», a la derecha debajo de la respuesta publicada. */
+.reviews-detail__reply-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.6rem;
 }
 
 .reviews-detail__compose {
   display: flex;
   flex-direction: column;
+}
+
+/* «Respuesta» / «Editando tu respuesta» y, al editar, «Cancelar» a la derecha. */
+.reviews-detail__compose-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.reviews-detail__compose-head .reviews-detail__label {
+  margin-bottom: 0;
+}
+
+.reviews-detail__editing-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+
+.reviews-btn--sm {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.74rem;
+  gap: 0.35rem;
 }
 
 .reviews-detail__compose textarea {
@@ -522,16 +564,6 @@
   min-width: 0;
   white-space: normal;
   text-align: center;
-}
-
-.reviews-soon {
-  padding: 0.05rem 0.4rem;
-  border-radius: var(--radius-badge);
-  background: rgba(255, 255, 255, 0.3);
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
 }
 
 /* ── Llamado a Business (sólo gratis) ── */

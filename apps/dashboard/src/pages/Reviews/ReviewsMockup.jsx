@@ -103,6 +103,7 @@ export default function ReviewsMockup() {
           onPublish={noop}
           publishing={false}
           replyError={null}
+          onGenerate={noop}
           onOpenTone={noop}
           onBack={noop}
         />

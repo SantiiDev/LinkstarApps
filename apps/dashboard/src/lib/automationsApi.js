@@ -3,10 +3,14 @@ import { requireOrg } from './dashboardApi';
 
 /*
  * Automatizaciones con IA: responder reseñas anteriores, la respuesta automática
- * y su contador. El backend lo hace el socio (respuestas con IA y tono de marca,
- * resto de la fase 5); este archivo es el contrato entre la pantalla
- * (pages/Automations) y sus rutas en services/api. Todas con Bearer, y la
- * organización siempre explícita, como el resto del panel.
+ * y su contador. Este archivo es el contrato entre la pantalla
+ * (pages/Automations) y services/api/routes/automations.js (0037). Todas con
+ * Bearer, y la organización siempre explícita, como el resto del panel.
+ *
+ * Las respuestas las escribe y publica la cola del API (lib/replyJobs.js), que
+ * corre cada hora (scripts/hourly.js), después de cada «Actualizar ahora» y al
+ * pedir «Responder reseñas anteriores». «Inmediata» quiere decir «en la próxima
+ * corrida», o sea en menos de una hora.
  *
  *   GET  /api/automations/auto-reply?org=<uuid>[&location=<uuid>]
  *        → { enabled: boolean, stars: number[] (1..5), delay: 'now' | '1-3h' | '3-6h',
@@ -28,16 +32,18 @@ import { requireOrg } from './dashboardApi';
  *        Responde con IA las últimas `count` reseñas SIN responder de ese
  *        filtro. Publica en Google: la pantalla pide confirmación antes.
  *
- * Reglas que la pantalla da por hechas y el backend tiene que cumplir:
+ * Reglas que cumple el backend (review_automation_target y la cola, 0037):
  *   - `location_id: null` es la regla de «Todos los locales»; la de un local la
  *     pisa (mismo criterio que el tono de marca de BrandToneModal).
  *   - Las respuestas usan el tono de marca del local, o el global si no tiene.
  *   - Es Business: en gratis la pantalla ni lo pide (BusinessLock), pero el
  *     corte de verdad va en el backend (private.org_has_business).
  *   - Quién puede: owner/admin en toda la organización, manager sólo en sus
- *     sucursales, nunca un viewer — la misma regla que responder una reseña
- *     (google_review_reply_target, 0026). La pantalla no muestra estas tarjetas
- *     a un viewer.
+ *     sucursales (nunca en «Todos los locales»), nunca un viewer — la misma
+ *     regla que responder una reseña (google_review_reply_target, 0026). La
+ *     pantalla no muestra estas tarjetas a un viewer.
+ *   - La regla sólo responde reseñas creadas DESPUÉS de activarla; para las de
+ *     antes está «Responder reseñas anteriores».
  *   - Errores como el resto del API: `{ error: 'mensaje para mostrar' }`.
  */
 

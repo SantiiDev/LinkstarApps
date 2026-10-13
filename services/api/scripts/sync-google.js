@@ -2,12 +2,19 @@ import 'dotenv/config';
 import { supabase } from '../lib/supabase.js';
 import { assertGoogleConfigured } from '../lib/googleOAuth.js';
 import { syncGoogleOrganization } from '../lib/googleSync.js';
+import { runAutoReplies } from '../lib/replyJobs.js';
 
-/* sync-google — la parte de Google del job diario (scripts/daily.js).
+/* sync-google — la parte de Google del job diario (scripts/daily.js) y del
+ * horario (scripts/hourly.js).
  *
  *   node scripts/sync-google.js                  todas las organizaciones conectadas
  *   node scripts/sync-google.js --org <uuid>     sólo una
  *   node scripts/sync-google.js --dry-run        lista cuentas y fichas, no escribe
+ *   node scripts/sync-google.js --only-reviews   sólo reseñas (sin métricas ni
+ *                                                protección): lo que corre cada hora
+ *
+ * Después de leer cada organización responde las reseñas que manda una regla
+ * automática (lib/replyJobs.js, 0037). Ese paso nunca hace fallar la lectura.
  *
  * Por cada organización con Google conectado y plan vigente
  * (google_sync_targets, 0024): pide un access token con el refresh token,
@@ -40,6 +47,7 @@ async function main() {
   assertGoogleConfigured();
 
   const dryRun = process.argv.includes('--dry-run');
+  const onlyReviews = process.argv.includes('--only-reviews');
   const onlyOrg = argValue('--org');
 
   const { data: targets, error } = await supabase.rpc('google_sync_targets');
@@ -63,7 +71,7 @@ async function main() {
   for (const target of selected) {
     console.log(`▸ ${target.organization_id}`);
     try {
-      const summary = await syncGoogleOrganization(target, { dryRun });
+      const summary = await syncGoogleOrganization(target, { dryRun, onlyReviews });
       if (!dryRun) {
         await supabase.rpc('google_record_sync_result', {
           p_org: target.organization_id,
@@ -84,6 +92,8 @@ async function main() {
       // leen bien, las reseñas no).
       if (summary.failures) partial++;
       else ok++;
+
+      if (!dryRun) await runAutoReplies(target.organization_id);
     } catch (err) {
       const needsReauth = err.code === 'invalid_grant';
       if (needsReauth) reauth++;
@@ -97,7 +107,7 @@ async function main() {
           // Texto para el panel, no el error crudo de Google.
           p_error: needsReauth
             ? 'Google revocó el acceso. Volvé a conectar tu ficha.'
-            : 'No pudimos leer tu ficha de Google. Lo volvemos a intentar mañana.',
+            : 'No pudimos leer tu ficha de Google. Lo volvemos a intentar más tarde.',
           p_needs_reauth: needsReauth,
         });
       }
