@@ -196,6 +196,11 @@ const AUDIT_ACTION_LABELS = {
   'google.profile_change_accepted': 'Aceptó un cambio que Google hizo en la ficha',
   'google.post_published': 'Publicó en la ficha de Google',
   'google.post_deleted': 'Borró una publicación de la ficha de Google',
+  // Respuestas con IA (0038).
+  'auto_reply.rule_saved': 'Cambió la respuesta automática a reseñas',
+  'auto_reply.past_requested': 'Pidió responder reseñas anteriores con IA',
+  'review_tone.saved': 'Guardó un tono de marca',
+  'review_tone.deleted': 'Borró un tono de marca',
 };
 
 export async function fetchAuditLog(organizationId, limit = 20) {

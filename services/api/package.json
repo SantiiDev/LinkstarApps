@@ -18,7 +18,8 @@
     "analyze-reviews": "node scripts/analyze-reviews.js",
     "auto-replies": "node scripts/run-auto-replies.js",
     "daily": "node scripts/daily.js",
-    "hourly": "node scripts/hourly.js"
+    "hourly": "node scripts/hourly.js",
+    "test": "node --test \"test/*.test.js\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",

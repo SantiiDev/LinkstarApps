@@ -1760,6 +1760,187 @@ exception when insufficient_privilege then
 end $$;
 reset role;
 
+-- =========================================================================
+-- 22. Tonos por tipo y por locales, techo y ventana de la cola (0038)
+-- =========================================================================
+-- Sigue el estado de la sección 21. Bar Uno: Echesortu (dddd..04) es de Caro,
+-- Pichincha (dddd..02) no. Mail global hola@bar-uno.test. Regla global
+-- prendida para 1 y 2★; Echesortu con la suya apagada.
+create temp table t22 (name text primary key, id uuid);
+
+insert into t22 values ('global_pos', public.save_reply_tone(
+  '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null,
+  'positive', true, null, 'Agradecé siempre', '— Bar Uno',
+  '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}'));
+select pg_temp.check('Ana guarda el tono positivo de todos los locales',
+  (select id is not null from t22 where name = 'global_pos'));
+select pg_temp.check('Un segundo tono positivo «para todos» da tono_global_existente',
+  pg_temp.raises($q$select public.save_reply_tone('11111111-1111-1111-1111-111111111111',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, 'positive', true, null, 'x', '',
+    '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}')$q$, 'tono_global_existente'));
+
+insert into t22 values ('eche_crit', public.save_reply_tone(
+  '33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001', null,
+  'critical', false, '{dddddddd-0000-0000-0000-000000000004}', 'Pedí disculpas', '— Echesortu',
+  '{"enabled": true, "mode": "custom", "amount": "few", "custom": ["🙏"]}'));
+select pg_temp.check('Caro (manager) guarda un tono crítico para su sucursal',
+  (select id is not null from t22 where name = 'eche_crit'));
+select pg_temp.check('Caro no puede guardar un tono de todos los locales',
+  pg_temp.raises($q$select public.save_reply_tone('33333333-3333-3333-3333-333333333333',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, 'critical', true, null, 'x', '',
+    '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}')$q$, 'rol_insuficiente'));
+select pg_temp.check('… ni uno que incluya una sucursal que no tiene',
+  pg_temp.raises($q$select public.save_reply_tone('33333333-3333-3333-3333-333333333333',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, 'positive', false,
+    '{dddddddd-0000-0000-0000-000000000004,dddddddd-0000-0000-0000-000000000002}', 'x', '',
+    '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}')$q$, 'rol_insuficiente'));
+select pg_temp.check('… ni cambiar el tono de todos los locales',
+  pg_temp.raises(format($q$select public.save_reply_tone('33333333-3333-3333-3333-333333333333',
+    'aaaaaaaa-0000-0000-0000-000000000001', %L, 'positive', false,
+    '{dddddddd-0000-0000-0000-000000000004}', 'x', '',
+    '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}')$q$,
+    (select id from t22 where name = 'global_pos')), 'rol_insuficiente'));
+select pg_temp.check('Un local que ya tiene tono crítico no puede tener otro (local_con_tono)',
+  pg_temp.raises($q$select public.save_reply_tone('11111111-1111-1111-1111-111111111111',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, 'critical', false,
+    '{dddddddd-0000-0000-0000-000000000004,dddddddd-0000-0000-0000-000000000002}', 'x', '',
+    '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}')$q$, 'local_con_tono'));
+select pg_temp.check('Sin «todos» y sin locales da sin_locales',
+  pg_temp.raises($q$select public.save_reply_tone('11111111-1111-1111-1111-111111111111',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, 'critical', false, '{}', 'x', '',
+    '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}')$q$, 'sin_locales'));
+select pg_temp.check('Un local de otra organización da local_inexistente',
+  pg_temp.raises($q$select public.save_reply_tone('11111111-1111-1111-1111-111111111111',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, 'critical', false,
+    '{dddddddd-0000-0000-0000-000000000003}', 'x', '',
+    '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}')$q$, 'local_inexistente'));
+
+-- Qué tono usa la IA según las estrellas y el local.
+select pg_temp.check('Echesortu, 2★: su tono crítico, con el mail global',
+  (select tone_kind = 'critical' and instructions = 'Pedí disculpas' and signature = '— Echesortu'
+          and negative_contact_email = 'hola@bar-uno.test' and language = 'business'
+     from public.review_reply_writer_context('aaaaaaaa-0000-0000-0000-000000000001',
+       'dddddddd-0000-0000-0000-000000000004', 2::smallint)));
+select pg_temp.check('Echesortu, 5★: el positivo de todos',
+  (select tone_kind = 'positive' and instructions = 'Agradecé siempre'
+     from public.review_reply_writer_context('aaaaaaaa-0000-0000-0000-000000000001',
+       'dddddddd-0000-0000-0000-000000000004', 5::smallint)));
+select pg_temp.check('Pichincha, 2★, sin tono crítico: cae en el positivo',
+  (select tone_kind = 'positive' and instructions = 'Agradecé siempre'
+     from public.review_reply_writer_context('aaaaaaaa-0000-0000-0000-000000000001',
+       'dddddddd-0000-0000-0000-000000000002', 2::smallint)));
+select pg_temp.check('Sin estrellas cuenta como positiva',
+  (select tone_kind = 'positive'
+     from public.review_reply_writer_context('aaaaaaaa-0000-0000-0000-000000000001',
+       'dddddddd-0000-0000-0000-000000000002', null)));
+
+-- Lo que ve cada uno.
+select pg_temp.check('Ana ve los dos tonos y puede editar los dos',
+  (select count(*) = 2 and bool_and(editable)
+     from public.list_reply_tones('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001')));
+select pg_temp.check('Caro ve los dos, pero sólo edita el de su sucursal',
+  (select count(*) = 2
+          and bool_and(editable = (id = (select id from t22 where name = 'eche_crit')))
+     from public.list_reply_tones('33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001')));
+select pg_temp.check('Dani (viewer) no ve tonos',
+  pg_temp.raises($q$select * from public.list_reply_tones('44444444-4444-4444-4444-444444444444',
+    'aaaaaaaa-0000-0000-0000-000000000001')$q$, 'rol_insuficiente'));
+select pg_temp.check('Caro no puede borrar el de todos los locales',
+  pg_temp.raises(format($q$select public.delete_reply_tone('33333333-3333-3333-3333-333333333333',
+    'aaaaaaaa-0000-0000-0000-000000000001', %L)$q$, (select id from t22 where name = 'global_pos')), 'rol_insuficiente'));
+select pg_temp.check('Beto no ve un tono de Bar Uno ni con su id',
+  pg_temp.raises(format($q$select public.delete_reply_tone('22222222-2222-2222-2222-222222222222',
+    'aaaaaaaa-0000-0000-0000-000000000001', %L)$q$, (select id from t22 where name = 'eche_crit')), 'rol_insuficiente'));
+
+select public.delete_reply_tone('33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001',
+  (select id from t22 where name = 'eche_crit'));
+select pg_temp.check('Caro borra el suyo, queda en el registro, y Echesortu vuelve al positivo',
+  exists (select 1 from public.audit_log
+           where action = 'review_tone.deleted' and entity_id = (select id from t22 where name = 'eche_crit')
+             and actor_id = '33333333-3333-3333-3333-333333333333')
+  and (select tone_kind = 'positive'
+         from public.review_reply_writer_context('aaaaaaaa-0000-0000-0000-000000000001',
+           'dddddddd-0000-0000-0000-000000000004', 1::smallint)));
+
+update public.subscriptions set plan_code = 'free' where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check('En gratis, guardar un tono da solo_business',
+  pg_temp.raises($q$select public.save_reply_tone('11111111-1111-1111-1111-111111111111',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, 'critical', true, null, 'x', '',
+    '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}')$q$, 'solo_business'));
+update public.subscriptions set plan_code = 'business' where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+-- El registro de lo que configura cada persona.
+select pg_temp.check('Guardar la regla y pedir «anteriores» quedan en el registro',
+  exists (select 1 from public.audit_log
+           where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001' and action = 'auto_reply.rule_saved'
+             and actor_id = '11111111-1111-1111-1111-111111111111')
+  and exists (select 1 from public.audit_log
+               where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001' and action = 'auto_reply.past_requested'
+                 and (metadata ->> 'queued')::int = 1));
+
+-- Ventana de 7 días: con la regla global prendida hace un mes (se corre a mano
+-- `enabled_at`, que el trigger no deja tocar), una 1★ de hace 10 días no entra y
+-- una de hace 2 días sí. También entra 9b..05 (1★ de hace una hora), que en la
+-- sección 21 había quedado afuera por ser anterior a la regla.
+alter table public.review_auto_reply_rules disable trigger review_auto_reply_rules_enabled_at;
+update public.review_auto_reply_rules set enabled_at = now() - interval '30 days'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001' and location_id is null;
+alter table public.review_auto_reply_rules enable trigger review_auto_reply_rules_enabled_at;
+
+insert into public.google_reviews
+  (id, organization_id, google_location_id, review_id, star_rating, created_time, updated_time) values
+  ('9b000000-0000-0000-0000-000000000022', 'aaaaaaaa-0000-0000-0000-000000000001',
+   '9a000000-0000-0000-0000-000000000002', 'r22', 1, now() - interval '10 days', now()),
+  ('9b000000-0000-0000-0000-000000000023', 'aaaaaaaa-0000-0000-0000-000000000001',
+   '9a000000-0000-0000-0000-000000000002', 'r23', 1, now() - interval '2 days', now());
+
+select pg_temp.check('La regla encola la de hace 2 días y la de hace una hora…',
+  public.enqueue_auto_replies() = 2);
+select pg_temp.check('… y no la de hace 10',
+  exists (select 1 from public.review_reply_jobs where review_id = '9b000000-0000-0000-0000-000000000023')
+  and not exists (select 1 from public.review_reply_jobs where review_id = '9b000000-0000-0000-0000-000000000022'));
+
+-- Techo: con el techo en lo que ya hay este mes, no entra nada más (ni por la
+-- regla ni por «anteriores»), y «anteriores» lo registra igual.
+create or replace function private.ai_reply_monthly_cap() returns integer language sql stable
+  as $$ select private.ai_replies_this_month('aaaaaaaa-0000-0000-0000-000000000001') $$;
+insert into public.google_reviews
+  (id, organization_id, google_location_id, review_id, star_rating, created_time, updated_time) values
+  ('9b000000-0000-0000-0000-000000000024', 'aaaaaaaa-0000-0000-0000-000000000001',
+   '9a000000-0000-0000-0000-000000000002', 'r24', 2, now(), now());
+select pg_temp.check('Con el techo alcanzado, la regla no encola',
+  public.enqueue_auto_replies() = 0);
+select pg_temp.check('… ni «anteriores»',
+  public.enqueue_past_replies('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001',
+    null, 50, 'all') = 0);
+create or replace function private.ai_reply_monthly_cap() returns integer language sql stable as $$ select 2000 $$;
+select pg_temp.check('Con lugar otra vez, «anteriores» encola las dos de Pichincha sin cola',
+  public.enqueue_past_replies('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001',
+    'dddddddd-0000-0000-0000-000000000002', 50, '1-3') = 2);
+select pg_temp.check('… también la de hace 10 días (lo viejo, a pedido)',
+  exists (select 1 from public.review_reply_jobs
+               where review_id = '9b000000-0000-0000-0000-000000000022' and source = 'past'));
+
+-- Desde el panel no se toca nada de esto.
+select pg_temp.login('11111111-1111-1111-1111-111111111111', 'ana@bar-uno.test');
+do $$
+begin
+  perform 1 from public.review_reply_tones;
+  raise exception 'FALLA: authenticated pudo leer review_reply_tones';
+exception when insufficient_privilege then
+  raise notice '  OK   authenticated no lee review_reply_tones';
+end $$;
+do $$
+begin
+  perform public.save_reply_tone('11111111-1111-1111-1111-111111111111',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, 'critical', true, null, 'x', '',
+    '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}');
+  raise exception 'FALLA: authenticated pudo guardar un tono';
+exception when insufficient_privilege then
+  raise notice '  OK   authenticated no ejecuta save_reply_tone';
+end $$;
+reset role;
+
 do $$ begin
   raise notice '';
   raise notice '=== Todos los tests de aislamiento pasaron ===';

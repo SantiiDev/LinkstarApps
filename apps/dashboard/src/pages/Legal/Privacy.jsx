@@ -9,10 +9,16 @@ import './Legal.css';
  *
  * La sección 3 tiene que coincidir con lo que el panel hace con la ficha: la
  * verificación de Google la compara con la app. El proveedor de IA de la 3.2
- * es el que analiza las reseñas (services/api/lib/reviewAnalysis.js) y escribe
- * los borradores de publicaciones (lib/postWriter.js); si se cambia de
- * proveedor o se le manda un dato nuevo, se cambia acá antes, y también en
- * GOOGLE_VERIFICATION.md.
+ * es el que analiza las reseñas (services/api/lib/reviewAnalysis.js), escribe
+ * los borradores de publicaciones (lib/postWriter.js) y las respuestas a
+ * reseñas (lib/replyWriter.js, 0037/0038); si se cambia de proveedor o se le
+ * manda un dato nuevo, se cambia acá antes, y también en GOOGLE_VERIFICATION.md.
+ *
+ * La 3.1 declara desde el 14 oct 2026 las respuestas que publica una regla que
+ * activó el dueño, aunque en producción esa publicación sigue apagada
+ * (AI_AUTO_REPLY_PUBLISH) hasta que Google apruebe la verificación: así
+ * encenderla no contradice lo que vio Google. El nombre de quien escribió la
+ * reseña sigue sin llegarle a la IA.
  *
  * Tiene que ser PÚBLICA y estar fuera de los guards de /panel. No es una
  * preferencia: la pantalla de consentimiento de Google exige una URL de
@@ -32,7 +38,7 @@ import './Legal.css';
  * la fecha de abajo.
  */
 
-const UPDATED = '11 de octubre de 2026';
+const UPDATED = '14 de octubre de 2026';
 
 /* La casilla real, la misma que ofrece la sección Contacto del panel. NO usar
  * soporte@linkstar.com.ar: ese dominio nunca se registró (es lo que vino a
@@ -128,9 +134,19 @@ export default function Privacy() {
           </p>
           <ul>
             <li><strong>La lista de fichas que administra tu cuenta</strong> — nombre, dirección e identificador de lugar de cada una, para que elijas cuáles son de tu negocio y a qué sucursal corresponde cada una.</li>
-            <li><strong>Las reseñas de las fichas que vinculaste</strong> — autor tal como lo muestra Google, puntaje, texto, fecha y respuesta, para mostrártelas en el panel. <strong>De una ficha que no vinculaste no leemos ni guardamos reseñas</strong>: tu cuenta de Google puede administrar fichas de otros negocios, y esos datos no son tuyos.</li>
-            <li><strong>El conteo total y el puntaje promedio de esas fichas</strong> — se leen una vez por día para estimar cuántas reseñas nuevas generaron tus expositores. Google no avisa cuando entra una reseña, así que la diferencia día a día es la única forma de medirlo.</li>
-            <li><strong>Responder reseñas en tu nombre</strong> — sólo cuando vos (o alguien de tu equipo con permiso) escribe una respuesta y la publica desde el panel. Nunca publicamos nada por nuestra cuenta.</li>
+            <li><strong>Las reseñas de las fichas que vinculaste</strong> — autor tal como lo muestra Google, puntaje, texto, fecha y respuesta, para mostrártelas en el panel. Se leen periódicamente, hasta una vez por hora. <strong>De una ficha que no vinculaste no leemos ni guardamos reseñas</strong>: tu cuenta de Google puede administrar fichas de otros negocios, y esos datos no son tuyos.</li>
+            <li><strong>El conteo total y el puntaje promedio de esas fichas</strong> — se leen junto con las reseñas y se guardan una vez por día para estimar cuántas reseñas nuevas generaron tus expositores. Google no avisa cuando entra una reseña, así que la diferencia día a día es la única forma de medirlo.</li>
+            <li>
+              <strong>Responder reseñas en tu nombre</strong> — de tres maneras, y siempre por una decisión tuya
+              (o de alguien de tu equipo con permiso):
+              <ul>
+                <li>escribís una respuesta, o partís de un borrador que propone la IA (punto 3.2), y la publicás desde el panel;</li>
+                <li>activás una <strong>regla de respuesta automática</strong>: desde ese momento, las reseñas nuevas con las estrellas que elegiste se responden solas con IA, en los locales que elegiste. La regla viene apagada, no responde reseñas anteriores a su activación y la podés apagar cuando quieras;</li>
+                <li>pedís <strong>responder reseñas anteriores</strong>: elegís cuántas y de cuántas estrellas, y se responden con IA.</li>
+              </ul>
+              Toda respuesta que publicamos sale de una acción tuya o de una regla que activaste. Fuera de
+              eso, no publicamos nada.
+            </li>
             <li><strong>Las métricas de tus fichas vinculadas</strong> — visualizaciones, llamadas, solicitudes de cómo llegar, visitas a tu web y las búsquedas con las que te encontraron, día por día, para mostrarte su evolución.</li>
             <li><strong>Los datos de la ficha</strong> — descripción, teléfonos, web, horarios, atributos, servicios, fotos y publicaciones, que se leen cuando abrís el panel para mostrártelos, para calcular el análisis de SEO local y, si lo pedís, para escribir publicaciones con IA (punto 3.2). Sólo los modificamos cuando vos (o alguien de tu equipo con permiso) edita un dato o crea o borra una publicación desde el panel. Las fotos que subís para una publicación se guardan en nuestro almacenamiento con una dirección pública, porque Google las descarga desde ahí.</li>
             <li><strong>Los cambios que Google hace en tu ficha por su cuenta</strong> — en el plan Business, una vez por día comparamos tu ficha con la versión que Google propone, te avisamos si cambió algo y te dejamos revertirlo. Nunca lo revertimos sin que vos lo pidas.</li>
@@ -151,12 +167,15 @@ export default function Privacy() {
           </p>
           <p>
             <strong>Escribir respuestas a reseñas.</strong> Cuando vos (o alguien de tu equipo con
-            permiso) le pedís a la IA una respuesta para una reseña, enviamos <strong>el texto y el
-            puntaje</strong> de esa reseña (o sólo el puntaje, si no tiene texto), el nombre de tu ficha y
-            el tono de marca que configuraste (tus indicaciones y si usar emojis). Lo que vuelve es un
-            borrador que aparece en el cuadro de respuesta: no se publica nada hasta que lo publicás vos.
-            Si configuraste un mail de contacto para reseñas negativas, la IA sólo sabe que existe; el mail
-            y la firma los agregamos nosotros al texto.
+            permiso) le pedís a la IA una respuesta para una reseña, o cuando una reseña se responde por
+            una regla automática o por «responder reseñas anteriores» (punto 3.1), enviamos <strong>el
+            texto y el puntaje</strong> de esa reseña (o sólo el puntaje, si no tiene texto), el nombre de
+            tu ficha y el tono de marca que configuraste para ese tipo de reseña y ese local (tus
+            indicaciones y si usar emojis). Lo que vuelve es el texto de la respuesta: un borrador que
+            revisás antes de publicar, o la respuesta que publica la regla que activaste. Si configuraste
+            un mail de contacto para reseñas negativas, la IA sólo sabe que existe; el mail y la firma los
+            agregamos nosotros al texto. Si pedís otra versión de un borrador, le mandamos también el
+            borrador anterior, sin el nombre ni el mail.
           </p>
           <ul>
             <li><strong>En ningún caso enviamos el nombre ni la foto de quien escribió la reseña.</strong> Si la respuesta saluda por el nombre, lo completamos nosotros, después de que vuelve el texto.</li>

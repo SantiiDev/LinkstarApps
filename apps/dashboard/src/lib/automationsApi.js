@@ -2,21 +2,32 @@ import { apiFetch, authHeaders } from './googleApi';
 import { requireOrg } from './dashboardApi';
 
 /*
- * Respuestas con IA (0037): el borrador de una reseña, el tono de marca, el mail
+ * Respuestas con IA (0037/0038): el borrador de una reseña, el tono de marca, el mail
  * para reseñas negativas, la respuesta automática, responder reseñas anteriores
  * y su contador. Las rutas viven en services/api/routes/automations.js; este
  * archivo es el contrato entre ellas y la pantalla. Todas con Bearer, y la
  * organización siempre explícita, como el resto del panel.
  *
- *   POST /api/google/reviews/:id/reply/ai   ← { instructions? } → { text }
+ *   POST /api/google/reviews/:id/reply/ai   ← { instructions?, previous? } → { text }
  *        Un borrador. Nunca publica: va al cuadro de respuesta, y se publica con
- *        replyToReview(id, texto, 'ai_draft') (lib/googleApi.js).
+ *        replyToReview(id, texto, 'ai_draft') (lib/googleApi.js). `previous` es
+ *        el borrador anterior («Generar otra»); el API le saca el nombre antes
+ *        de mandárselo a la IA.
  *
  *   GET    /api/automations/brand-tones?org=<uuid>
- *          → { tones: [{ location_id, location_name, instructions, signature,
- *                        emojis, language, updated_at }] }
- *   PUT    /api/automations/brand-tones  ← DEFAULT_BRAND_TONE + { org }
- *   DELETE /api/automations/brand-tones?org=<uuid>[&location=<uuid>]
+ *          → { tones: [{ id, kind: 'positive' | 'critical', applies_to_all,
+ *                        location_ids, instructions, signature, emojis,
+ *                        updated_at, editable }] }
+ *          Un encargado ve los de «todos» y los que nombran alguno de sus
+ *          locales; `editable` dice si además lo puede cambiar.
+ *   PUT    /api/automations/brand-tones  ← EMPTY_TONE + { org } → { tone }
+ *          Sin `id` crea; con `id` reemplaza. Un tipo tiene a lo sumo un tono
+ *          de «todos los locales», y un local a lo sumo uno de cada tipo (409).
+ *   DELETE /api/automations/brand-tones/:id?org=<uuid>
+ *
+ *        Qué tono usa la IA (0038): el de su tipo (positivas 4–5★, críticas
+ *        1–3★) que nombra al local, si no el de su tipo para todos; una crítica
+ *        sin tono crítico usa el positivo.
  *
  *   GET  /api/automations/negative-contact?org=<uuid>[&location=<uuid>] → { location_id, email }
  *   PUT  /api/automations/negative-contact  ← { org, location_id, email }  (vacío lo borra)
@@ -80,6 +91,27 @@ export const PAST_REPLY_STARS = [
 
 export const PAST_REPLY_MAX = 200;
 
+export const TONE_INSTRUCTIONS_MAX = 500;
+export const TONE_SIGNATURE_MAX = 120;
+export const TONE_MAX_CUSTOM_EMOJIS = 10;
+
+export const TONE_KINDS = [
+  { value: 'positive', label: 'Positivas (4★ y 5★)', short: 'Positivas' },
+  { value: 'critical', label: 'Críticas (1★ a 3★)', short: 'Críticas' },
+];
+
+/* Un tono nuevo. `emojis`: auto = la IA elige (`amount` moderate = 2–4, few =
+ * 1–2); custom = sólo los de `custom`. */
+export const EMPTY_TONE = Object.freeze({
+  id: null,
+  kind: 'positive',
+  applies_to_all: true,
+  location_ids: [],
+  instructions: '',
+  signature: '',
+  emojis: { enabled: false, mode: 'auto', amount: 'moderate', custom: [] },
+});
+
 function query(organizationId, locationId) {
   const params = new URLSearchParams({ org: requireOrg(organizationId) });
   if (locationId) params.set('location', locationId);
@@ -141,14 +173,15 @@ export async function replyPastReviews(organizationId, locationId, { count, star
 /* ─── Borrador de una reseña ──────────────────────────────────────────────── */
 
 /* Un borrador de respuesta escrito por la IA con el tono de marca del local.
- * Nunca publica: devuelve el texto para el cuadro de respuesta. */
-export async function generateReplyDraft(reviewId, { instructions } = {}) {
+ * Nunca publica: devuelve el texto para el cuadro de respuesta. `previous`: el
+ * borrador anterior, para que «Generar otra» no repita el mismo. */
+export async function generateReplyDraft(reviewId, { instructions, previous } = {}) {
   const body = await apiFetch(
     `/api/google/reviews/${encodeURIComponent(reviewId)}/reply/ai`,
     {
       method: 'POST',
       headers: await authHeaders(),
-      body: JSON.stringify(instructions ? { instructions } : {}),
+      body: JSON.stringify({ instructions: instructions || undefined, previous: previous || undefined }),
     },
     'No pudimos escribir la respuesta con IA.'
   );
@@ -166,7 +199,7 @@ export async function fetchBrandTones(organizationId) {
   return body.tones ?? [];
 }
 
-/* `tone` tiene la forma de DEFAULT_BRAND_TONE (pages/Reviews/BrandToneModal.jsx). */
+/* `tone` tiene la forma de EMPTY_TONE. */
 export async function saveBrandTone(organizationId, tone) {
   const body = await apiFetch(
     '/api/automations/brand-tones',
@@ -175,11 +208,18 @@ export async function saveBrandTone(organizationId, tone) {
       headers: await authHeaders(),
       body: JSON.stringify({
         org: requireOrg(organizationId),
-        location_id: tone.location_id ?? null,
-        instructions: tone.instructions ?? '',
-        signature: tone.signature ?? '',
-        emojis: tone.emojis,
-        language: tone.language ?? 'business',
+        id: tone.id ?? null,
+        kind: tone.kind,
+        applies_to_all: Boolean(tone.applies_to_all),
+        location_ids: tone.applies_to_all ? [] : tone.location_ids ?? [],
+        instructions: (tone.instructions ?? '').trim(),
+        signature: (tone.signature ?? '').trim(),
+        emojis: {
+          enabled: Boolean(tone.emojis?.enabled),
+          mode: tone.emojis?.mode ?? 'auto',
+          amount: tone.emojis?.amount ?? 'moderate',
+          custom: tone.emojis?.custom ?? [],
+        },
       }),
     },
     'No pudimos guardar el tono de marca.'
@@ -187,9 +227,9 @@ export async function saveBrandTone(organizationId, tone) {
   return body.tone;
 }
 
-export async function deleteBrandTone(organizationId, locationId = null) {
+export async function deleteBrandTone(organizationId, toneId) {
   await apiFetch(
-    `/api/automations/brand-tones?${query(organizationId, locationId)}`,
+    `/api/automations/brand-tones/${encodeURIComponent(toneId)}?${query(organizationId)}`,
     { method: 'DELETE', headers: await authHeaders() },
     'No pudimos borrar el tono de marca.'
   );

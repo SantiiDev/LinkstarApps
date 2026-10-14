@@ -16,6 +16,7 @@ import {
 import { encryptToken, decryptToken } from '../lib/tokenCrypto.js';
 import { syncGoogleOrganization } from '../lib/googleSync.js';
 import { publishReviewReply } from '../lib/replyPublisher.js';
+import { runAfterSync } from '../lib/autoReplies.js';
 
 const router = Router();
 
@@ -277,6 +278,9 @@ function runSync(target) {
       });
       await supabase.rpc('compute_review_deltas', {});
       log(`sincronización: ${summary.locations} ficha(s), ${summary.linked} vinculada(s), ${summary.reviews} reseña(s), ${summary.metricDays} día(s) de métricas`);
+      // Las reseñas recién leídas que una regla manda responder (0037/0038).
+      // Nunca tira; publica sólo con AI_AUTO_REPLY_PUBLISH=on.
+      await runAfterSync(organizationId, log);
     } catch (err) {
       console.error(`Sincronización de Google falló para ${organizationId}:`, err.message);
       const needsReauth = err.code === 'invalid_grant';

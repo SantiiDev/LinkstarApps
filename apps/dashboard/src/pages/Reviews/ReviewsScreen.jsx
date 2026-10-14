@@ -9,6 +9,7 @@ import {
   fetchReviewCounts,
   fetchReviewPage,
   fetchReviewSentiments,
+  fetchReplySources,
   replyToReview,
   REVIEWS_INBOX_PAGE_SIZE,
   useGoogleSyncRequest,
@@ -95,6 +96,7 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
   const [error, setError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [sentiments, setSentiments] = useState(() => new Map());
+  const [replySources, setReplySources] = useState(() => new Map());
 
   const [filters, setFilters] = useState(() => initialFilters(initialFilter));
   const [search, setSearch] = useState('');
@@ -135,6 +137,16 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
       .catch((err) => console.error('No se pudo leer el tono de las reseñas:', err));
   }, [isBusiness, orgId]);
 
+  /* El origen de las respuestas cargadas (0037). Si falla, la lista queda igual,
+   * sin la etiqueta «Respondida automáticamente». */
+  const loadReplySources = useCallback((rows) => {
+    const answered = rows.filter((r) => r.reply_comment).map((r) => r.id);
+    if (!answered.length) return;
+    fetchReplySources(orgId, answered)
+      .then((found) => setReplySources((prev) => new Map([...prev, ...found])))
+      .catch((err) => console.error('No se pudo leer el origen de las respuestas:', err));
+  }, [orgId]);
+
   useEffect(() => {
     if (!orgId) return undefined;
     let cancelled = false;
@@ -154,6 +166,7 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
         // La elegida se conserva si sigue en la página; si no, la primera.
         setSelectedId((prev) => (result.rows.some((r) => r.id === prev) ? prev : result.rows[0]?.id ?? null));
         loadSentiments(result.rows);
+        loadReplySources(result.rows);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -164,7 +177,7 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [queryArgs, page, loadSummary, loadSentiments, orgId, reloadKey]);
+  }, [queryArgs, page, loadSummary, loadSentiments, loadReplySources, orgId, reloadKey]);
 
   // Cuando termina una lectura pedida desde acá, se relee todo.
   useEffect(() => {
@@ -207,7 +220,9 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
     setGenerating(true);
     updateCompose({ error: null });
     try {
-      const text = await generateReplyDraft(reviewId);
+      // «Generar otra» manda el borrador anterior para que no repita el mismo
+      // (el API le saca el nombre antes de mandárselo a la IA).
+      const text = await generateReplyDraft(reviewId, { previous: current.fromAi ? current.text : undefined });
       setCompose((prev) => ({ ...(prev.id === reviewId ? prev : NO_COMPOSE), id: reviewId, text, fromAi: true, error: null }));
     } catch (err) {
       setCompose((prev) => ({ ...(prev.id === reviewId ? prev : NO_COMPOSE), id: reviewId, error: err.message }));
@@ -221,7 +236,9 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
     setPublishing(true);
     updateCompose({ error: null });
     try {
-      const saved = await replyToReview(selected.id, current.text, current.fromAi ? 'ai_draft' : 'panel');
+      const source = current.fromAi ? 'ai_draft' : 'panel';
+      const saved = await replyToReview(selected.id, current.text, source);
+      setReplySources((prev) => new Map(prev).set(selected.id, source));
       if (filters.status === 'pending') {
         // Sale de la bandeja y el detalle pasa a la que ocupa su lugar. Se
         // relee la página para que la primera de la siguiente suba a ésta (y
@@ -379,6 +396,7 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
         <ReviewDetail
           review={selected}
           sentiment={selected ? sentiments.get(selected.id) ?? null : null}
+          replySource={selected ? replySources.get(selected.id) ?? null : null}
           showBranch={showBranch}
           canReply={canReply}
           isBusiness={isBusiness}
@@ -392,13 +410,14 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
           replyError={current.error}
           onGenerate={generate}
           generating={generating}
-          onOpenTone={() => setToneOpen(true)}
+          aiDraft={current.fromAi}
+          onOpenTone={isBusiness && canReply ? () => setToneOpen(true) : undefined}
           onShare={() => setSharing(selected)}
           onBack={() => setMobileDetail(false)}
         />
       </div>
 
-      {toneOpen && <BrandToneModal organizationId={orgId} onClose={() => setToneOpen(false)} />}
+      {toneOpen && <BrandToneModal onClose={() => setToneOpen(false)} onSaved={() => setToneOpen(false)} />}
       {sharing && <ReviewShareModal review={sharing} onClose={() => setSharing(null)} />}
     </div>
   );

@@ -263,6 +263,22 @@ function reviewsQuery(organizationId, {
  * Business: en gratis el RLS no devuelve filas. Va aparte de la lista para que
  * un fallo acá (o un entorno sin la 0033) deje la lista sin etiquetas, no sin
  * reseñas. */
+/* El origen de la respuesta (0037) de un grupo de reseñas: Map<review_id,
+ * 'panel' | 'ai_draft' | 'auto' | 'past'>, sólo las que tienen. Es la etiqueta
+ * «Respondida automáticamente» / «Escrita con IA» del detalle. Aparte de la
+ * lista, como el tono: si falla, la lista queda sin etiqueta, no sin reseñas. */
+export async function fetchReplySources(organizationId, reviewIds) {
+  if (!reviewIds.length) return new Map();
+  const { data, error } = await supabase
+    .from('google_reviews')
+    .select('id, reply_source')
+    .eq('organization_id', requireOrg(organizationId))
+    .in('id', reviewIds)
+    .not('reply_source', 'is', null);
+  if (error) throw error;
+  return new Map((data ?? []).map((row) => [row.id, row.reply_source]));
+}
+
 export async function fetchReviewSentiments(organizationId, reviewIds) {
   if (!reviewIds.length) return new Map();
   const { data, error } = await supabase

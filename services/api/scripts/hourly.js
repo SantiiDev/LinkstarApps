@@ -8,7 +8,10 @@ import path from 'node:path';
  *   node scripts/hourly.js --dry-run  se lo pasa a los tres
  *
  * En orden:
- *   1. sync-google      — lee las reseñas nuevas (y métricas y protección de ficha).
+ *   1. sync-google --only-reviews — lee las reseñas nuevas y las analiza. Las
+ *                         métricas y la protección de ficha quedan en el diario:
+ *                         Google publica las métricas con días de atraso, y
+ *                         releer 10 días por corrida cada hora sólo gasta cuota.
  *   2. run-auto-replies — encola las respuestas automáticas y, con
  *                         AI_AUTO_REPLY_PUBLISH=on, publica las vencidas. Los
  *                         retardos «entre 1 y 3 horas» y «entre 3 y 6 horas»
@@ -29,7 +32,7 @@ import path from 'node:path';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const passthrough = process.argv.slice(2).filter((arg) => arg === '--dry-run');
 
-const JOBS = [['sync-google.js'], ['run-auto-replies.js'], ['send-alerts.js', '--solo-resenas']];
+const JOBS = [['sync-google.js', '--only-reviews'], ['run-auto-replies.js'], ['send-alerts.js', '--solo-resenas']];
 
 function run([script, ...args]) {
   return new Promise((resolve) => {

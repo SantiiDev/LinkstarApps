@@ -226,22 +226,129 @@
   background: rgba(26, 38, 57, 0.08);
 }
 
-/* ── Aviso y enlace ── */
-.tone-modal__soon {
+/* ── Tipo y locales (como el modal de Tapstar) ── */
+.tone-section {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tone-section__title {
+  display: inline-flex;
+  align-items: center;
   gap: 0.45rem;
-  margin: 0;
-  font-size: 0.76rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.tone-section__title svg {
+  color: var(--color-orange);
+}
+
+.tone-section__hint {
+  font-size: 0.74rem;
   line-height: 1.45;
   color: var(--color-text-secondary);
 }
 
-.tone-modal__soon svg {
-  flex: none;
-  margin-top: 0.1rem;
+/* El tipo elegido va resaltado suave, no relleno: es una elección, no un CTA. */
+.tone-choice__btn--large {
+  padding: 0.8rem 1rem;
+  font-size: 0.88rem;
 }
 
+.tone-choice__btn--large.tone-choice__btn--active {
+  background: rgba(245, 133, 41, 0.1);
+  border: 2px solid var(--color-navy);
+  color: var(--color-navy);
+}
+
+.tone-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+/* `position: relative`: el checkbox oculto se ubica contra la fila. Sin eso
+   quedaba contra otro ancestro y, dentro del modal que scrollea, cada clic le
+   daba foco lejos y movía el scroll (lo mismo que le pasó a Switch). */
+.tone-check {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(26, 38, 57, 0.12);
+  background: var(--color-white);
+  font-size: 0.86rem;
+  color: var(--color-navy);
+  cursor: pointer;
+  transition: border-color var(--transition-base), background var(--transition-base);
+}
+
+.tone-check:hover:not(.tone-check--disabled) {
+  border-color: rgba(245, 133, 41, 0.5);
+}
+
+/* El checkbox real queda invisible pero accesible (teclado y lector). */
+.tone-check input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.tone-check__box {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 0.3rem;
+  border: 1.5px solid rgba(26, 38, 57, 0.3);
+  background: var(--color-white);
+  color: #fff;
+}
+
+.tone-check input:focus-visible + .tone-check__box {
+  box-shadow: 0 0 0 3px rgba(245, 133, 41, 0.25);
+}
+
+.tone-check--on .tone-check__box {
+  background: var(--color-orange);
+  border-color: var(--color-orange);
+}
+
+.tone-check__label {
+  flex: 1;
+  min-width: 0;
+}
+
+.tone-check--all .tone-check__label {
+  font-weight: 700;
+}
+
+.tone-check--all.tone-check--on {
+  background: rgba(245, 133, 41, 0.08);
+  border-color: rgba(245, 133, 41, 0.6);
+}
+
+.tone-check__aside {
+  flex: none;
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+}
+
+.tone-check--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ── Enlace a Configuración ── */
 .tone-modal__settings-link {
   align-self: center;
   display: inline-flex;

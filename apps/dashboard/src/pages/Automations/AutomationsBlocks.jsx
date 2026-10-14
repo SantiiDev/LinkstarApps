@@ -254,7 +254,7 @@ export function AutoReplyCard({ rule, onChange, onToneSettings, savedEnabled, di
           )}
         </p>
       </div>
-      <p className="auto-hint">Responde siempre en el idioma de tu negocio.</p>
+      <p className="auto-hint">Responde siempre en el idioma de tu negocio, con el tono de marca de cada local. «Inmediata» es en menos de una hora: las reseñas nuevas se leen cada hora.</p>
       <div className="auto-grid">
         <SelectField
           label="Retardo de respuesta"

@@ -79,10 +79,15 @@ hace falta ese y no uno más chico. Texto sugerido (los revisores leen en inglé
 > (1) list the business locations they manage, so the owner chooses which ones
 > belong to their business;
 > (2) read the reviews, total review count and average rating of those chosen
-> locations only, once a day, to show them and to measure how many new reviews
-> each location gets;
-> (3) publish the owner's reply to a review when the owner writes it and clicks
-> "Publicar en Google";
+> locations only, periodically (up to once an hour), to show them and to
+> measure how many new reviews each location gets;
+> (3) publish replies to reviews on the owner's behalf, in three ways, each one
+> started by the owner: the owner writes a reply (or edits a draft suggested by
+> AI) and clicks "Publicar en Google"; the owner turns on an auto-reply rule
+> (off by default) so that new reviews with the star ratings and locations the
+> owner chose are answered automatically with AI, never reviews older than the
+> rule; or the owner asks to answer a chosen number of past unanswered reviews
+> with AI;
 > (4) show the location's performance metrics (views, calls, direction requests,
 > website clicks, search keywords);
 > (5) show and edit the location's profile (description, phone numbers, website,
@@ -90,19 +95,21 @@ hace falta ese y no uno más chico. Texto sugerido (los revisores leen en inglé
 > saves a change or publishes a post in the dashboard;
 > (6) on the paid plan, detect once a day when Google changed the profile on its
 > own, notify the owner and let them revert it with a button.
-> We never write anything on our own: every write is an explicit action of the
-> owner. Reviews of locations the owner did not select are never stored.
+> Every write is an explicit action of the owner or the result of a rule the
+> owner turned on and can turn off at any time; we never write anything else.
+> Reviews of locations the owner did not select are never stored.
 > On the paid plan, the text and star rating of each review (never the
 > reviewer's name) are sent to Anthropic's Claude API to classify sentiment and
 > topics shown to that same owner. Also on the paid plan, only when the owner
 > asks the AI to suggest or rewrite a post, the location's name, primary
 > category, description and city are sent to the same API, together with the
 > photo and details the owner entered for that post; the result is a draft
-> that is published only if the owner clicks "Publicar ahora". Likewise, only
-> when the owner asks the AI to draft a reply to a review, the review's text and
+> that is published only if the owner clicks "Publicar ahora". Likewise, to
+> write a reply to a review (a draft the owner reviews, or a reply published by
+> the owner's auto-reply rule or past-reviews request), the review's text and
 > star rating (never the reviewer's name), the location's name and the owner's
-> brand-tone instructions are sent to the same API; the draft appears in the
-> reply box and is published only if the owner clicks "Publicar en Google".
+> brand-tone instructions are sent to the same API; the reviewer's first name,
+> the contact email and the signature are added by our server afterwards.
 > Anthropic processes this data on our behalf and does not use it for training.
 > business.manage is the only scope that grants access to the Account
 > Management, Business Information, Performance and My Business (reviews and
@@ -115,13 +122,18 @@ hace falta ese y no uno más chico. Texto sugerido (los revisores leen en inglé
 Si cambia el proveedor de IA, cambiar este párrafo y `pages/Legal/Privacy.jsx`
 (§3.2 y §4) juntos: el revisor compara los dos.
 
-**La frase «We never write anything on our own» sigue siendo cierta en
-producción porque la publicación automática está apagada** (respuesta automática
-y «responder reseñas anteriores», 0037: `AI_AUTO_REPLY_PUBLISH` en el API). El
-día que se encienda, después de aprobada la verificación, hay que reescribir esa
-frase y el punto (3) para declarar respuestas publicadas por una regla que
-configuró el dueño, y cambiar a la vez §3.1 de la política («Nunca publicamos
-nada por nuestra cuenta»).
+**El punto (3) ya declara las respuestas que publica una regla del dueño**
+(respuesta automática y «responder reseñas anteriores», 0037/0038), aunque en
+producción la publicación sola sigue apagada (`AI_AUTO_REPLY_PUBLISH` en el API)
+hasta que Google apruebe la verificación: decidido el 14 oct 2026, para que
+encenderla después no contradiga lo que vio Google y no pida otra revisión.
+§3.1 de la política dice lo mismo. Mientras está apagada, lo que piden esas
+reglas queda en cola y el panel lo dice («en cola»). La lectura de reseñas es
+cada hora desde el 11 oct 2026 (cron `hourly`), de ahí «up to once an hour».
+
+**Al modelo nunca le llega el nombre de quien escribió la reseña** (decidido de
+nuevo el 14 oct 2026, al integrar la versión de `develop`, que sí lo mandaba):
+escribe `{nombre}` y el servidor lo completa (`services/api/lib/replyWriter.js`).
 
 ## 5. Video de demostración
 
@@ -152,7 +164,9 @@ se declara y no se ve en el video es el motivo de rechazo más común.
 | 3 | Pantalla de consentimiento: que se vean **el nombre "Linkstar"**, el permiso, y la **barra de direcciones con el `client_id`**. Elegir la cuenta y aceptar. | "Google shows our app name and the only scope we request, business.manage." |
 | 4 | De vuelta en el panel: el mensaje "Listo, tu ficha de Google quedó conectada". | "We're back in the dashboard. The refresh token is stored encrypted on our server and never reaches the browser." |
 | 5 | **Configuración → Gestión local → Fichas de Google**: vincular *Linkstar* con su sucursal. Mostrar que la otra ficha queda **sin vincular**. Tocar **Actualizar ahora**. | "The owner chooses which locations belong to their business. We only read reviews and metrics of linked locations. Unlinked locations keep only their name and address, so they can be offered here." |
-| 6 | **Reseñas**: la bandeja con las reseñas de Linkstar. Abrir una; si la cuenta es Business, tocar **Generar respuesta con IA** y retocar el borrador (si no, escribirla a mano). Tocar **Publicar en Google**. Después mostrar la respuesta en Google Maps, en otra pestaña. | "Reviews of the linked location. On the paid plan the owner can ask the AI for a draft: the review's text and rating, never the reviewer's name, are sent to Anthropic's Claude API. The owner edits it and publishes it. We only post when the owner clicks this button. Here is the same reply on Google Maps." |
+| 6 | **Reseñas**: la bandeja con las reseñas de Linkstar. Abrir una; si la cuenta es Business, tocar **Generar respuesta con IA** y retocar el borrador (si no, escribirla a mano). Tocar **Publicar en Google**. Después mostrar la respuesta en Google Maps, en otra pestaña. | "Reviews of the linked location. On the paid plan the owner can ask the AI for a draft: the review's text and rating, never the reviewer's name, are sent to Anthropic's Claude API, with the tone the owner configured. The owner edits it and publishes it. Here is the same reply on Google Maps." |
+| 6b | **Configuración → Gestión local**: la tarjeta **Tonos de marca** (abrir uno: positivas o críticas, todos los locales o algunos) y **Email de contacto para reseñas negativas**. | "This is how the owner tells the AI how to write: a tone for positive reviews and one for critical ones, a signature, and the contact email used in replies to critical reviews." |
+| 6c | **Automatizaciones**: elegir el local **Linkstar** arriba y, en **Respuesta automática a reseñas**, mostrar que está apagada; activarla (4 y 5★, inmediata) y volver a apagarla al final. Si la publicación sola ya está encendida (`AI_AUTO_REPLY_PUBLISH=on`), mostrar en **Reseñas → Estado: Resp. automáticamente** una respuesta con la etiqueta «Respondida automáticamente», preparada antes de grabar **sólo en Linkstar**; si no, mostrar «Responder reseñas anteriores» y el aviso «en cola». | "The owner can also turn on an auto-reply rule. It's off by default, it only answers new reviews with the stars and locations the owner chose, and it can be turned off at any time." |
 | 7 | **Google Business → Métricas**: tarjetas y gráfico del período. | "Performance metrics of the linked location: views, calls, direction requests and website clicks." |
 | 8 | **Google Business → Perfil**: cambiar algo inocuo (por ejemplo, una frase de la descripción), **Guardar cambios**, y volver a dejarlo como estaba. | "The owner can edit the profile from here. We only write when the owner saves a change." |
 | 9 | **Google Business → Publicaciones**: **Nueva publicación**; en «Qué contar», **Generar sugerencias** (si la cuenta es Business) y elegir una; publicarla y después **borrarla**. | "On the paid plan the owner can ask the AI for a draft: the location's name, category, description and the post's photo are sent to Anthropic's Claude API. It's only a draft — posts are created and deleted only by the owner." |
