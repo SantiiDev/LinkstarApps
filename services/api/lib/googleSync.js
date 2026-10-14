@@ -24,16 +24,27 @@ import { analyzeOrganizationReviews } from './reviewAnalysis.js';
  * reseñas o en métricas se cuenta en `failures` y no frena al resto. El análisis
  * NO suma a `failures`: ese número se le muestra al cliente como «no pudimos
  * leer N de tus fichas», y una reseña sin analizar no es una ficha sin leer.
+ *
+ * `onlyReviews` (el cron horario, scripts/hourly.js) se saltea los pasos 3 y 4:
+ * Google publica las métricas con días de atraso y la protección se mira una
+ * vez por día, así que correrlos cada hora sólo gastaría cuota.
  */
-export async function syncGoogleOrganization(target, { dryRun = false, log = console.log } = {}) {
+const NO_METRICS = { days: 0, keywords: 0, failures: 0 };
+const NO_PROTECTION = { changes: 0, failures: 0 };
+
+export async function syncGoogleOrganization(target, { dryRun = false, onlyReviews = false, log = console.log } = {}) {
   const { organization_id: organizationId, refresh_token_enc: refreshTokenEnc, key_id: keyId } = target;
 
   const refreshToken = decryptToken(refreshTokenEnc, keyId, organizationId);
   const { accessToken } = await refreshAccessToken(refreshToken);
 
   const reviews = await syncReviews(accessToken, organizationId, { dryRun, log });
-  const metrics = await syncMetrics(accessToken, organizationId, reviews.linkedLocations, { dryRun, log });
-  const protection = await checkProfileChanges(accessToken, organizationId, reviews.linkedLocations, { dryRun, log });
+  const metrics = onlyReviews
+    ? NO_METRICS
+    : await syncMetrics(accessToken, organizationId, reviews.linkedLocations, { dryRun, log });
+  const protection = onlyReviews
+    ? NO_PROTECTION
+    : await checkProfileChanges(accessToken, organizationId, reviews.linkedLocations, { dryRun, log });
 
   // Lo que se lee de Google ya quedó guardado: si el análisis falla entero (la
   // API de Claude caída, o un entorno sin la 0033), se anota y la lectura sigue

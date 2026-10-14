@@ -1,17 +1,13 @@
-import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon/Icon';
 import PageHeader from '../../components/PageHeader/PageHeader';
-import Select from '../../components/Select/Select';
 import LocationsPage from '../Locations/Locations';
 import GoogleFichas from './GoogleFichas';
-import BrandToneModal from '../Reviews/BrandToneModal';
-import { fetchLocationRows } from '../../lib/catalogApi';
+import { ReplyContactCard, ReplyTonesCard } from './ReplySettings';
 import TeamMembers from './TeamMembers';
 import ActivityLog from './ActivityLog';
 import PlanTab from './PlanTab';
 import CardHead from './SettingsCardHead';
-import { useOrg } from '../../context/OrgContext';
 import { PUBLIC_ROUTES, SETTINGS_TABS, SETTINGS_TAB_ALIASES, settingsTabPath } from '../../lib/routes';
 import './Settings.css';
 
@@ -27,23 +23,7 @@ const TABS = [
 ];
 
 /* ─── Gestión local ───────────────────────────────────────────── */
-const CONTACT_LOCATION_OPTIONS = [{ value: 'all', label: 'Todos los locales' }];
-
 function LocalTab() {
-  const { org } = useOrg();
-  const [contactLocation, setContactLocation] = useState('all');
-  // El mismo modal de tono que abre Reseñas, con el selector de local. Todavía
-  // no guarda (sólo frontend, ver BrandToneModal): por eso la lista de abajo
-  // sigue vacía.
-  const [toneLocations, setToneLocations] = useState(null);
-
-  function openTone() {
-    setToneLocations([]);
-    fetchLocationRows(org?.organization_id)
-      .then((rows) => setToneLocations(rows.map((l) => ({ value: l.id, label: l.name }))))
-      .catch(() => {});
-  }
-
   return (
     <div className="settings-panel">
       {/* Primero Google y después las sucursales, como en Tapstar: la cuenta de
@@ -86,46 +66,9 @@ function LocalTab() {
         <LocationsPage embedded />
       </div>
 
-      <div className="settings-card">
-        <CardHead
-          icon="palette"
-          iconVariant="gold"
-          title="Tonos de marca"
-          subtitle={<p className="settings-card__subtitle">Definí cómo responde la IA por local. El tono específico de un local tiene prioridad sobre el global.</p>}
-          action={<button type="button" className="settings-save-btn" onClick={openTone}>+ Añadir tono</button>}
-        />
-
-        <div className="settings-empty-state">
-          <div className="settings-empty-state__icon"><Icon name="palette" size={22} /></div>
-          <p className="settings-empty-state__title">No hay tonos configurados todavía.</p>
-          <p className="settings-empty-state__text">Creá tu primer tono para que la IA responda con tu voz.</p>
-        </div>
-      </div>
-
-      {toneLocations && <BrandToneModal locationOptions={toneLocations} onClose={() => setToneLocations(null)} />}
-
-      <div className="settings-card">
-        <CardHead
-          icon="mail"
-          iconVariant="forest"
-          title="Email de contacto para reseñas negativas"
-          subtitle={<p className="settings-card__subtitle">La IA lo va a citar en las respuestas a reseñas de 1, 2 y 3 estrellas.</p>}
-        />
-
-        <div className="settings-contact-email-row">
-          <Select
-            value={contactLocation}
-            onChange={setContactLocation}
-            options={CONTACT_LOCATION_OPTIONS}
-            triggerClassName="settings-select"
-          />
-          <input type="email" placeholder="contacto@tunegocio.com" className="settings-text-input" />
-          <button type="button" className="settings-save-btn">Guardar</button>
-        </div>
-        <p className="settings-card__hint settings-card__hint--block">
-          Distinto de las alertas de Automatizaciones (que te avisan a vos). Este email es público — el cliente lo va a ver en la respuesta visible en Google Maps.
-        </p>
-      </div>
+      {/* Lo que usa la IA para responder reseñas (0037). Ver ReplySettings. */}
+      <ReplyTonesCard />
+      <ReplyContactCard />
     </div>
   );
 }

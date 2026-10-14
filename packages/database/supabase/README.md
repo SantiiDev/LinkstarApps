@@ -50,12 +50,15 @@ Desde la raíz del monorepo son `npm run db:reset`, `npm run db:push` y `npm run
 | `0034_retention_by_plan.sql` | El historial de cada plan (decisión 3): corte de lectura en escaneos, rollups, reseñas estimadas, métricas y búsquedas; purga de escaneos crudos (`run_purge_scan_events()`); `rebuild_today_rollup()` no reconstruye días ya purgados |
 | `0035_review_alert_kinds.sql` | Los dos tipos de aviso nuevos (`low_rating`, `review_keyword`). Va sola: un valor de enum no se puede usar en la transacción que lo crea |
 | `0036_review_alerts.sql` | Alertas de reseñas (Automatizaciones): columnas en `notification_preferences`, el trigger que anota desde cuándo está activa cada una, y `pending_notifications()` con valoración baja y palabras clave |
+| `0037_ai_review_replies.sql` | Respuestas con IA (resto de la fase 5): `google_reviews.reply_source` (+ trigger que lo borra si la respuesta cambia en Google), tonos de marca (`review_reply_tones` + locales, RPC `save/delete_review_reply_tone`), email de contacto por local (`review_reply_settings`), reglas automáticas (`review_auto_reply_rules`) y la cola `review_reply_jobs` con su candado (índice único parcial + claim con `skip locked`). Reemplaza `google_record_reply()` (suma `p_source`) |
 
 > **Producción tiene hasta la `0034`** (8 oct 2026; se subió antes que el API que llama a
 > `run_purge_scan_events()`, que es el orden correcto). **El proyecto de pruebas tiene hasta la
 > `0036`**: hasta la `0034` desde el 9 oct 2026, y `0035`–`0036` desde el 10 oct (`db push --db-url`,
 > `rls_isolation.sql` 185 en verde ahí). **La `0035` y la `0036` van a producción antes de mergear a
-> `main`**: el panel nuevo lee sus columnas y `send-alerts.js` ya tiene sus plantillas. Ojo con el vínculo del CLI: en la máquina de Santiago apunta al proyecto de
+> `main`**: el panel nuevo lee sus columnas y `send-alerts.js` ya tiene sus plantillas. **La `0037`
+> está en pruebas desde el 13 oct 2026** (`db push --db-url`, `rls_isolation.sql` 228 en verde, con su
+> sección 21); va a producción antes que el API que la usa (`routes/automations.js`, la ruta de respuesta con `p_source`). Ojo con el vínculo del CLI: en la máquina de Santiago apunta al proyecto de
 > pruebas y en otras a producción — revisá `.temp/project-ref` antes de cualquier `db:push`.
 
 > **Al aplicar la `0022` hay que actualizar `tests/rls_isolation.sql` en el mismo cambio.** El test

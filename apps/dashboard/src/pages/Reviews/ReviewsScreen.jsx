@@ -7,8 +7,10 @@ import {
   DEFAULT_REVIEW_FILTERS,
   fetchGoogleLocations,
   fetchReviewCounts,
+  fetchReplySources,
   fetchReviewPage,
   fetchReviewSentiments,
+  generateReplyDraft,
   replyToReview,
   REVIEWS_INBOX_PAGE_SIZE,
   useGoogleSyncRequest,
@@ -38,7 +40,11 @@ import './Reviews.css';
  *     que se muestra después es lo que devolvió Google, no el borrador. Con el
  *     filtro «Sin responder», la reseña respondida sale de la lista y el detalle
  *     pasa a la siguiente: es una bandeja, se vacía respondiendo.
- *   - La IA y el tono de marca son sólo frontend por ahora (ver BrandToneModal).
+ *   - «Generar respuesta con IA» (Business) pide un borrador con el tono de marca
+ *     (POST …/reply/ai, 0037) y lo pone en el cuadro: NO publica. Si se publica
+ *     partiendo de él, la respuesta queda como 'ai_assisted'. Las que publicó
+ *     sola la cola (regla automática o «Responder anteriores») llevan la
+ *     etiqueta «Respondida automáticamente» y su propio filtro en Estado.
  */
 
 function useDebounced(value, ms) {
@@ -57,7 +63,8 @@ const ICONS = {
   alert: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>,
 };
 
-const NO_COMPOSE = { id: null, text: '', editing: false, error: null };
+// `ai`: el texto del cuadro salió de la IA (aunque después se haya retocado).
+const NO_COMPOSE = { id: null, text: '', editing: false, error: null, ai: false };
 
 /* `initialFilter` son filtros con los que abrir la bandeja. «Responder ahora»
  * de Mi Empresa manda { rating: 'low', status: 'pending', locationId }: las de
@@ -73,11 +80,13 @@ function initialFilters(initialFilter) {
 }
 
 export default function ReviewsScreen({ google, onNavigateSettings, initialFilter }) {
-  const { org, isBusiness } = useOrg();
+  const { org, isBusiness, canManageBilling } = useOrg();
   const orgId = org?.organization_id;
   // Mismo criterio que google_review_reply_target() (0026). Para un manager la
   // base además restringe a sus sucursales; un viewer no ve el cuadro.
   const canReply = ['owner', 'admin', 'manager'].includes(org?.role);
+  // Los tonos los guarda quien administra la cuenta, en Business (0037).
+  const canEditTone = canManageBilling && isBusiness;
   // POST /api/google/sync es de owner/admin.
   const canSync = ['owner', 'admin'].includes(org?.role) && google.connection?.status === 'active';
 
@@ -90,6 +99,7 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
   const [error, setError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [sentiments, setSentiments] = useState(() => new Map());
+  const [replySources, setReplySources] = useState(() => new Map());
 
   const [filters, setFilters] = useState(() => initialFilters(initialFilter));
   const [search, setSearch] = useState('');
@@ -102,6 +112,7 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
   // nunca queda listo para publicarse en ésta.
   const [compose, setCompose] = useState(NO_COMPOSE);
   const [publishing, setPublishing] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [toneOpen, setToneOpen] = useState(false);
   const [sharing, setSharing] = useState(null); // la reseña que se está compartiendo
 
@@ -129,6 +140,16 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
       .catch((err) => console.error('No se pudo leer el tono de las reseñas:', err));
   }, [isBusiness, orgId]);
 
+  /* El origen de las respuestas cargadas (0037). Si falla, la lista queda igual,
+   * sin la etiqueta «Respondida automáticamente». */
+  const loadReplySources = useCallback((rows) => {
+    const answered = rows.filter((r) => r.reply_comment).map((r) => r.id);
+    if (!answered.length) return;
+    fetchReplySources(orgId, answered)
+      .then((found) => setReplySources((prev) => new Map([...prev, ...found])))
+      .catch((err) => console.error('No se pudo leer el origen de las respuestas:', err));
+  }, [orgId]);
+
   useEffect(() => {
     if (!orgId) return undefined;
     let cancelled = false;
@@ -148,6 +169,7 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
         // La elegida se conserva si sigue en la página; si no, la primera.
         setSelectedId((prev) => (result.rows.some((r) => r.id === prev) ? prev : result.rows[0]?.id ?? null));
         loadSentiments(result.rows);
+        loadReplySources(result.rows);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -158,7 +180,7 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [queryArgs, page, loadSummary, loadSentiments, orgId, reloadKey]);
+  }, [queryArgs, page, loadSummary, loadSentiments, loadReplySources, orgId, reloadKey]);
 
   // Cuando termina una lectura pedida desde acá, se relee todo.
   useEffect(() => {
@@ -193,12 +215,32 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
   const current = compose.id === selectedId ? compose : NO_COMPOSE;
   const updateCompose = (patch) => setCompose({ ...current, id: selectedId, ...patch });
 
+  /* Un borrador de la IA en el cuadro. «Generar otra» le pasa el anterior para
+   * que no repita el mismo. No publica nada. */
+  async function generate() {
+    if (!selected) return;
+    const reviewId = selected.id;
+    setGenerating(true);
+    updateCompose({ error: null });
+    try {
+      const text = await generateReplyDraft(reviewId, current.ai ? current.text : undefined);
+      // Va atado a la reseña para la que se pidió: si mientras tanto se eligió
+      // otra, no aparece en ésa.
+      setCompose((prev) => ({ ...(prev.id === reviewId ? prev : NO_COMPOSE), id: reviewId, text, ai: true, error: null }));
+    } catch (err) {
+      updateCompose({ error: err.message });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   async function publish() {
     if (!selected) return;
     setPublishing(true);
     updateCompose({ error: null });
     try {
-      const saved = await replyToReview(selected.id, current.text);
+      const saved = await replyToReview(selected.id, current.text, current.ai ? 'ai_assisted' : 'manual');
+      setReplySources((prev) => new Map(prev).set(selected.id, saved.source ?? (current.ai ? 'ai_assisted' : 'manual')));
       if (filters.status === 'pending') {
         // Sale de la bandeja y el detalle pasa a la que ocupa su lugar. Se
         // relee la página para que la primera de la siguiente suba a ésta (y
@@ -356,24 +398,28 @@ export default function ReviewsScreen({ google, onNavigateSettings, initialFilte
         <ReviewDetail
           review={selected}
           sentiment={selected ? sentiments.get(selected.id) ?? null : null}
+          replySource={selected ? replySources.get(selected.id) ?? null : null}
           showBranch={showBranch}
           canReply={canReply}
           isBusiness={isBusiness}
           draft={current.text}
           onDraft={(text) => updateCompose({ text })}
           editing={current.editing}
-          onEdit={() => updateCompose({ editing: true, text: selected?.reply_comment ?? '', error: null })}
+          onEdit={() => updateCompose({ editing: true, text: selected?.reply_comment ?? '', error: null, ai: false })}
           onCancelEdit={() => setCompose(NO_COMPOSE)}
           onPublish={publish}
           publishing={publishing}
           replyError={current.error}
-          onOpenTone={() => setToneOpen(true)}
+          onGenerate={generate}
+          generating={generating}
+          aiDraft={current.ai}
+          onOpenTone={canEditTone ? () => setToneOpen(true) : null}
           onShare={() => setSharing(selected)}
           onBack={() => setMobileDetail(false)}
         />
       </div>
 
-      {toneOpen && <BrandToneModal onClose={() => setToneOpen(false)} />}
+      {toneOpen && <BrandToneModal onClose={() => setToneOpen(false)} onSaved={() => setToneOpen(false)} />}
       {sharing && <ReviewShareModal review={sharing} onClose={() => setSharing(null)} />}
     </div>
   );

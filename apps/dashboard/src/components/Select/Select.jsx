@@ -3,7 +3,10 @@ import SoonBadge from '../SoonBadge/SoonBadge';
 import './Select.css';
 
 /* Una opción con `soon: true` lleva la etiqueta «Próximamente» del panel
-   (components/SoonBadge). Suele ir con `disabled: true`. */
+   (components/SoonBadge). Suele ir con `disabled: true`.
+   Una con `checked: true` lleva un ✓ a la derecha: «este ya tiene algo
+   cargado» (los locales con email en Datos para las respuestas). No es la
+   opción elegida, que se marca con el color. */
 
 export default function Select({ value, onChange, options, triggerClassName = '', menuClassName = '', disabled = false, placeholder = 'Seleccionar' }) {
   const [open, setOpen] = useState(false);
@@ -59,6 +62,11 @@ export default function Select({ value, onChange, options, triggerClassName = ''
             >
               {opt.label}
               {opt.soon && <SoonBadge className="ls-select__soon" />}
+              {opt.checked && (
+                <svg className="ls-select__check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-label="configurado">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
             </li>
           ))}
         </ul>

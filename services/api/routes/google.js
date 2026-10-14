@@ -17,6 +17,9 @@ import {
 import { encryptToken, decryptToken } from '../lib/tokenCrypto.js';
 import { syncGoogleOrganization } from '../lib/googleSync.js';
 import { putReviewReply } from '../lib/googleBusiness.js';
+import { isClaudeConfigured } from '../lib/claude.js';
+import { generateReply, REPLY_TEXT_MAX } from '../lib/replyWriter.js';
+import { runAutoReplies } from '../lib/replyJobs.js';
 
 const router = Router();
 
@@ -29,6 +32,7 @@ const router = Router();
  *   POST /api/google/disconnect    (con sesión) → revoca y borra
  *   POST /api/google/sync          (con sesión) → vuelve a leer la cuenta (202)
  *   POST /api/google/reviews/:id/reply (con sesión) → responde una reseña
+ *   POST /api/google/reviews/:id/reply/ai (con sesión) → borrador con IA
  *
  * ── Por qué el inicio es un POST que devuelve la URL ─────────────────────────
  * El panel autentica con un JWT en `Authorization: Bearer`, que una navegación
@@ -278,6 +282,9 @@ function runSync(target) {
       });
       await supabase.rpc('compute_review_deltas', {});
       log(`sincronización: ${summary.locations} ficha(s), ${summary.linked} vinculada(s), ${summary.reviews} reseña(s), ${summary.metricDays} día(s) de métricas`);
+      // Las reseñas recién leídas que una regla manda responder (0037). Nunca
+      // tira: un problema acá no es un problema de la sincronización.
+      await runAutoReplies(organizationId, { log });
     } catch (err) {
       console.error(`Sincronización de Google falló para ${organizationId}:`, err.message);
       const needsReauth = err.code === 'invalid_grant';
@@ -368,6 +375,16 @@ const replyLimiter = rateLimit({
   message: { error: 'Publicaste muchas respuestas seguidas. Esperá unos minutos y volvé a intentar.' },
 });
 
+// Cada borrador es una llamada paga a Claude. El costo es chico (~US$0,0005);
+// el límite es contra el abuso.
+const replyAiLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Pediste muchas respuestas con IA seguidas. Esperá unos minutos y volvé a intentar.' },
+});
+
 // ──────────────────────────────────────────────────────────
 // POST /api/google/sync
 // "Actualizar ahora": vuelve a leer la cuenta de Google de la organización en
@@ -404,13 +421,25 @@ router.post('/api/google/sync', syncLimiter, requireAuth(supabase), async (req, 
 });
 
 // ──────────────────────────────────────────────────────────
-// POST /api/google/reviews/:id/reply   { comment }
+// POST /api/google/reviews/:id/reply   { comment, source? }
 // Publica (o reemplaza) la respuesta del dueño en Google y, recién cuando Google
 // la acepta, la registra en la base. Quién puede responder qué lo decide
 // google_review_reply_target() (0026): owner/admin, o un manager en sus
-// sucursales.
+// sucursales. `source` dice si la escribió a mano ('manual') o partiendo de un
+// borrador de la IA ('ai_assisted'); 'auto' sólo lo pone la cola (0037).
 // ──────────────────────────────────────────────────────────
-const MAX_REPLY_LENGTH = 4096; // límite de Google
+const MAX_REPLY_LENGTH = REPLY_TEXT_MAX; // límite de Google
+const REPLY_SOURCES = ['manual', 'ai_assisted'];
+
+function badRequest(message) {
+  const err = new Error(message);
+  err.status = 400;
+  return err;
+}
+
+function requireReviewId(id) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw badRequest('Reseña inválida');
+}
 
 router.post('/api/google/reviews/:id/reply', replyLimiter, requireAuth(supabase), async (req, res) => {
   try {
@@ -418,15 +447,11 @@ router.post('/api/google/reviews/:id/reply', replyLimiter, requireAuth(supabase)
 
     const comment = typeof req.body?.comment === 'string' ? req.body.comment.trim() : '';
     if (!comment || comment.length > MAX_REPLY_LENGTH) {
-      const err = new Error(`La respuesta tiene que tener entre 1 y ${MAX_REPLY_LENGTH} caracteres`);
-      err.status = 400;
-      throw err;
+      throw badRequest(`La respuesta tiene que tener entre 1 y ${MAX_REPLY_LENGTH} caracteres`);
     }
-    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) {
-      const err = new Error('Reseña inválida');
-      err.status = 400;
-      throw err;
-    }
+    const source = req.body?.source ?? 'manual';
+    if (!REPLY_SOURCES.includes(source)) throw badRequest('Origen de la respuesta inválido');
+    requireReviewId(req.params.id);
 
     const { data: rows, error } = await supabase.rpc('google_review_reply_target', {
       p_user: req.user.id,
@@ -457,13 +482,14 @@ router.post('/api/google/reviews/:id/reply', replyLimiter, requireAuth(supabase)
       p_user: req.user.id,
       p_comment: reply.comment,
       p_updated: reply.updateTime,
+      p_source: source,
     });
     // La respuesta ya está publicada en Google. Si no se pudo registrar, se
     // avisa en el log pero no se le dice al usuario que falló: la próxima
     // lectura de la ficha la trae de Google igual.
     if (recordError) console.error('Respuesta publicada en Google pero no registrada:', recordError.message);
 
-    res.json({ comment: reply.comment, updatedTime: reply.updateTime });
+    res.json({ comment: reply.comment, updatedTime: reply.updateTime, source });
   } catch (err) {
     if ((err.status && err.status < 500) || err.status === 503) {
       return res.status(err.status).json({ error: err.message });
@@ -475,6 +501,59 @@ router.post('/api/google/reviews/:id/reply', replyLimiter, requireAuth(supabase)
     // El detalle de Google (o de la base) sólo al log (CWE-209).
     console.error('Error respondiendo una reseña:', err);
     res.status(502).json({ error: 'Google no aceptó la respuesta. Probá de nuevo en unos minutos.' });
+  }
+});
+
+// ──────────────────────────────────────────────────────────
+// POST /api/google/reviews/:id/reply/ai   { previous? }
+// Un borrador de respuesta escrito por Claude (lib/replyWriter.js) con el tono
+// de marca y el email de contacto del local. NO publica: vuelve al panel, la
+// persona lo revisa y lo publica con la ruta de arriba (source 'ai_assisted').
+// Mismo permiso que responder, y Business. `previous` es el borrador anterior,
+// para que «Generar otra» no repita el mismo.
+// ──────────────────────────────────────────────────────────
+router.post('/api/google/reviews/:id/reply/ai', replyAiLimiter, requireAuth(supabase), async (req, res) => {
+  try {
+    if (!isClaudeConfigured()) {
+      return res.status(503).json({ error: 'La IA no está disponible en este momento' });
+    }
+    requireReviewId(req.params.id);
+    const previous = typeof req.body?.previous === 'string' ? req.body.previous.trim().slice(0, MAX_REPLY_LENGTH) : '';
+
+    const { error: targetError } = await supabase.rpc('google_review_reply_target', {
+      p_user: req.user.id,
+      p_review: req.params.id,
+    });
+    if (targetError) throw rpcError(targetError, { rol_insuficiente: [403, 'No tenés permiso para responder reseñas de esta sucursal'] });
+
+    const { data: ctx, error: ctxError } = await supabase.rpc('review_reply_context', { p_review: req.params.id });
+    if (ctxError) throw ctxError;
+    if (!ctx) {
+      const err = new Error(RPC_ERRORS.resena_inexistente[1]);
+      err.status = 404;
+      throw err;
+    }
+    if (!ctx.is_business) {
+      const err = new Error('Las respuestas con IA son parte del plan Business');
+      err.status = 402;
+      throw err;
+    }
+
+    // Lo que falle del lado de Claude se loguea entero; al panel le llega el
+    // texto genérico (un 4xx de Claude no tiene que llegar crudo).
+    let text;
+    try {
+      text = await generateReply(ctx, { previous: previous || undefined });
+    } catch (err) {
+      throw new Error(`Claude no pudo escribir la respuesta: ${err.message}`, { cause: err });
+    }
+    res.json({ text });
+  } catch (err) {
+    if ((err.status && err.status < 500) || err.status === 503) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    console.error('Error en la IA de respuestas:', err);
+    res.status(502).json({ error: 'No pudimos escribir la respuesta con IA. Probá de nuevo en unos minutos.' });
   }
 });
 

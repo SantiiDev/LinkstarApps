@@ -7,6 +7,13 @@ import { send, deviceIdleEmail, weeklySummaryEmail, lowRatingEmail, keywordAlert
  *
  *   node scripts/send-alerts.js            manda lo que haya pendiente
  *   node scripts/send-alerts.js --dry-run  muestra qué mandaría, sin mandar
+ *   node scripts/send-alerts.js --kinds=low_rating,review_keyword
+ *                                          sólo esos tipos (lo que corre cada
+ *                                          hora, scripts/hourly.js)
+ *
+ * El cron horario manda sólo las alertas de reseñas: el resumen semanal se
+ * repite «si no salió en los últimos 6 días», y corriendo cada hora saldría
+ * cada 6 días a cualquier hora en vez de una vez por semana a las 8.
  *
  * Toda la decisión de QUÉ mandar vive en SQL (public.pending_notifications,
  * migración 0023). Acá sólo se arma el mail y se manda, igual que
@@ -35,9 +42,12 @@ const TEMPLATES = {
 
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
+  const kindsArg = process.argv.find((arg) => arg.startsWith('--kinds='));
+  const kinds = kindsArg ? new Set(kindsArg.slice('--kinds='.length).split(',').map((k) => k.trim()).filter(Boolean)) : null;
 
-  const { data: pending, error } = await supabase.rpc('pending_notifications');
+  const { data: all, error } = await supabase.rpc('pending_notifications');
   if (error) throw error;
+  const pending = kinds ? (all ?? []).filter((row) => kinds.has(row.kind)) : all;
 
   if (!pending?.length) {
     console.log('No hay avisos pendientes.');

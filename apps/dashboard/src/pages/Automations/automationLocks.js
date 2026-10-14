@@ -10,7 +10,7 @@ export const PAST_REPLIES_LOCK = {
 
 export const AUTO_REPLY_LOCK = {
   title: 'Que tus reseñas se respondan solas, con tu tono',
-  description: 'Cada reseña nueva recibe una respuesta escrita con IA, en el idioma de tu negocio, apenas entra o con el retardo que elijas.',
+  description: 'Cada reseña nueva recibe una respuesta escrita con IA, en el idioma de la reseña, en menos de una hora o con el retardo que elijas.',
 };
 
 export const AUTO_REPLY_STATS_LOCK = {

@@ -199,6 +199,25 @@ export const googlePostAiSchema = z
   })
   .refine((b) => b.mode !== 'tweak' || (b.text && b.tweak), { message: 'Falta el texto o el ajuste' });
 
+// Automatizaciones con IA (routes/automations.js, 0037). La forma es la del
+// contrato de apps/dashboard/src/lib/automationsApi.js.
+// Regex y no z.string().uuid(): en zod 4 esa exige la variante RFC, y el resto
+// del API valida ids con el mismo patrón laxo.
+const uuid = z.string().regex(/^[0-9a-f-]{36}$/i, 'id inválido');
+export const autoReplyRuleSchema = z.object({
+  org: uuid,
+  location_id: uuid.nullable(),
+  enabled: z.boolean(),
+  stars: z.array(z.number().int().min(1).max(5)).min(1).max(5),
+  delay: z.enum(['now', '1-3h', '3-6h']),
+});
+export const replyPastSchema = z.object({
+  org: uuid,
+  location_id: uuid.nullable(),
+  count: z.number().int().min(1).max(200),
+  stars: z.enum(['all', '4-5', '5', '1-3']),
+});
+
 // Middleware genérico: valida req.body contra un schema de Zod. 400 con el
 // primer error legible si falla, y reemplaza req.body por los datos ya
 // parseados/coercionados (trim, etc.) si pasa.

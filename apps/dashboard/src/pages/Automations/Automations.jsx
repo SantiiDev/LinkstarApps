@@ -3,6 +3,7 @@ import BusinessLock from '../../components/BusinessLock/BusinessLock';
 import Icon from '../../components/Icon/Icon';
 import PageHeader from '../../components/PageHeader/PageHeader';
 import { useOrg } from '../../context/OrgContext';
+import { useRememberedState } from '../../lib/useRememberedState';
 import { fetchLocationRows } from '../../lib/catalogApi';
 import {
   AUTO_REPLY_DEFAULTS,
@@ -38,9 +39,9 @@ import './Automations.css';
  * Automatizaciones — la estructura de Tapstar, con nuestra estética:
  *
  *   1. Selector de local («Configurar automatizaciones de»).
- *   2. Responder reseñas anteriores        ┐ Business, con IA. El backend es del
- *   3. Respuesta automática a reseñas       │ socio: el contrato (rutas y forma de
- *   4. Reseñas respondidas automáticamente  ┘ los datos) está en lib/automationsApi.js.
+ *   2. Responder reseñas anteriores        ┐ Business, con IA (0037). El contrato
+ *   3. Respuesta automática a reseñas       │ está en lib/automationsApi.js y lo
+ *   4. Reseñas respondidas automáticamente  ┘ implementa routes/automations.js.
  *   5. Alerta por palabras clave            ┐ Todos los planes. Nuestras, reales
  *   6. Alerta por valoración baja           ┘ (0036): las manda send-alerts.js.
  *   7. Avisos de tus expositores (0023).
@@ -75,7 +76,11 @@ const IDLE_HOUR_OPTIONS = [
   { value: 168, label: '1 semana' },
 ];
 
-const KEYWORD_FIELDS = ['keyword_alert_enabled', 'keyword_alert_terms', 'keyword_alert_recipients'];
+const PAST_DEFAULTS = { count: 50, stars: '4-5' };
+const NO_LOCATIONS = [];
+const NO_AUTO = { saved: AUTO_REPLY_DEFAULTS, draft: null };
+
+const KEYWORD_FIELDS =['keyword_alert_enabled', 'keyword_alert_terms', 'keyword_alert_recipients'];
 const LOW_RATING_FIELDS = ['low_rating_enabled', 'low_rating_stars', 'low_rating_recipients'];
 const DEVICE_FIELDS = ['device_idle_enabled', 'device_idle_hours', 'weekly_summary_enabled', 'recipient_email'];
 
@@ -93,10 +98,13 @@ const noop = () => {};
 /* El borrador se deriva en el mismo render, no en un efecto: con un efecto, el
    primer render después de cargar las preferencias usaba el borrador viejo
    (todo null) y la pantalla entera se caía. Lo editado vale mientras sea sobre
-   la misma versión guardada (`key`). */
-function useCardDraft(saved, keys) {
+   la misma versión guardada (`key`). Queda en memoria (`memoryKey`): lo que se
+   escribió sin guardar sigue ahí al volver de otra sección. */
+const NO_EDIT = { key: null, draft: null };
+
+function useCardDraft(saved, keys, memoryKey) {
   const baseKey = JSON.stringify(pick(saved, keys));
-  const [edit, setEdit] = useState({ key: null, draft: null });
+  const [edit, setEdit] = useRememberedState(memoryKey, NO_EDIT);
   const draft = edit.key === baseKey ? edit.draft : JSON.parse(baseKey);
   return {
     draft,
@@ -110,17 +118,27 @@ export default function Automations({ onNavigateSettings }) {
   const orgId = org?.organization_id;
   const isViewer = org?.role === 'viewer';
 
+  /* Todo lo que elige o escribe la persona en esta pantalla queda en memoria
+     por organización (lib/useRememberedState): al ir a otra sección y volver
+     sigue como estaba. Se pierde al recargar, como en el resto del panel. */
+  const mem = (name) => (orgId ? `automations:${name}:${orgId}` : null);
+
   /* ── Locales para el selector ── */
-  const [locations, setLocations] = useState([]);
-  const [scope, setScope] = useState('');
+  const [locations, setLocations] = useRememberedState(mem('locations'), NO_LOCATIONS);
+  const [scope, setScope] = useRememberedState(mem('scope'), '');
   useEffect(() => {
     if (!orgId) return undefined;
     let cancelled = false;
     fetchLocationRows(orgId)
-      .then((rows) => { if (!cancelled) setLocations(rows); })
+      .then((rows) => {
+        if (cancelled) return;
+        setLocations(rows);
+        // El local recordado ya no existe (se borró): vuelve a «Todos».
+        setScope((current) => (current && !rows.some((l) => l.id === current) ? '' : current));
+      })
       .catch((err) => console.error('No se pudieron cargar los locales:', err));
     return () => { cancelled = true; };
-  }, [orgId]);
+  }, [orgId, setLocations, setScope]);
   const scopeOptions = useMemo(
     () => [{ value: '', label: 'Todos los locales' }, ...locations.map((l) => ({ value: l.id, label: l.name }))],
     [locations]
@@ -129,8 +147,9 @@ export default function Automations({ onNavigateSettings }) {
   const locationId = scope || null;
 
   /* ── Preferencias de avisos y registro (0023/0036) ── */
-  const [saved, setSaved] = useState(null);
-  const [prefsLoading, setPrefsLoading] = useState(true);
+  // Lo último leído queda en memoria: al volver se muestra al instante y se
+  // relee por detrás, sin «Cargando tus alertas…».
+  const [saved, setSaved] = useRememberedState(mem('prefs'), null);
   const [prefsError, setPrefsError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [cardState, setCardState] = useState({});   // { [card]: { saving, status } }
@@ -138,7 +157,6 @@ export default function Automations({ onNavigateSettings }) {
   useEffect(() => {
     if (orgLoading || !orgId || !canManageBilling) return undefined;
     let cancelled = false;
-    setPrefsLoading(true);
     setPrefsError(null);
     fetchNotificationPreferences(orgId)
       .then(({ prefs }) => {
@@ -148,14 +166,13 @@ export default function Automations({ onNavigateSettings }) {
         if (cancelled) return;
         console.error('No se pudieron leer las preferencias de avisos:', err);
         setPrefsError('No pudimos leer la configuración de tus avisos.');
-      })
-      .finally(() => { if (!cancelled) setPrefsLoading(false); });
+      });
     return () => { cancelled = true; };
-  }, [orgId, canManageBilling, orgLoading, reloadKey]);
+  }, [orgId, canManageBilling, orgLoading, reloadKey, setSaved]);
 
-  const keyword = useCardDraft(saved, KEYWORD_FIELDS);
-  const lowRating = useCardDraft(saved, LOW_RATING_FIELDS);
-  const devices = useCardDraft(saved, DEVICE_FIELDS);
+  const keyword = useCardDraft(saved, KEYWORD_FIELDS, mem('draft:keyword'));
+  const lowRating = useCardDraft(saved, LOW_RATING_FIELDS, mem('draft:lowRating'));
+  const devices = useCardDraft(saved, DEVICE_FIELDS, mem('draft:devices'));
 
   async function savePrefs(card, patch, okText) {
     setCardState((s) => ({ ...s, [card]: { saving: true, status: null } }));
@@ -180,36 +197,46 @@ export default function Automations({ onNavigateSettings }) {
   const deviceEmail = (devices.draft.recipient_email ?? '').trim();
   const deviceEmailInvalid = deviceEmail !== '' && !isEmail(deviceEmail);
 
-  /* ── Respuestas con IA (Business, backend del socio) ── */
+  /* ── Respuestas con IA (Business, 0037) ── */
   const aiVisible = isBusiness && !isViewer;
-  const [autoSaved, setAutoSaved] = useState(AUTO_REPLY_DEFAULTS);
-  const [autoDraft, setAutoDraft] = useState(AUTO_REPLY_DEFAULTS);
-  const [stats, setStats] = useState(null);
-  const [past, setPast] = useState({ count: 50, stars: '4-5' });
+  // La regla de cada ámbito: la guardada y lo cambiado sin guardar (`draft`,
+  // null = igual a la guardada). En memoria por local: cambiar el selector y
+  // volver no pierde lo que se estaba armando.
+  const scopeMem = (name) => mem(`${name}:${locationId ?? 'all'}`);
+  const [auto, setAuto] = useRememberedState(scopeMem('auto'), NO_AUTO);
+  const autoSaved = auto.saved;
+  const autoDraft = auto.draft ?? auto.saved;
+  const setAutoDraft = (update) => setAuto((m) => ({ ...m, draft: update(m.draft ?? m.saved) }));
+  const [stats, setStats] = useRememberedState(scopeMem('stats'), null);
+  // Cuántas y de qué estrellas en «Responder reseñas anteriores».
+  const [past, setPast] = useRememberedState(mem('past'), PAST_DEFAULTS);
   const [pastConfirming, setPastConfirming] = useState(false);
 
   useEffect(() => {
     if (!aiVisible || !orgId) return undefined;
     let cancelled = false;
     setPastConfirming(false);
-    // Una lectura que falla deja los valores por defecto, sin mensaje: la
-    // pantalla sigue sirviendo para configurar.
+    // Una lectura que falla deja lo que había (o los valores por defecto), sin
+    // mensaje: la pantalla sigue sirviendo para configurar. Lo cambiado sin
+    // guardar se conserva mientras la regla guardada no haya cambiado.
     fetchAutoReplyRule(orgId, locationId)
-      .catch((err) => { console.error('No se pudo leer la respuesta automática:', err); return AUTO_REPLY_DEFAULTS; })
-      .then((rule) => { if (!cancelled) { setAutoSaved(rule); setAutoDraft(rule); } });
+      .then((rule) => {
+        if (cancelled) return;
+        setAuto((m) => ({ saved: rule, draft: m.draft && same(m.saved, rule) ? m.draft : null }));
+      })
+      .catch((err) => console.error('No se pudo leer la respuesta automática:', err));
     fetchAutoReplyStats(orgId, locationId)
-      .catch((err) => { console.error('No se pudieron leer las reseñas respondidas:', err); return null; })
-      .then((s) => { if (!cancelled) setStats(s); });
+      .then((s) => { if (!cancelled) setStats(s); })
+      .catch((err) => console.error('No se pudieron leer las reseñas respondidas:', err));
     return () => { cancelled = true; };
-  }, [aiVisible, orgId, locationId]);
+  }, [aiVisible, orgId, locationId, setAuto, setStats]);
 
   const saveAutoReply = useCallback(async (enabled) => {
     setCardState((s) => ({ ...s, autoReply: { saving: true, status: null } }));
     try {
       const rule = await saveAutoReplyRule(orgId, locationId, { ...autoDraft, enabled });
       const next = { ...AUTO_REPLY_DEFAULTS, ...autoDraft, ...rule, enabled };
-      setAutoSaved(next);
-      setAutoDraft(next);
+      setAuto({ saved: next, draft: null });
       setCardState((s) => ({
         ...s,
         autoReply: { saving: false, status: { text: enabled ? 'Listo, la regla está activa.' : 'Regla desactivada.' } },
@@ -217,7 +244,7 @@ export default function Automations({ onNavigateSettings }) {
     } catch (err) {
       setCardState((s) => ({ ...s, autoReply: { saving: false, status: { text: err.message, error: true } } }));
     }
-  }, [orgId, locationId, autoDraft]);
+  }, [orgId, locationId, autoDraft, setAuto]);
 
   async function runPastReplies() {
     setCardState((s) => ({ ...s, past: { saving: true, status: null } }));
@@ -230,7 +257,7 @@ export default function Automations({ onNavigateSettings }) {
           saving: false,
           status: {
             text: queued
-              ? `Listo: ${queued} reseña${queued === 1 ? '' : 's'} en camino. Las respuestas aparecen en Reseñas a medida que se publican.`
+              ? `Listo: ${queued} reseña${queued === 1 ? '' : 's'} en camino. Las respuestas aparecen en Reseñas a medida que se publican (unos segundos cada una).`
               : 'No había reseñas sin responder con ese filtro.',
           },
         },
@@ -329,7 +356,7 @@ export default function Automations({ onNavigateSettings }) {
             mail. Si necesitás recibirlos, pedile a alguno de ellos que los configure.
           </p>
         </div>
-      ) : prefsLoading || !saved ? (
+      ) : !saved ? (
         prefsError ? (
           <div className="automations-notice automations-notice--error" role="alert">
             <p>{prefsError}</p>

@@ -90,13 +90,26 @@ export async function requestGoogleSync() {
 }
 
 /* Publica (o reemplaza) la respuesta a una reseña. Devuelve lo que Google
- * guardó, que es lo que hay que mostrar. */
-export async function replyToReview(reviewId, comment) {
+ * guardó, que es lo que hay que mostrar. `source` es 'ai_assisted' si se partió
+ * de un borrador de la IA (0037): es lo que distingue las respuestas en la base. */
+export async function replyToReview(reviewId, comment, source = 'manual') {
   return apiFetch(
     `/api/google/reviews/${encodeURIComponent(reviewId)}/reply`,
-    { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ comment }) },
+    { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ comment, source }) },
     'No se pudo publicar la respuesta'
   );
+}
+
+/* Un borrador de respuesta escrito por la IA con el tono de marca (Business).
+ * NO publica: vuelve al cuadro de respuesta. `previous` es el borrador anterior,
+ * para que «Generar otra» no repita el mismo. */
+export async function generateReplyDraft(reviewId, previous) {
+  const body = await apiFetch(
+    `/api/google/reviews/${encodeURIComponent(reviewId)}/reply/ai`,
+    { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ previous: previous || undefined }) },
+    'No pudimos escribir la respuesta con IA'
+  );
+  return body.text ?? '';
 }
 
 /* ─── Fichas ──────────────────────────────────────────────────────────────── */
@@ -132,10 +145,10 @@ export const REVIEWS_PAGE_SIZE = 50;
 /* Los filtros de la bandeja, combinables entre sí (formato de <Select>).
  *
  *   - Rating: las estrellas que puso el cliente.
- *   - Estado: «Resp. automáticamente» (fase 7, responder solas las de 5★) y
- *     «Retiradas» (reseñas que el autor o Google borraron: la lectura todavía no
- *     las detecta) no tienen dato. Van deshabilitadas para que se vea lo que
- *     viene, sin un filtro que devuelva siempre vacío.
+ *   - Estado: «Resp. automáticamente» son las que publicó la cola de respuestas
+ *     con IA (reply_source = 'auto', 0037): una regla automática o «Responder
+ *     reseñas anteriores». «Retiradas» (reseñas que el autor o Google borraron:
+ *     la lectura todavía no las detecta) no tiene dato y va deshabilitada.
  *   - Tipo: el TONO del texto según la IA (0033), no las estrellas. Es de
  *     Business: en gratis la pantalla deshabilita las opciones, y aunque no lo
  *     hiciera el RLS de google_review_analysis no devolvería nada. */
@@ -151,7 +164,7 @@ export const REVIEW_STATUS_OPTIONS = [
   { value: 'all', label: 'Todas' },
   { value: 'answered', label: 'Respondidas' },
   { value: 'pending', label: 'Sin responder' },
-  { value: 'auto', label: 'Resp. automáticamente', disabled: true, soon: true },
+  { value: 'auto', label: 'Resp. automáticamente' },
   { value: 'withdrawn', label: 'Retiradas', disabled: true, soon: true },
 ];
 
@@ -246,6 +259,9 @@ function reviewsQuery(organizationId, {
   else if (rating !== 'all') query = query.eq('star_rating', Number(rating));
   if (status === 'answered') query = query.not('reply_comment', 'is', null);
   if (status === 'pending') query = query.is('reply_comment', null);
+  // reply_source es de la 0037: se usa sólo con este filtro, por la misma razón
+  // que el análisis (una base sin la migración rechazaría la consulta entera).
+  if (status === 'auto') query = query.eq('reply_source', 'auto');
   if (sentiment !== 'all') query = query.eq('google_review_analysis.sentiment', sentiment);
   if (locationId) query = query.eq('google_locations.location_id', locationId);
 
@@ -269,6 +285,22 @@ export async function fetchReviewSentiments(organizationId, reviewIds) {
     .in('review_id', reviewIds);
   if (error) throw error;
   return new Map((data ?? []).map((row) => [row.review_id, row.sentiment]));
+}
+
+/* El origen de la respuesta (0037) de un grupo de reseñas: Map<review_id,
+ * 'manual' | 'ai_assisted' | 'auto'>, sólo las que tienen. Es la etiqueta
+ * «Respondida automáticamente» del detalle. Aparte de la lista, como el tono:
+ * si falla, la lista queda sin etiqueta, no sin reseñas. */
+export async function fetchReplySources(organizationId, reviewIds) {
+  if (!reviewIds.length) return new Map();
+  const { data, error } = await supabase
+    .from('google_reviews')
+    .select('id, reply_source')
+    .eq('organization_id', requireOrg(organizationId))
+    .in('id', reviewIds)
+    .not('reply_source', 'is', null);
+  if (error) throw error;
+  return new Map((data ?? []).map((row) => [row.id, row.reply_source]));
 }
 
 /* Unas reseñas puntuales, por id, de la más nueva a la más vieja: las que se
