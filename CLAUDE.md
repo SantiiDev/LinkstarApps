@@ -320,10 +320,11 @@ window, and audit-log entries — what was worth keeping from `develop`'s parall
 `0039` the "contract" half of `0038`: drops `0037`'s tone functions and the tone columns of
 `review_reply_settings` (same section).
 
-**Everything up to `0038` is applied in production**, and the API and panel that use it are deployed
-(`main` = `d1abc8c`, 14 Oct 2026). **`0039` is not in any remote project yet** (written 14 Oct 2026):
-unlike every migration before it, it *removes* what the old API called, so it goes **after** the new
-API is on Railway (it is). **Up to `0037`:** `0035`–`0036` reached it on 11 Oct 2026 (after
+**Everything up to `0039` is applied in production.** `0038` went first and the API and panel that
+use it were deployed on top (`main` = `d1abc8c`, 14 Oct 2026); `0039` was pushed the same day, after
+that deploy (merged as PR #17) — unlike every migration before it, it *removes* what the old API
+called, so it had to go **after** the new API was on Railway. Checked in production afterwards:
+`migration list` matches and `review_reply_settings` has no tone columns left. **Up to `0037`:** `0035`–`0036` reached it on 11 Oct 2026 (after
 the test project on 10 Oct, 185 green), but `main` had been merged with their code a little earlier —
 the wrong order again, harmless only because `send-alerts.js` works with the old
 `pending_notifications()`. `0037` was pushed the same day **before** the AI-replies API reached `main`
@@ -1192,7 +1193,6 @@ Tested on 11 Oct 2026 (`0037`) and 14 Oct 2026 (`0038`):
 Pending:
 - the «Respuestas IA» settings tab (with the language control);
 - per-location review alerts;
-- pushing `0039` to production (written, not pushed);
 - bringing the test project back to the production schema (needs its pooler password), then
   `0038` and `0039`.
 

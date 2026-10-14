@@ -54,10 +54,10 @@ Desde la raíz del monorepo son `npm run db:reset`, `npm run db:push` y `npm run
 | `0038_ai_reply_tones_and_queue_limits.sql` | Tonos por tipo (positivas / críticas) y por lista de locales (`review_reply_tones` + `review_reply_tone_locations`, `review_reply_writer_context()`), techo de 2.000 respuestas por organización y mes, ventana de 7 días de la regla automática y registro de actividad. Sólo agrega: lo que reemplaza de la 0037 lo borra la `0039` |
 | `0039_drop_unused_ai_reply_tone.sql` | El «contract» de la `0038`: borra `list_brand_tones()`, `save_brand_tone()`, `delete_brand_tone()`, `review_reply_context(uuid, uuid)` y las columnas de tono de `review_reply_settings` (`instructions`, `signature`, `emojis`, `tone_saved_at`); `save_negative_contact()` borra la fila vacía sin mirar el tono (sí el idioma). Va **después** del deploy del API que usa la `0038` |
 
-> **Producción tiene hasta la `0038`**, y el API y el panel que la usan están desplegados (`main` =
-> `d1abc8c`, 14 oct 2026). **La `0039` todavía no está en ningún proyecto remoto**: es la primera
-> que *saca* algo que el API viejo usaba, así que va a producción sólo con el API nuevo ya en Railway
-> (al revés que la `0038`, que iba antes). **El proyecto de pruebas tiene una `0037` distinta** (la de
+> **Producción tiene hasta la `0039`** (14 oct 2026). La `0038` fue antes del deploy del API y el
+> panel que la usan (`main` = `d1abc8c`); la `0039` fue después, porque es la primera que *saca* algo
+> que el API viejo usaba. Comprobado en producción con `migration list` y sobre el esquema
+> (`review_reply_settings` ya no tiene columnas de tono). **El proyecto de pruebas tiene una `0037` distinta** (la de
 > `develop`, ver abajo) y hay que devolverlo al esquema de producción antes de subirle la `0038` y la
 > `0039`. Ojo con el vínculo del CLI: en la máquina de Santiago apunta al proyecto de
 > pruebas y en otras a producción — revisá `.temp/project-ref` antes de cualquier `db:push`.
