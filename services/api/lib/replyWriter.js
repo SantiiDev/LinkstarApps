@@ -1,6 +1,6 @@
 import { generateJson } from './claude.js';
 
-/* Respuestas con IA a reseñas de Google (0037). Escribe el texto; publicarlo es
+/* Respuestas con IA a reseñas de Google (0037/0038). Escribe el texto; publicarlo es
  * de lib/replyPublisher.js. Lo usan:
  *   - POST /api/google/reviews/:id/reply/ai (routes/automations.js): un borrador
  *     que vuelve al panel y la persona revisa y publica.
@@ -14,7 +14,10 @@ import { generateJson } from './claude.js';
  * modelo escribe {nombre} y lo completamos acá. Lo mismo con el mail ({email}) y
  * la firma, que se agrega al final y nunca la escribe el modelo. Está declarado
  * en la política de privacidad del panel (3.2) y en GOOGLE_VERIFICATION.md: si
- * se suma otro dato, se cambian los dos.
+ * se suma otro dato, se cambian los dos. Decidido otra vez el 14 oct 2026, al
+ * integrar la versión de `develop`, que sí mandaba el nombre de pila: no.
+ * El tono de marca es el que toca por estrellas y local (0038: positivas 4–5★,
+ * críticas 1–3★, el del local antes que el de todos).
  *
  * El texto de la reseña lo escribió un tercero: va entre comillas como dato, y
  * la respuesta está atada a un esquema, así que no puede cambiar su forma.
@@ -104,14 +107,50 @@ export function fillPlaceholders(text, { name, email, signature }) {
   return out.slice(0, REPLY_TEXT_MAX);
 }
 
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/* Lo contrario de fillPlaceholders, para el borrador anterior de «Generar
+ * otra»: ese texto ya tiene el nombre, el mail y la firma completados, y el
+ * nombre no puede llegarle a Claude. Vuelven a ser {nombre} y {email}, y la
+ * firma se saca. Busca el nombre completo y el de pila, palabra entera. Si la
+ * persona escribió a mano otra forma del nombre (un apodo, el apellido solo),
+ * eso no se reconoce: el borrador anterior es un texto que la persona puede
+ * haber retocado. */
+export function toPlaceholders(text, { reviewerName, isAnonymous, email, signature }) {
+  let out = String(text ?? '').trim();
+
+  const sign = String(signature ?? '').trim();
+  if (sign && out.endsWith(sign)) out = out.slice(0, -sign.length).trimEnd();
+
+  if (email) out = out.split(email).join(EMAIL);
+
+  const names = [String(reviewerName ?? '').trim(), firstName(reviewerName, isAnonymous)]
+    .filter((n, i, all) => n && n.length > 1 && all.indexOf(n) === i);
+  for (const name of names) {
+    out = out.replace(new RegExp(`(^|[^\\p{L}])${escapeRegExp(name)}(?![\\p{L}])`, 'gu'), `$1${NAME}`);
+  }
+  return out;
+}
+
 /* review: { star_rating, comment (el original), reviewer_name, is_anonymous, business_name }
- * context: lo que devuelve review_reply_context() (tono + mail del alcance)
- * instructions: una indicación puntual para este borrador (opcional) */
-export async function writeReply({ review, context = {}, instructions }) {
+ * context: lo que devuelve review_reply_writer_context() (0038): el tono que
+ *          toca por estrellas y local, el idioma y el mail
+ * instructions: una indicación puntual para este borrador (opcional)
+ * previous: el borrador anterior, con «Generar otra» (opcional; se manda sin
+ *           el nombre, ver toPlaceholders) */
+export function buildReplyPrompt({ review, context = {}, instructions, previous }) {
   const stars = review.star_rating;
   const comment = String(review.comment ?? '').trim();
   const isNegative = stars != null && stars <= 3;
   const hasEmail = Boolean(context.negative_contact_email) && isNegative;
+  const before = previous
+    ? toPlaceholders(previous, {
+        reviewerName: review.reviewer_name,
+        isAnonymous: review.is_anonymous,
+        email: context.negative_contact_email,
+        signature: context.signature,
+      })
+    : '';
 
   const prompt = [
     'Escribí la respuesta del dueño a esta reseña.',
@@ -124,8 +163,15 @@ export async function writeReply({ review, context = {}, instructions }) {
     hasEmail ? `Hay un mail de contacto: si corresponde, invitá a escribir a ${EMAIL}.` : '',
     context.instructions ? `Tono de marca del dueño: ${quoted(context.instructions, 500)}` : '',
     instructions ? `Indicaciones para esta respuesta: ${quoted(instructions, 300)}` : '',
+    before ? `Ya propusiste esta respuesta y el dueño pidió otra: ${quoted(before, REPLY_TEXT_MAX)}` : '',
+    before ? 'Escribí una distinta en enfoque y en palabras, con las mismas reglas.' : '',
   ].filter(Boolean).join('\n');
 
+  return { prompt, hasEmail };
+}
+
+export async function writeReply({ review, context = {}, instructions, previous }) {
+  const { prompt, hasEmail } = buildReplyPrompt({ review, context, instructions, previous });
   const { json } = await generateJson({ system: SYSTEM, prompt, schema: SCHEMA });
   const raw = typeof json?.text === 'string' ? json.text.trim() : '';
   if (!raw) throw new Error('Claude no devolvió el texto');

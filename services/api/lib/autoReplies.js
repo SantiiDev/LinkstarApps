@@ -3,24 +3,30 @@ import { accessTokenForOrg } from './googleAccess.js';
 import { isClaudeConfigured } from './claude.js';
 import { writeReply } from './replyWriter.js';
 import { publishReviewReply } from './replyPublisher.js';
+import { isLocationAllowed } from './replyRules.js';
 
 /* La cola de respuestas con IA que se publican solas (0037): la respuesta
  * automática y «responder reseñas anteriores». La corren:
  *   - scripts/run-auto-replies.js, desde el job diario y el de cada hora;
  *   - POST /api/automations/reply-past, en segundo plano, para la organización
- *     que lo pidió (runOrgInBackground).
+ *     que lo pidió (runOrgInBackground);
+ *   - routes/google.js, después de cada «Actualizar ahora» (runAfterSync, 0038).
  *
- * Todo lo que decide QUÉ se publica vive en SQL: enqueue_auto_replies() encola,
- * claim_reply_jobs() toma lo vencido y vuelve a mirar que se pueda publicar
- * (sin respuesta, Business, regla prendida). Acá sólo se escribe y se publica.
+ * Todo lo que decide QUÉ se publica vive en SQL: enqueue_auto_replies() encola
+ * (con el techo de 2.000 por organización y mes y la ventana de 7 días de la
+ * 0038), claim_reply_jobs() toma lo vencido y vuelve a mirar que se pueda
+ * publicar (sin respuesta, Business, regla prendida). Acá sólo se escribe y se
+ * publica — salvo REPLY_ALLOWED_LOCATIONS (lib/replyRules.js), el seguro del
+ * proyecto de pruebas, que saltea los locales que no están en la lista.
  *
  * ── El interruptor ───────────────────────────────────────────────────────────
  * Sólo con AI_AUTO_REPLY_PUBLISH=on se publica algo. Con cualquier otro valor
  * se encola (para que el contador de «en camino» sea real) pero no se toma
  * nada: los trabajos quedan pendientes y salen cuando se encienda. Está apagado
- * en producción hasta que Google apruebe la verificación de la app: la política
- * de privacidad y la justificación de Google dicen «nunca publicamos nada por
- * nuestra cuenta», y encenderlo es cambiar esas dos cosas a la vez.
+ * en producción hasta que Google apruebe la verificación de la app. Desde el 14
+ * oct 2026 la política de privacidad (§3.1) y la justificación de Google ya
+ * declaran las respuestas que publica una regla que activó el dueño, así que
+ * encenderlo no obliga a reescribirlas.
  */
 
 // Varias en paralelo, pocas: cada una es una llamada a Claude y otra a Google,
@@ -58,11 +64,19 @@ async function processJob(job, tokenFor, log) {
   const review = rows?.[0];
   if (!review) return finish(job.job_id, 'skipped', 'ficha_desvinculada');
   if (review.has_reply) return finish(job.job_id, 'skipped', 'ya_respondida');
+  if (!isLocationAllowed(review.location_id)) {
+    log(`  · ${job.review_id}: local fuera de REPLY_ALLOWED_LOCATIONS, salteada`);
+    return finish(job.job_id, 'skipped', 'fuera_de_REPLY_ALLOWED_LOCATIONS');
+  }
 
   // El token antes que Claude: con la conexión vencida no se paga un texto que
   // no se va a poder publicar.
   const accessToken = await tokenFor(review.organization_id);
-  const contextRows = await rpc('review_reply_context', { p_org: review.organization_id, p_location: review.location_id });
+  const contextRows = await rpc('review_reply_writer_context', {
+    p_org: review.organization_id,
+    p_location: review.location_id,
+    p_stars: review.star_rating,
+  });
   const text = await writeReply({ review, context: contextRows?.[0] ?? {} });
 
   await publishReviewReply({
@@ -141,4 +155,22 @@ export function runOrgInBackground(orgId) {
     .catch((err) => console.error(`Respuestas con IA fallaron para ${orgId}:`, err.message))
     .finally(() => running.delete(orgId));
   return true;
+}
+
+/* Después de «Actualizar ahora» (runSync en routes/google.js): las reseñas que
+ * acaban de entrar y que una regla manda responder se encolan y, con la
+ * publicación encendida, salen ya en vez de esperar al cron horario. Nunca
+ * tira: un problema acá no es un problema de la sincronización. Encolar mira
+ * todas las organizaciones (enqueue_auto_replies() no recibe una); publicar,
+ * sólo ésta. */
+export async function runAfterSync(orgId, log = console.log) {
+  if (running.has(orgId)) return;
+  running.add(orgId);
+  try {
+    await runAutoReplies({ orgId, log });
+  } catch (err) {
+    console.error(`Respuestas automáticas después del sync fallaron para ${orgId}:`, err.message);
+  } finally {
+    running.delete(orgId);
+  }
 }

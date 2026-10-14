@@ -9,7 +9,8 @@ Son **dos servicios** de Railway construidos con la misma imagen:
 | Servicio | Qué corre | Cuándo |
 |---|---|---|
 | `api` | `node server.js` (el `CMD` del Dockerfile) | Siempre encendido |
-| `daily` | `npm run daily` → `rebuild-rollups` + `sync-google` + `send-alerts` (`scripts/daily.js`) | Cron, una vez por día |
+| `daily` | `npm run daily` → `rebuild-rollups` + `sync-google` + `run-auto-replies` + `send-alerts` (`scripts/daily.js`) | Cron, una vez por día |
+| `hourly` | `npm run hourly` → `sync-google --only-reviews` + `run-auto-replies` + `send-alerts --solo-resenas` (`scripts/hourly.js`) | Cron, cada hora |
 
 Lo que ya está en el repo: `services/api/Dockerfile`, `.dockerignore` en la raíz y
 `scripts/daily.js`. **No hay `railway.json` a propósito:** Railway deprecó «Config as Code» (los
@@ -145,16 +146,16 @@ Lo que no puede esperar al día siguiente: las respuestas automáticas con IA (0
 reseñas (0036). Sin esto, «Inmediata» en la respuesta automática quiere decir «mañana a las 8».
 
 1. Igual que `daily` (mismo repo, mismas variables, sin healthcheck), nombrado `hourly`.
-2. **Custom Start Command:** `npm run hourly` (`scripts/hourly.js`: `sync-google`, `run-auto-replies`
+2. **Custom Start Command:** `npm run hourly` (`scripts/hourly.js`: `sync-google --only-reviews`, `run-auto-replies`
    y `send-alerts --solo-resenas`).
 3. **Cron Schedule:** `0 * * * *`.
 
 Las alertas de escaneos y el resumen semanal quedan sólo en `daily` (`--solo-resenas`): el resumen
 sale a los 6 días del anterior, y corriendo cada hora se iría adelantando una hora por semana.
 
-Cuota de Google: las reseñas se leen sólo desde la última guardada, pero `sync-google` también relee
-los últimos 10 días de métricas de cada ficha en cada corrida. Con pocas fichas no importa; si crece,
-conviene que el `hourly` lea sólo reseñas.
+Cuota de Google: el `hourly` lee sólo reseñas (`--only-reviews`, desde la 0038): las reseñas se leen
+desde la última guardada, y las métricas (que releen 10 días por ficha) y la protección de ficha quedan
+en `daily`.
 
 ### La publicación automática: `AI_AUTO_REPLY_PUBLISH`
 
@@ -162,10 +163,18 @@ La respuesta automática y «Responder reseñas anteriores» publican en Google 
 apriete «Publicar». **Sólo lo hacen con `AI_AUTO_REPLY_PUBLISH=on`** en `api`, `daily` y `hourly`.
 Vacío (o cualquier otro valor) encolan las reseñas y las dejan pendientes; el panel lo dice.
 
-Va **apagado** hasta que Google apruebe la verificación de la app: la política de privacidad (§3.1) y
-la justificación de `apps/dashboard/GOOGLE_VERIFICATION.md` dicen «nunca publicamos nada por nuestra
-cuenta». Encenderlo es cambiar esos dos textos el mismo día. Lo que esté en cola sale en la primera
-corrida después de encenderlo: antes, revisá con `npm run auto-replies -- --dry-run` cuántas hay.
+Va **apagado** hasta que Google apruebe la verificación de la app. Desde el 14 oct 2026 la política de
+privacidad (§3.1) y la justificación de `apps/dashboard/GOOGLE_VERIFICATION.md` ya declaran las respuestas
+publicadas por una regla que activó el dueño, así que encenderlo no obliga a cambiar esos textos. Lo que
+esté en cola sale en la primera corrida después de encenderlo: antes, revisá con
+`npm run auto-replies -- --dry-run` cuántas hay. La cola tiene un techo de 2.000 respuestas por
+organización y mes (0038).
+
+### `REPLY_ALLOWED_LOCATIONS` (sólo en entornos de prueba)
+
+Ids de `locations` separados por coma: si está cargada, la cola sólo publica en esos locales. Es el
+seguro del proyecto de pruebas, que tiene vinculada la ficha real de Vineria Martu. **En los tres
+servicios de producción queda vacía** (vacía = sin efecto).
 
 ## 5. Verificar
 

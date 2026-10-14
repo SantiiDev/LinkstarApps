@@ -209,20 +209,27 @@ const scopeFields = {
   location_id: dbId.nullable().optional().transform((v) => v ?? null),
 };
 
-// La forma de DEFAULT_BRAND_TONE en apps/dashboard/src/pages/Reviews/BrandToneModal.jsx.
+// Un tono de marca (0038): la forma de EMPTY_TONE en
+// apps/dashboard/src/lib/automationsApi.js. Sin `id` se crea; con `id`, se
+// reemplaza. Con applies_to_all, location_ids se ignora.
+const toneEmojis = z
+  .object({
+    enabled: z.boolean(),
+    mode: z.enum(['auto', 'custom']),
+    amount: z.enum(['moderate', 'few']),
+    custom: z.array(z.string().trim().min(1).max(16)).max(10),
+  })
+  .strict();
+
 export const brandToneSchema = z.object({
-  ...scopeFields,
+  org: dbId,
+  id: dbId.nullable().optional().transform((v) => v ?? null),
+  kind: z.enum(['positive', 'critical']),
+  applies_to_all: z.boolean(),
+  location_ids: z.array(dbId).max(200).default([]),
   instructions: z.string().trim().max(500).default(''),
   signature: z.string().trim().max(120).default(''),
-  emojis: z
-    .object({
-      enabled: z.boolean(),
-      mode: z.enum(['auto', 'custom']),
-      amount: z.enum(['moderate', 'few']),
-      custom: z.array(z.string().trim().min(1).max(16)).max(10),
-    })
-    .strict(),
-  language: z.enum(['business', 'review']).default('business'),
+  emojis: toneEmojis,
 });
 
 // `email` vacío o null borra el mail de ese alcance.
@@ -244,9 +251,11 @@ export const replyPastSchema = z.object({
   stars: z.enum(['all', '4-5', '5', '1-3']),
 });
 
-// El borrador de una respuesta: una indicación opcional para esta reseña.
+// El borrador de una respuesta: una indicación opcional para esta reseña y,
+// con «Generar otra», el borrador anterior para que no repita el mismo.
 export const reviewReplyAiSchema = z.object({
   instructions: z.string().trim().max(300).optional(),
+  previous: z.string().trim().max(4096).optional(),
 });
 
 // Middleware genérico: valida req.body contra un schema de Zod. 400 con el

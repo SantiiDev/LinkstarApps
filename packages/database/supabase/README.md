@@ -50,13 +50,45 @@ Desde la raíz del monorepo son `npm run db:reset`, `npm run db:push` y `npm run
 | `0034_retention_by_plan.sql` | El historial de cada plan (decisión 3): corte de lectura en escaneos, rollups, reseñas estimadas, métricas y búsquedas; purga de escaneos crudos (`run_purge_scan_events()`); `rebuild_today_rollup()` no reconstruye días ya purgados |
 | `0035_review_alert_kinds.sql` | Los dos tipos de aviso nuevos (`low_rating`, `review_keyword`). Va sola: un valor de enum no se puede usar en la transacción que lo crea |
 | `0036_review_alerts.sql` | Alertas de reseñas (Automatizaciones): columnas en `notification_preferences`, el trigger que anota desde cuándo está activa cada una, y `pending_notifications()` con valoración baja y palabras clave |
+| `0037_ai_replies.sql` | Respuestas con IA: `review_reply_settings` (tono y mail), `review_auto_reply_rules`, la cola `review_reply_jobs`, `google_reviews.reply_source`, `google_record_reply()` con `p_source` y las RPC de alcance y de cola. Todo sólo por el API |
+| `0038_ai_reply_tones_and_queue_limits.sql` | Tonos por tipo (positivas / críticas) y por lista de locales (`review_reply_tones` + `review_reply_tone_locations`, `review_reply_writer_context()`), techo de 2.000 respuestas por organización y mes, ventana de 7 días de la regla automática y registro de actividad. Sólo agrega: lo que reemplaza de la 0037 lo borra una migración posterior |
 
-> **Producción tiene hasta la `0034`** (8 oct 2026; se subió antes que el API que llama a
-> `run_purge_scan_events()`, que es el orden correcto). **El proyecto de pruebas tiene hasta la
-> `0036`**: hasta la `0034` desde el 9 oct 2026, y `0035`–`0036` desde el 10 oct (`db push --db-url`,
-> `rls_isolation.sql` 185 en verde ahí). **La `0035` y la `0036` van a producción antes de mergear a
-> `main`**: el panel nuevo lee sus columnas y `send-alerts.js` ya tiene sus plantillas. Ojo con el vínculo del CLI: en la máquina de Santiago apunta al proyecto de
+> **Producción tiene hasta la `0037`** (`0035`–`0037` el 11 oct 2026; confirmado con `db:status` el
+> 14 oct). **La `0038` todavía no está en ningún proyecto remoto**: va a producción **antes** de
+> mergear a `main` el API que la usa (Railway despliega `main`). **El proyecto de pruebas tiene una
+> `0037` distinta** (la de `develop`, ver abajo) y hay que devolverlo al esquema de producción antes de
+> subirle la `0038`. Ojo con el vínculo del CLI: en la máquina de Santiago apunta al proyecto de
 > pruebas y en otras a producción — revisá `.temp/project-ref` antes de cualquier `db:push`.
+
+### Proyecto de pruebas: volver al esquema de producción (la 0037 de `develop`)
+
+Las respuestas con IA se hicieron dos veces en paralelo con el mismo número: `main` tiene
+`0037_ai_replies.sql` (la de producción) y `develop` (PR #14, 13 oct 2026) tenía
+`0037_ai_review_replies.sql`, con otras tablas y otras RPC. El proyecto de pruebas
+(`mbhuzrrjyboyimqvnrpy`) recibió la de `develop`. Como la versión `0037` ya figura aplicada ahí,
+`db push` saltearía la de producción y la `0038` fallaría sobre tablas con otra forma. Lo bueno de
+`develop` se trajo como `0038` sobre el esquema de `main`.
+
+Para dejar el proyecto de pruebas como producción (más la `0038`), desde `packages/database`:
+
+1. Mandar `../ops/revert-develop-0037.sql` entero, como una sola consulta, contra el pooler
+   (`aws-0-sa-east-1.pooler.supabase.com:5432`, usuario `postgres.mbhuzrrjyboyimqvnrpy`): con
+   `psql -v ON_ERROR_STOP=1 -f` o con `client.query(texto)` de `node-pg`. **No** con
+   `supabase db query -f` (usa una sentencia preparada y rechaza archivos con varias). Es una
+   transacción: deshace todo lo de la `0037` de `develop`, vuelve `google_record_reply()` a la de
+   la `0026` y saca la `0037` del historial (lo mismo que `supabase migration repair --status
+   reverted 0037`). Se niega a correr si la `0037` registrada no es `ai_review_replies`, así que
+   contra producción no hace nada.
+2. `npx supabase db push --db-url <url del pooler>`: aplica la `0037` de producción y la `0038`.
+3. `rls_isolation.sql` contra el mismo pooler: tiene que terminar en
+   `=== Todos los tests de aislamiento pasaron ===` (249 al 14 oct 2026).
+
+Se pierde lo que se cargó con la versión de `develop` (tonos, mails, reglas, cola y el origen de
+cada respuesta); las respuestas en sí y el registro de actividad quedan. Si alguna vez publicaste
+con la cola de `develop`, en la base nueva esas respuestas aparecen sin origen (se ven, no se
+cuentan como automáticas). Probado el 14 oct 2026 en un stack local: `0036` → `0037` de `develop`
+→ el script → `0037` + `0038` deja un esquema idéntico (`pg_dump --schema-only`) al de un
+`db reset` limpio, y `rls_isolation.sql` en verde.
 
 > **Al aplicar la `0022` hay que actualizar `tests/rls_isolation.sql` en el mismo cambio.** El test
 > assertea la regla de la `0015` —"plan gratis sin expositor: `org_has_access` sí,

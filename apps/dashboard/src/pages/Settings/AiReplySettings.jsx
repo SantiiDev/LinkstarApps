@@ -10,14 +10,15 @@ import {
   fetchBrandTones,
   fetchNegativeContact,
   saveNegativeContact,
+  TONE_KINDS,
 } from '../../lib/automationsApi';
 import { settingsTabPath } from '../../lib/routes';
 import { useNavigate } from 'react-router-dom';
 
 /*
  * Configuración → Gestión local: las dos tarjetas de las respuestas con IA
- * (0037). Las lee y las guarda el API (lib/automationsApi.js), que decide quién
- * puede con review_ai_scope_target():
+ * (0037/0038). Las lee y las guarda el API (lib/automationsApi.js), que decide
+ * quién puede con review_ai_scope_target():
  *
  *   owner / admin   todo, también «Todos los locales»
  *   manager         sólo sus sucursales (el global lo ve, no lo cambia)
@@ -25,7 +26,65 @@ import { useNavigate } from 'react-router-dom';
  *
  * Son Business: en gratis la tarjeta lo dice y lleva al plan, sin pedir nada al
  * API (que respondería 402).
+ *
+ * Los tonos (0038) son por tipo —Positivas 4–5★ / Críticas 1–3★— y para todos
+ * los locales o una lista; la lista y el modal vienen de la versión de
+ * `develop` (13 oct 2026). Un encargado ve los de «todos» y los de sus locales,
+ * y edita sólo los que son enteramente suyos (`editable`, lo decide la base).
  */
+
+const KIND_SHORT = Object.fromEntries(TONE_KINDS.map((k) => [k.value, k.short]));
+
+function emojiSummary(emojis) {
+  if (!emojis?.enabled) return 'Sin emojis';
+  if (emojis.mode === 'custom' && emojis.custom?.length) return `Emojis: ${emojis.custom.join(' ')}`;
+  return emojis.amount === 'few' ? 'Pocos emojis' : 'Emojis moderados';
+}
+
+function ToneRow({ tone, locationNames, onEdit, onDelete, deleting }) {
+  const [confirming, setConfirming] = useState(false);
+  const scope = tone.applies_to_all
+    ? 'Todos los locales'
+    : tone.location_ids.map((id) => locationNames.get(id) ?? 'Otro local').join(', ');
+  return (
+    <li className="settings-tone">
+      <div className="settings-tone__main">
+        <div className="settings-tone__top">
+          <span className={`settings-tone__kind settings-tone__kind--${tone.kind}`}>{KIND_SHORT[tone.kind]}</span>
+          <span className="settings-tone__scope"><Icon name="pin" size={12} /> {scope}</span>
+        </div>
+        <p className="settings-tone__text">
+          {tone.instructions || 'Sin consigna: la IA responde con un tono amable y profesional.'}
+        </p>
+        <p className="settings-tone__meta">
+          {tone.signature ? `Firma: ${tone.signature}` : 'Sin firma'} · {emojiSummary(tone.emojis)}
+        </p>
+      </div>
+      {tone.editable && (
+        <div className="settings-tone__actions">
+          {confirming ? (
+            <>
+              <span className="settings-tone__confirm">¿Eliminar este tono?</span>
+              <button type="button" className="settings-danger-link" onClick={() => onDelete(tone)} disabled={deleting}>
+                {deleting ? 'Eliminando…' : 'Sí, eliminar'}
+              </button>
+              <button type="button" className="settings-tone__btn" onClick={() => setConfirming(false)}>No</button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="settings-tone__btn" onClick={() => onEdit(tone)}>
+                <Icon name="pen" size={13} /> Editar
+              </button>
+              <button type="button" className="settings-tone__btn settings-tone__btn--danger" onClick={() => setConfirming(true)} aria-label="Eliminar tono">
+                <Icon name="trash" size={13} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
 
 const GLOBAL = 'all';
 
@@ -69,18 +128,17 @@ export default function AiReplySettings() {
 
   return (
     <>
-      <BrandTonesCard orgId={orgId} active={active} locations={locations} allowGlobal={allowGlobal} />
+      <BrandTonesCard orgId={orgId} active={active} locations={locations} />
       <NegativeContactCard orgId={orgId} active={active} locations={locations} allowGlobal={allowGlobal} />
     </>
   );
 }
 
-function BrandTonesCard({ orgId, active, locations, allowGlobal }) {
+function BrandTonesCard({ orgId, active, locations }) {
   const [tones, setTones] = useState(null);
   const [error, setError] = useState(null);
-  const [modal, setModal] = useState(null); // { initialTone } mientras está abierto
-  const [confirming, setConfirming] = useState(null); // location_id a borrar (o GLOBAL)
-  const [deleting, setDeleting] = useState(false);
+  const [modalTone, setModalTone] = useState(undefined); // undefined = cerrado, null = nuevo
+  const [deletingId, setDeletingId] = useState(null);
 
   const load = useCallback(() => {
     if (!active || !orgId) return;
@@ -92,23 +150,20 @@ function BrandTonesCard({ orgId, active, locations, allowGlobal }) {
 
   useEffect(load, [load]);
 
-  async function remove(locationId) {
-    setDeleting(true);
+  async function remove(tone) {
+    setDeletingId(tone.id);
     setError(null);
     try {
-      await deleteBrandTone(orgId, locationId);
-      setConfirming(null);
-      load();
+      await deleteBrandTone(orgId, tone.id);
+      setTones((prev) => prev.filter((t) => t.id !== tone.id));
     } catch (err) {
       setError(err.message);
     } finally {
-      setDeleting(false);
+      setDeletingId(null);
     }
   }
 
-  // Un encargado no puede escribir el global: el modal abre en su primera sucursal.
-  const newTone = allowGlobal ? null : { location_id: locations?.[0]?.value ?? null };
-  const canAdd = active && locations && (allowGlobal || locations.length > 0);
+  const locationNames = new Map((locations ?? []).map((l) => [l.value, l.label]));
 
   return (
     <div className="settings-card">
@@ -116,9 +171,9 @@ function BrandTonesCard({ orgId, active, locations, allowGlobal }) {
         icon="palette"
         iconVariant="gold"
         title="Tonos de marca"
-        subtitle={<p className="settings-card__subtitle">Definí cómo responde la IA por local. El tono específico de un local tiene prioridad sobre el global.</p>}
+        subtitle={<p className="settings-card__subtitle">Uno para agradecer (4 y 5★) y otro para responder a quien no quedó contento (1 a 3★), para todos tus locales o para algunos. El de un local tiene prioridad sobre el de todos.</p>}
         action={active ? (
-          <button type="button" className="settings-save-btn" onClick={() => setModal({ initialTone: newTone })} disabled={!canAdd}>
+          <button type="button" className="settings-save-btn" onClick={() => setModalTone(null)} disabled={tones === null || !locations}>
             + Añadir tono
           </button>
         ) : null}
@@ -137,57 +192,28 @@ function BrandTonesCard({ orgId, active, locations, allowGlobal }) {
       )}
 
       {active && tones?.length > 0 && (
-        <div className="settings-tone-list">
-          {tones.map((tone) => {
-            const key = tone.location_id ?? GLOBAL;
-            const editable = allowGlobal || tone.location_id != null;
-            return (
-              <div key={key} className="settings-account-row">
-                <span className="settings-account-row__icon"><Icon name="palette" size={18} /></span>
-                <div className="settings-account-row__body">
-                  <span className="settings-account-row__name">{tone.location_name ?? 'Todos los locales'}</span>
-                  <span className="settings-account-row__email">
-                    {tone.instructions || 'Sin indicaciones'}
-                    {tone.signature ? ` · Firma: ${tone.signature}` : ''}
-                    {tone.emojis?.enabled ? ' · Con emojis' : ''}
-                  </span>
-                </div>
-                {editable && (confirming === key ? (
-                  <span className="settings-tone-actions">
-                    <button type="button" className="settings-danger-link" onClick={() => remove(tone.location_id)} disabled={deleting}>
-                      {deleting ? 'Borrando…' : 'Sí, borrar'}
-                    </button>
-                    <button type="button" className="settings-inline-link" onClick={() => setConfirming(null)} disabled={deleting}>
-                      Cancelar
-                    </button>
-                  </span>
-                ) : (
-                  <span className="settings-tone-actions">
-                    <button type="button" className="settings-btn settings-btn--outline" onClick={() => setModal({ initialTone: tone })}>
-                      Editar
-                    </button>
-                    <button type="button" className="settings-danger-link" onClick={() => setConfirming(key)}>
-                      Borrar
-                    </button>
-                  </span>
-                ))}
-              </div>
-            );
-          })}
-        </div>
+        <ul className="settings-tone-list">
+          {tones.map((tone) => (
+            <ToneRow
+              key={tone.id}
+              tone={tone}
+              locationNames={locationNames}
+              onEdit={(t) => setModalTone(t)}
+              onDelete={remove}
+              deleting={deletingId === tone.id}
+            />
+          ))}
+        </ul>
       )}
 
-      {error && <p className="settings-card__hint settings-card__hint--block" role="alert">{error}</p>}
+      {error && <p className="settings-card__hint settings-card__hint--block settings-card__hint--error" role="alert">{error}</p>}
 
-      {modal && (
+      {modalTone !== undefined && (
         <BrandToneModal
-          organizationId={orgId}
-          locationOptions={locations ?? []}
-          existingTones={tones ?? []}
-          initialTone={modal.initialTone}
-          allowGlobal={allowGlobal}
-          onSaved={load}
-          onClose={() => setModal(null)}
+          fromSettings
+          tone={modalTone}
+          onClose={() => setModalTone(undefined)}
+          onSaved={() => { setModalTone(undefined); load(); }}
         />
       )}
     </div>

@@ -8,6 +8,9 @@ import { syncGoogleOrganization } from '../lib/googleSync.js';
  *   node scripts/sync-google.js                  todas las organizaciones conectadas
  *   node scripts/sync-google.js --org <uuid>     sólo una
  *   node scripts/sync-google.js --dry-run        lista cuentas y fichas, no escribe
+ *   node scripts/sync-google.js --only-reviews   sólo reseñas (y su análisis), sin
+ *                                                métricas ni protección: lo que
+ *                                                corre cada hora (scripts/hourly.js)
  *
  * Por cada organización con Google conectado y plan vigente
  * (google_sync_targets, 0024): pide un access token con el refresh token,
@@ -40,6 +43,7 @@ async function main() {
   assertGoogleConfigured();
 
   const dryRun = process.argv.includes('--dry-run');
+  const onlyReviews = process.argv.includes('--only-reviews');
   const onlyOrg = argValue('--org');
 
   const { data: targets, error } = await supabase.rpc('google_sync_targets');
@@ -63,7 +67,7 @@ async function main() {
   for (const target of selected) {
     console.log(`▸ ${target.organization_id}`);
     try {
-      const summary = await syncGoogleOrganization(target, { dryRun });
+      const summary = await syncGoogleOrganization(target, { dryRun, onlyReviews });
       if (!dryRun) {
         await supabase.rpc('google_record_sync_result', {
           p_org: target.organization_id,

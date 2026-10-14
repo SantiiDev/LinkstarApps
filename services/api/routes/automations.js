@@ -21,8 +21,8 @@ const router = Router();
  *
  *   POST   /api/google/reviews/:id/reply/ai              borrador para una reseña → { text }
  *   GET    /api/automations/brand-tones?org=             tonos guardados → { tones }
- *   PUT    /api/automations/brand-tones                  guardar el tono de un alcance
- *   DELETE /api/automations/brand-tones?org=&location=   borrar el tono de un alcance
+ *   PUT    /api/automations/brand-tones                  crear o reemplazar un tono → { tone }
+ *   DELETE /api/automations/brand-tones/:id?org=         borrar un tono
  *   GET    /api/automations/negative-contact?org=&location=  mail para reseñas negativas
  *   PUT    /api/automations/negative-contact             guardarlo (vacío lo borra)
  *   GET    /api/automations/auto-reply?org=&location=    regla automática
@@ -31,10 +31,14 @@ const router = Router();
  *   POST   /api/automations/reply-past                   encolar reseñas anteriores → { queued }
  *
  * Alcance: `location` es un id de `locations` (sucursal). Sin él (o null), es
- * «Todos los locales», y el de un local pisa al global.
+ * «Todos los locales», y el de un local pisa al global. Un tono (0038) es para
+ * reseñas positivas (4–5★) o críticas (1–3★) y para todos los locales o una
+ * lista; la IA usa el de su tipo y su local, si no el de todos, y en una crítica
+ * sin tono crítico, el positivo (review_reply_writer_context).
  *
- * Quién puede lo decide la base: review_ai_target() para una reseña y
- * review_ai_scope_target() para un alcance. Owner/admin en todo, un encargado
+ * Quién puede lo decide la base: review_ai_target() para una reseña,
+ * review_ai_scope_target() para un alcance, y para un tono, ese mismo permiso en
+ * cada uno de sus locales (save_reply_tone). Owner/admin en todo, un encargado
  * sólo en sus sucursales (puede leer el global, no escribirlo), nunca un viewer,
  * y sólo Business. El API corre como service_role, así que estas funciones son
  * el único control: ninguna ruta toca las tablas directo.
@@ -72,6 +76,11 @@ const RPC_ERRORS = {
   sin_acceso: [402, 'Tu plan no está activo'],
   solo_business: [402, 'Las respuestas con IA son parte del plan Business'],
   filtro_invalido: [400, 'Filtro de estrellas inválido'],
+  tipo_invalido: [400, 'Tipo de tono inválido'],
+  sin_locales: [400, 'Elegí al menos un local, o «Todos los locales»'],
+  tono_inexistente: [404, 'Ese tono ya no existe. Recargá la página'],
+  tono_global_existente: [409, 'Ya hay un tono de este tipo para todos los locales. Editá ese, o elegí locales'],
+  local_con_tono: [409, 'Alguno de los locales elegidos ya tiene un tono de este tipo'],
 };
 
 function rpcError(error, overrides = {}) {
@@ -120,10 +129,11 @@ function sendError(res, err, fallback, logLabel) {
 }
 
 // ──────────────────────────────────────────────────────────
-// POST /api/google/reviews/:id/reply/ai   { instructions? }
+// POST /api/google/reviews/:id/reply/ai   { instructions?, previous? }
 // Un borrador de respuesta: vuelve al panel, que lo pone en el cuadro de
 // respuesta. Nunca publica: la persona lo revisa y lo publica con la ruta de
 // siempre (POST /api/google/reviews/:id/reply, con source 'ai_draft').
+// `previous` es el borrador anterior («Generar otra»), para que no repita.
 // ──────────────────────────────────────────────────────────
 router.post(
   '/api/google/reviews/:id/reply/ai',
@@ -143,11 +153,20 @@ router.post(
         { rol_insuficiente: [403, 'No tenés permiso para responder reseñas de esta sucursal'] }
       );
       const review = rows?.[0];
-      const contextRows = await rpc('review_reply_context', { p_org: review.organization_id, p_location: review.location_id });
+      const contextRows = await rpc('review_reply_writer_context', {
+        p_org: review.organization_id,
+        p_location: review.location_id,
+        p_stars: review.star_rating,
+      });
 
       let text;
       try {
-        text = await writeReply({ review, context: contextRows?.[0] ?? {}, instructions: req.body.instructions });
+        text = await writeReply({
+          review,
+          context: contextRows?.[0] ?? {},
+          instructions: req.body.instructions,
+          previous: req.body.previous,
+        });
       } catch (err) {
         // Sin `status`: un 400 o 429 de Claude no tiene que llegarle al panel
         // como si fuera un error del pedido.
@@ -167,7 +186,7 @@ router.post(
 router.get('/api/automations/brand-tones', readLimiter, requireAuth(supabase), async (req, res) => {
   try {
     const { org } = scopeFromQuery(req.query);
-    const tones = await rpc('list_brand_tones', { p_user: req.user.id, p_org: org });
+    const tones = await rpc('list_reply_tones', { p_user: req.user.id, p_org: org });
     res.json({ tones: tones ?? [] });
   } catch (err) {
     sendError(res, err, 'No pudimos leer los tonos de marca', 'Error leyendo tonos de marca');
@@ -176,28 +195,34 @@ router.get('/api/automations/brand-tones', readLimiter, requireAuth(supabase), a
 
 router.put('/api/automations/brand-tones', writeLimiter, requireAuth(supabase), validateBody(brandToneSchema), async (req, res) => {
   try {
-    const { org, location_id, instructions, signature, emojis, language } = req.body;
+    const { org, id, kind, applies_to_all, location_ids, instructions, signature, emojis } = req.body;
     // En «custom» los emojis elegidos se guardan; en «auto», la lista no se usa.
     const cleanEmojis = { ...emojis, custom: emojis.mode === 'custom' ? [...new Set(emojis.custom)] : [] };
-    await rpc('save_brand_tone', {
+    const locations = applies_to_all ? [] : [...new Set(location_ids)];
+    const savedId = await rpc('save_reply_tone', {
       p_user: req.user.id,
       p_org: org,
-      p_location: location_id,
+      p_id: id,
+      p_kind: kind,
+      p_applies_to_all: applies_to_all,
+      p_location_ids: locations,
       p_instructions: instructions,
       p_signature: signature,
       p_emojis: cleanEmojis,
-      p_language: language,
     });
-    res.json({ tone: { location_id, instructions, signature, emojis: cleanEmojis, language } });
+    res.json({
+      tone: { id: savedId, kind, applies_to_all, location_ids: locations, instructions, signature, emojis: cleanEmojis },
+    });
   } catch (err) {
     sendError(res, err, 'No pudimos guardar el tono de marca', 'Error guardando tono de marca');
   }
 });
 
-router.delete('/api/automations/brand-tones', writeLimiter, requireAuth(supabase), async (req, res) => {
+router.delete('/api/automations/brand-tones/:id', writeLimiter, requireAuth(supabase), async (req, res) => {
   try {
-    const { org, location } = scopeFromQuery(req.query);
-    await rpc('delete_brand_tone', { p_user: req.user.id, p_org: org, p_location: location });
+    const { org } = scopeFromQuery(req.query);
+    requireUuid(req.params.id, 'Tono');
+    await rpc('delete_reply_tone', { p_user: req.user.id, p_org: org, p_id: req.params.id });
     res.status(204).end();
   } catch (err) {
     sendError(res, err, 'No pudimos borrar el tono de marca', 'Error borrando tono de marca');

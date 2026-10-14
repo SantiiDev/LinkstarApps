@@ -345,31 +345,113 @@
   overflow-wrap: anywhere;
 }
 
-/* ── Gestión local: tonos de marca (AiReplySettings) ── */
-.settings-tone-list .settings-account-row__name,
-.settings-tone-list .settings-account-row__email {
-  display: block;
+/* ── Gestión local: tonos de marca (AiReplySettings, 0038; de la versión de develop) ── */
+.settings-tone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.settings-tone-list .settings-account-row:last-child {
-  margin-bottom: 0;
+.settings-tone {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
 }
 
-.settings-tone-actions {
+.settings-tone__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.settings-tone__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-tone__kind {
+  padding: 0.1rem 0.6rem;
+  border-radius: var(--radius-badge);
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.settings-tone__kind--positive { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); color: var(--color-forest); }
+.settings-tone__kind--critical { background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.3); color: #b91c1c; }
+
+.settings-tone__scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.settings-tone__text {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.settings-tone__meta {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+
+.settings-tone__actions {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  flex-shrink: 0;
+  gap: 0.5rem;
+}
+
+.settings-tone__confirm {
+  font-size: 0.76rem;
+  color: var(--color-text-secondary);
+}
+
+.settings-tone__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--color-navy);
+  cursor: pointer;
+}
+
+.settings-tone__btn:hover {
+  border-color: var(--color-orange);
+}
+
+.settings-tone__btn--danger:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 
 @media (max-width: 640px) {
-  .settings-tone-list .settings-account-row {
-    flex-wrap: wrap;
-  }
-
-  .settings-tone-actions {
-    width: 100%;
-    justify-content: flex-end;
+  .settings-tone {
+    flex-direction: column;
   }
 }
 
