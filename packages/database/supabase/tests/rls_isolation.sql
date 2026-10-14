@@ -1622,37 +1622,65 @@ select pg_temp.check('… y el borrador también',
     '9b000000-0000-0000-0000-000000000004')$q$, 'solo_business'));
 update public.subscriptions set plan_code = 'business' where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001';
 
--- Tono de marca: global y uno de Echesortu; el del local pisa al global.
-select public.save_brand_tone('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null,
-  'Agradecé siempre', '— Bar Uno', '{"enabled": false, "mode": "auto", "amount": "moderate", "custom": []}');
-select public.save_brand_tone('33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001',
-  'dddddddd-0000-0000-0000-000000000004',
-  'Tuteá y usá emojis', '— Echesortu', '{"enabled": true, "mode": "custom", "amount": "few", "custom": ["🍷"]}');
+-- Mail para reseñas negativas: global, y uno de Echesortu que lo pisa. Los
+-- tonos se prueban en la sección 22 (0038); los de la 0037 se borraron en la 0039.
 select public.save_negative_contact('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null,
   'hola@bar-uno.test');
+select public.save_negative_contact('33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001',
+  'dddddddd-0000-0000-0000-000000000004', 'eche@bar-uno.test');
 
-select pg_temp.check('Echesortu usa su tono y el mail global',
-  (select instructions = 'Tuteá y usá emojis' and signature = '— Echesortu' and negative_contact_email = 'hola@bar-uno.test'
-     from public.review_reply_context('aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000004')));
-select pg_temp.check('Pichincha, sin tono propio, usa el global',
-  (select instructions = 'Agradecé siempre' and signature = '— Bar Uno'
-     from public.review_reply_context('aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000002')));
-select pg_temp.check('Caro ve el tono global y el de su sucursal',
-  (select count(*) from public.list_brand_tones('33333333-3333-3333-3333-333333333333',
-     'aaaaaaaa-0000-0000-0000-000000000001')) = 2);
+select pg_temp.check('Echesortu usa su mail; Pichincha, sin mail propio, el global',
+  (select negative_contact_email = 'eche@bar-uno.test'
+     from public.review_reply_writer_context('aaaaaaaa-0000-0000-0000-000000000001',
+       'dddddddd-0000-0000-0000-000000000004', 2::smallint))
+  and (select negative_contact_email = 'hola@bar-uno.test'
+         from public.review_reply_writer_context('aaaaaaaa-0000-0000-0000-000000000001',
+           'dddddddd-0000-0000-0000-000000000002', 2::smallint)));
+select pg_temp.check('get_negative_contact devuelve el mail de ESE alcance, no el heredado',
+  public.get_negative_contact('33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001',
+    'dddddddd-0000-0000-0000-000000000004') = 'eche@bar-uno.test'
+  and public.get_negative_contact('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001',
+    'dddddddd-0000-0000-0000-000000000002') is null);
+select pg_temp.check('Caro no puede cambiar el mail global',
+  pg_temp.raises($q$select public.save_negative_contact('33333333-3333-3333-3333-333333333333',
+    'aaaaaaaa-0000-0000-0000-000000000001', null, 'x@bar-uno.test')$q$, 'rol_insuficiente'));
 
-select public.delete_brand_tone('33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001',
-  'dddddddd-0000-0000-0000-000000000004');
+select public.save_negative_contact('33333333-3333-3333-3333-333333333333', 'aaaaaaaa-0000-0000-0000-000000000001',
+  'dddddddd-0000-0000-0000-000000000004', '');
 select pg_temp.check('Borrado el de Echesortu, vuelve al global (y la fila vacía no queda)',
-  (select instructions = 'Agradecé siempre'
-     from public.review_reply_context('aaaaaaaa-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000004'))
+  (select negative_contact_email = 'hola@bar-uno.test'
+     from public.review_reply_writer_context('aaaaaaaa-0000-0000-0000-000000000001',
+       'dddddddd-0000-0000-0000-000000000004', 2::smallint))
   and not exists (select 1 from public.review_reply_settings
                    where location_id = 'dddddddd-0000-0000-0000-000000000004'));
 
+-- Con un idioma propio, borrar el mail no se lleva la fila (0039).
+update public.review_reply_settings set language = 'review'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001' and location_id is null;
+select public.save_negative_contact('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null, null);
+select pg_temp.check('Sin mail pero con idioma «review», la fila global queda',
+  (select language = 'review' and negative_contact_email is null
+     from public.review_reply_settings
+    where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001' and location_id is null));
+update public.review_reply_settings set language = 'business'
+ where organization_id = 'aaaaaaaa-0000-0000-0000-000000000001' and location_id is null;
+select public.save_negative_contact('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null,
+  'hola@bar-uno.test');
+
+select pg_temp.check('review_reply_settings ya no tiene las columnas de tono de la 0037',
+  not exists (select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'review_reply_settings'
+                 and column_name in ('instructions', 'signature', 'emojis', 'tone_saved_at')));
+select pg_temp.check('… ni existen las funciones de tono de la 0037',
+  to_regprocedure('public.list_brand_tones(uuid, uuid)') is null
+  and to_regprocedure('public.save_brand_tone(uuid, uuid, uuid, text, text, jsonb, text)') is null
+  and to_regprocedure('public.delete_brand_tone(uuid, uuid, uuid)') is null
+  and to_regprocedure('public.review_reply_context(uuid, uuid)') is null);
+
 do $$
 begin
-  perform public.save_brand_tone('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null,
-    'x', '', '{"enabled": true, "mode": "otro", "amount": "few", "custom": []}');
+  perform public.save_reply_tone('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', null,
+    'positive', true, null, 'x', '', '{"enabled": true, "mode": "otro", "amount": "few", "custom": []}');
   raise exception 'FALLA: se guardó un tono con emojis inválidos';
 exception
   when check_violation then
