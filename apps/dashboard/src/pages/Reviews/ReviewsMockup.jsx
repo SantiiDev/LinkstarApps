@@ -13,10 +13,15 @@ import './Reviews.css';
  * dibuja con las mismas piezas que la pantalla real (ReviewsBlocks), así quien
  * todavía no conectó Google ve cómo va a ser la bandeja.
  *
- * Se renderiza ÚNICAMENTE como `children` de `GoogleGate`, que lo deja borroso,
- * inerte y detrás de un modal que no se puede cerrar. Fuera de esa puerta sería
- * una pantalla inventando datos, que es justo lo que la fase 2 sacó del panel.
- * NO agregar otro importador.
+ * Se renderiza en dos lugares, siempre inerte: como `children` de `GoogleGate`,
+ * que lo deja borroso y detrás de un modal que no se puede cerrar, y como
+ * ilustración de la landing pública (pages/Landing, dentro de LandingShot, sin
+ * sesión). Adentro del panel, fuera de esa puerta, sería una pantalla inventando
+ * datos, que es justo lo que la fase 2 sacó del panel. NO agregar otro
+ * importador.
+ *
+ * `isBusiness` fuerza cómo se dibuja: la landing la muestra como la ve una
+ * cuenta Business; en GoogleGate se usa el plan de la cuenta.
  *
  * Los handlers no hacen nada: el subárbol es `inert`.
  */
@@ -48,8 +53,9 @@ const LOCATIONS = [
 const pending = ROWS.filter((r) => !r.reply_comment).length;
 const ICON = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
 
-export default function ReviewsMockup() {
-  const { isBusiness } = useOrg();
+export default function ReviewsMockup({ isBusiness: forcedBusiness }) {
+  const org = useOrg();
+  const isBusiness = forcedBusiness ?? org.isBusiness;
   const selected = ROWS.find((r) => !r.reply_comment);
 
   return (

@@ -14,7 +14,12 @@
  */
 
 export const PUBLIC_ROUTES = {
+  /* La landing son cuatro páginas con el mismo navbar y pie (pages/Landing):
+   * Inicio, Funciones, Multiubicaciones y Planes. */
   landing: '/',
+  features: '/funciones',
+  multiLocation: '/multiubicaciones',
+  plans: '/planes',
   login: '/iniciar-sesion',
   register: '/registro',
   /* Aceptar una invitación al equipo. Es pública en el sentido de que el

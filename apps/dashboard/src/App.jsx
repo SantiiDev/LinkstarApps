@@ -20,6 +20,10 @@ import ProfilePage from './pages/Profile/Profile';
 import ContactPage from './pages/Contact/Contact';
 import DevicesPage from './pages/Devices/Devices';
 import Landing from './pages/Landing/Landing';
+import HomePage from './pages/Landing/HomePage';
+import FeaturesPage from './pages/Landing/FeaturesPage';
+import MultiLocationPage from './pages/Landing/MultiLocationPage';
+import PlansPage from './pages/Landing/PlansPage';
 import Login from './pages/Login/Login';
 import Register from './pages/Register/Register';
 import AcceptInvitation from './pages/Invitation/AcceptInvitation';
@@ -109,20 +113,26 @@ function OnboardingStep({ children, requiresOrg = true, redirectIfOrg = false })
 }
 
 /* ─── Rutas públicas ───────────────────────────────────────────── */
+/* El layout de las cuatro páginas de la landing (navbar + página + pie).
+   Dos acciones distintas, que antes eran una sola y mandaban todo al login:
+   «Iniciar sesión» va al login, y el botón principal y las tarjetas de precio
+   van al REGISTRO, que es lo que busca alguien que todavía no tiene cuenta. Con
+   sesión, las dos llevan al panel. */
 function LandingRoute() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  /* Las tarjetas de precio pasan el código del plan; el navbar y el hero
-     llaman a esto sin argumentos (el `onClick` les pasa el evento del click,
-     por eso `rememberIntendedPlan` ignora todo lo que no sea un string). La
-     intención se guarda y la consume PlanPicker: no activa ni cobra nada. */
-  const enterDashboard = (planCode) => {
+  const goLogin = () => navigate(user ? HOME_SECTION_PATH : PUBLIC_ROUTES.login);
+
+  /* El código del plan viaja: la intención se guarda y la consume PlanPicker
+     (no activa ni cobra nada). `rememberIntendedPlan` ignora lo que no sea un
+     string, así que llamarlo sin código es inofensivo. */
+  const start = (planCode) => {
     rememberIntendedPlan(planCode);
-    navigate(user ? HOME_SECTION_PATH : PUBLIC_ROUTES.login);
+    navigate(user ? HOME_SECTION_PATH : PUBLIC_ROUTES.register);
   };
 
-  return <Landing onEnterDashboard={enterDashboard} />;
+  return <Landing loggedIn={Boolean(user)} onLogin={goLogin} onStart={start} />;
 }
 
 /* A dónde volver después de iniciar sesión o registrarse: el path y también la
@@ -309,7 +319,12 @@ export default function App() {
     <>
     <ScrollToTop />
     <Routes>
-      <Route path={PUBLIC_ROUTES.landing} element={<LandingRoute />} />
+      <Route element={<LandingRoute />}>
+        <Route path={PUBLIC_ROUTES.landing} element={<HomePage />} />
+        <Route path={PUBLIC_ROUTES.features} element={<FeaturesPage />} />
+        <Route path={PUBLIC_ROUTES.multiLocation} element={<MultiLocationPage />} />
+        <Route path={PUBLIC_ROUTES.plans} element={<PlansPage />} />
+      </Route>
       <Route path={PUBLIC_ROUTES.login} element={<LoginRoute />} />
       <Route path={PUBLIC_ROUTES.register} element={<RegisterRoute />} />
 

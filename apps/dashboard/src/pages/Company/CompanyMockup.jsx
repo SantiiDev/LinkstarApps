@@ -11,10 +11,11 @@ import './Company.css';
  * MAQUETA de Mi Empresa: TODOS LOS NÚMEROS Y NOMBRES SON INVENTADOS.
  *
  * Sólo se renderiza dentro de GoogleGate (ver Company.jsx), que la desenfoca, la
- * vuelve `inert` y la tapa con un modal que no se cierra: así se ve como una
- * muestra de la pantalla, nunca como datos del cliente. Renderizarla en otro
- * lugar rompe la regla de CLAUDE.md («nunca imprimir un número que no se
- * distinga de uno medido»).
+ * vuelve `inert` y la tapa con un modal que no se cierra, y como ilustración
+ * inerte de la landing pública (pages/Landing, LandingShot, sin sesión): así se
+ * ve como una muestra de la pantalla, nunca como datos del cliente.
+ * Renderizarla en otro lugar del panel rompe la regla de CLAUDE.md («nunca
+ * imprimir un número que no se distinga de uno medido»).
  *
  * Usa los mismos bloques que la pantalla real (CompanyBlocks.jsx), así la
  * muestra es fiel. Los negocios y las personas son ficticios a propósito: ni

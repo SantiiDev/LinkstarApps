@@ -76,7 +76,7 @@ no global install; `npm i -g supabase` is disabled upstream anyway). Each develo
 
 ```bash
 npm run db:push          # -> supabase db push, from packages/database
-npm run db:reset         # -> supabase db reset (applies 0000 → 0038 in order, locally)
+npm run db:reset         # -> supabase db reset (applies 0000 → 0039 in order, locally)
 npm run db:status        # -> supabase migration list (local vs remote), from packages/database
 ```
 
@@ -116,7 +116,7 @@ longer depend on physical row order either. 142 assertions green on the test pro
 on 10 Oct 2026 with `0035`–`0036` and section 20 (review alerts). Without
 psql or Docker, that run used `node-pg` installed in a scratch folder. The local stack started on the default ports on this machine.
 220 green on a local stack on 11 Oct 2026 through `0037` (section 21, AI replies), and 249 on 14 Oct
-2026 through `0038` (section 22). **The test project has a different `0037`** — `develop`'s
+2026 through `0038` (section 22), 252 the same day through `0039`. **The test project has a different `0037`** — `develop`'s
 `0037_ai_review_replies.sql` (see "AI replies") — so it has to be brought back to the production
 schema before it gets `0038`: script and steps in `packages/database/supabase/README.md` («Proyecto
 de pruebas: volver al esquema de producción»).
@@ -316,17 +316,22 @@ trigger, and the new `pending_notifications()` (see "Review alerts" under "Team"
 `review_reply_settings`, `review_auto_reply_rules`, `review_reply_jobs`, `google_reviews.reply_source`,
 `google_record_reply()` with `p_source`, and the scope/queue RPCs (see "AI replies" below) · `0038`
 brand tones by kind (positive/critical) and by list of locations, the queue's monthly cap and 7-day
-window, and audit-log entries — what was worth keeping from `develop`'s parallel `0037` (same section).
+window, and audit-log entries — what was worth keeping from `develop`'s parallel `0037` (same section) ·
+`0039` the "contract" half of `0038`: drops `0037`'s tone functions and the tone columns of
+`review_reply_settings` (same section).
 
-**Everything up to `0037` is applied in production.** `0035`–`0036` reached it on 11 Oct 2026 (after
+**Everything up to `0038` is applied in production**, and the API and panel that use it are deployed
+(`main` = `d1abc8c`, 14 Oct 2026). **`0039` is not in any remote project yet** (written 14 Oct 2026):
+unlike every migration before it, it *removes* what the old API called, so it goes **after** the new
+API is on Railway (it is). **Up to `0037`:** `0035`–`0036` reached it on 11 Oct 2026 (after
 the test project on 10 Oct, 185 green), but `main` had been merged with their code a little earlier —
 the wrong order again, harmless only because `send-alerts.js` works with the old
 `pending_notifications()`. `0037` was pushed the same day **before** the AI-replies API reached `main`
 and before the panel was deployed (the right order), after 220 green on a local stack and the push
 simulation. **The test project got `develop`'s `0037` instead** (13 Oct 2026), a different
 migration with the same number — see "AI replies". The panel was redeployed on 11 Oct 2026 with
-everything up to the AI replies. **`0038` is not in any remote project yet** (written 14 Oct 2026):
-it goes to production **before** `main` gets the API that calls it.
+everything up to the AI replies. `0038` went to production **before** `main` got the API that calls
+it (14 Oct 2026).
 
 **Before that, everything up to `0034`** (`0000`–`0019` pushed 15 Aug 2026, `0020` on
 16 Aug, `0021`–`0025` on 5 Oct 2026, `0026` and `0027` on 6 Oct 2026, `0028`–`0033` on 7 Oct 2026,
@@ -1094,10 +1099,20 @@ Not taken from `develop`: its schema, its `reply_source` values (`manual`/`ai_as
 access, publishing without the switch, sending the first name (decided again 14 Oct 2026: no), and the
 policy lines declaring scheduled and multi-ficha posts that don't exist. `0038` only adds and
 replaces function bodies with the same signature, so the API running in Railway keeps working between
-`db push` and deploy; `list_brand_tones()`/`save_brand_tone()`/`delete_brand_tone()`,
-`review_reply_context(uuid, uuid)` and the tone columns of `review_reply_settings` are now unused and
-a later migration drops them once the new API is deployed. Between that API deploy and the panel
-deploy the old panel can't read the new tone shape — deploy them back to back.
+`db push` and deploy. Between that API deploy and the panel deploy the old panel can't read the new
+tone shape — deploy them back to back.
+
+**`0039` is the contract half** (written 14 Oct 2026, once the new API and panel were deployed): it
+drops `list_brand_tones()`, `save_brand_tone()`, `delete_brand_tone()`, `review_reply_context(uuid,
+uuid)` and the tone columns of `review_reply_settings` (`instructions`, `signature`, `emojis`,
+`tone_saved_at`). That table now holds only the negative-review email (per scope) and `language`
+(the global row's). Two things it keeps on purpose:
+- `private.valid_reply_emojis()`, which `review_reply_tones.emojis` still checks against.
+- **A row with its own `language` survives clearing the email.** `save_negative_contact()` (same
+  signature) used to delete a scope's row when it had neither tone nor email; it now deletes it when
+  it has no email **and** `language = 'business'`, so clearing the global email doesn't silently reset
+  a `review` language the old API may have saved. The migration itself deletes the rows that held only
+  a tone, by the same rule (their tones had already been copied by `0038`).
 
 | Piece | Triggered by | Publishes on Google? |
 |---|---|---|
@@ -1163,6 +1178,10 @@ Tested on 11 Oct 2026 (`0037`) and 14 Oct 2026 (`0038`):
 - `0038` through the push simulation, and the copy of `0037`'s tones; the test-project rollback path
   (`0036` → `develop`'s `0037` → `packages/database/ops/revert-develop-0037.sql` → `0037` + `0038`)
   gives a schema identical to a clean reset.
+- `0039` (14 Oct): `db reset` through it and `rls_isolation.sql` 252 green on a local stack (section
+  21's old tone checks became email-scope checks plus "the old functions and columns are gone"; the
+  tone checks themselves were already in section 22); the push simulation; and a run over rows
+  written at `0038` (a tone-only row goes, a row with an email stays).
 - On 14 Oct, the tone, rule, past-replies and draft routes against the local stack (14 checks, three
   real Claude drafts) and a browser pass of Gestión local, Reseñas and Automatizaciones.
 - An end-to-end run of the routes against the local stack (20 checks, real Claude).
@@ -1173,8 +1192,9 @@ Tested on 11 Oct 2026 (`0037`) and 14 Oct 2026 (`0038`):
 Pending:
 - the «Respuestas IA» settings tab (with the language control);
 - per-location review alerts;
-- the migration that drops what `0038` left unused, after the new API is deployed;
-- bringing the test project back to the production schema (needs its pooler password).
+- pushing `0039` to production (written, not pushed);
+- bringing the test project back to the production schema (needs its pooler password), then
+  `0038` and `0039`.
 
 ### Retention by plan — what each plan shows and what we keep (`0034`, decision 3)
 
@@ -1205,10 +1225,35 @@ Still pre-launch: most of the dashboard is **UI built ahead of its backend**. Re
 split below before wiring anything — the shell is finished, the data mostly isn't.
 
 - Routing is `react-router-dom` (v7, `BrowserRouter` in `main.jsx`). `src/lib/routes.js` is the single
-  source of truth: `PUBLIC_ROUTES` (`/`, `/iniciar-sesion`, `/registro`), `SECTION_PATHS` (section id →
-  `/panel/...` path), and the `sectionFromPath` / `pathForSection` / `settingsTabPath` helpers. URLs are
-  Spanish and ASCII-only (`/panel/resenas`, not `/panel/reseñas`). `/`, `/iniciar-sesion` and `/registro`
-  render bare (no `AppShell`); everything under `/panel` renders inside it.
+  source of truth: `PUBLIC_ROUTES` (the four landing pages `/`, `/funciones`, `/multiubicaciones`,
+  `/planes`, plus `/iniciar-sesion`, `/registro`…), `SECTION_PATHS` (section id → `/panel/...` path), and
+  the `sectionFromPath` / `pathForSection` / `settingsTabPath` helpers. URLs are Spanish and ASCII-only
+  (`/panel/resenas`, not `/panel/reseñas`). The public routes render bare (no `AppShell`); everything under
+  `/panel` renders inside it.
+- **The public landing is four pages** (rebuilt 14 Oct 2026, MyTapStar as reference): Inicio, Funciones,
+  Multiubicaciones and Planes, children of one layout route (`LandingRoute` in `App.jsx` →
+  `pages/Landing/Landing.jsx`: navbar + `<Outlet />` + footer). Each page has its own hero, mocks and FAQ
+  (first question open). Things that are deliberate:
+  - **It sells the panel, not the hardware** — like mytapstar (panel) vs. tapstar (stands). The expositores
+    are sold on `linkstarapp.com` (`apps/ventas`); here they appear only as a feature of the panel
+    («Seguimiento de expositores» in Funciones), the hero image, and links to the shop.
+  - **The main button follows `effectiveCheckoutMode()`** (`useStartCta()` in `landingModel.js`): «Probar
+    N días gratis» with checkout on, «Empezar gratis» with `VITE_BUSINESS_CHECKOUT=off` — a trial that ends
+    in «Contactar con ventas» would promise what the onboarding can't do. It goes to **`/registro`**, not
+    the login; «Iniciar sesión» goes to the login. Both go to the panel with a session.
+  - **`LandingShot` is the fourth place a mock may render** (after `GoogleGate`, `BusinessLock` and
+    `BusinessPitch`): real panel blocks and `*Mockup.jsx` with invented data (`landingSample.js`), `inert`,
+    scaled into a browser frame, outside any session. Inside it `backdrop-filter`, animations and
+    transitions are forced off (rule 2 of scroll performance). On a phone it draws at `mobileWidth`,
+    because the panel's media queries look at the window, not the frame.
+  - **No company-level numbers** («+N negocios», «#1»): with no customers they would be invented
+    (misleading advertising). The trust strip lists only verifiable facts. Fictitious data lives only
+    inside the mocks. The Vineria Martu testimonial is a real customer who approved it.
+  - `PhotoSlot` marks where a photo is still missing; replace it with an `<img>` when it arrives.
+  - The footer of every page links `/privacidad`: Google checks the home page for it.
+  - `/funciones#…` anchors: React Router doesn't scroll to a hash, so `useScrollToHash()` in
+    `Landing.jsx` does. `FEATURE_LINKS` (`landingModel.js`) drives the navbar dropdown, the Funciones chips
+    and the anchors.
 - Sections wired in `App.jsx` (and in `components/Sidebar/Sidebar.jsx`, which groups them):
   `company`, `devices`, `reviews`, the `gb-*` sections (`gb-metrics`, `gb-profile`, `gb-posts` under
   "Google Business"; `gb-seo` "Análisis SEO" and `gb-seo-map` "Mapa SEO" under their own "SEO Local" group),
@@ -1219,7 +1264,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   the item in `Sidebar.jsx`.
 - **Contact** (Oct 2026): `components/ContactForm` is the ventas contact form (same fields, validation
   and copy) posting to `POST /api/contact` through `lib/contactApi.js`. It renders in two places: the
-  public landing (`#contact`, linked from the navbar and the footer, for people without an account) and
+  public landing (`/planes#contacto`, linked from the footer, the closing band of every page and «Contactar
+  con ventas», for people without an account) and
   `/panel/contacto` (`pages/Contact`), reached from the sidebar (the topbar's "¿Necesitás ayuda?
   Escribinos" link was removed on 11 Oct 2026, with the bell next to it). Inside the panel the form is prefilled from the session and
   appends a `— Enviado desde el panel · Organización: … (id) · Plan: …` line to the message, so a support
@@ -1749,7 +1795,7 @@ plan picker. The only moment to revisit this is right before charging the first 
 `price_ars`, `trial_days`, `checkout_mode` and `features.highlights` are seeded in `0013` and read at
 runtime by the plan picker (`pages/Onboarding/PlanPicker.jsx`), the checkout summary, the landing's
 pricing section and `POST /api/subscriptions/checkout`. A price change is an `update` on that table plus a
-new preapproval amount in Mercado Pago — no deploy. `Landing.jsx` keeps a `PRICING_FALLBACK` array that
+new preapproval amount in Mercado Pago — no deploy. `pages/Landing/landingModel.js` keeps a `PRICING_FALLBACK` array that
 mirrors the seed and is used **only if the query fails**, so the landing never renders an empty pricing
 section; it is not a second source of truth, and it is not what anyone gets charged.
 
@@ -1769,8 +1815,9 @@ up — but it does mean:
 When the rebuilt checkout gets a real catalog table, `lib/catalog.js` is replaced by a query against it and
 this whole duplication goes away — that's the intended endgame, not the current state.
 
-`SALES_CONTACT_URL` (now in `apps/dashboard/src/lib/config.js`, used by the landing *and* by the Enterprise
-card of the plan picker) still points at the Instagram profile from the ventas footer, because that's the
+`SALES_CONTACT_URL` (now in `apps/dashboard/src/lib/config.js`, used by the landing's footer *and* by the
+Enterprise card of the plan picker; the landing's «Contactar con ventas» goes to its own form at
+`/planes#contacto` instead) still points at the Instagram profile from the ventas footer, because that's the
 only real contact channel in the repo. Replace it when there's a sales email or WhatsApp.
 
 ## Deployment

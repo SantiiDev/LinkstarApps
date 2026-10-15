@@ -5,8 +5,9 @@
  * ÚNICAMENTE en los dos lugares donde una maqueta es legal en Reportes: como
  * `children` de `BusinessPitch` (plan gratis) y de `GoogleGate` (Business sin
  * Google conectado). Los dos la dejan borrosa, inerte y detrás de un modal que
- * no se cierra. NO agregar otro importador: fuera de esas puertas es una
- * pantalla inventando datos.
+ * no se cierra. Además es ilustración inerte de la landing pública
+ * (pages/Landing, LandingShot, sin sesión). NO agregar otro importador: adentro
+ * del panel, fuera de esas puertas, es una pantalla inventando datos.
  *
  * Dibuja con los mismos bloques que la pantalla real (SentimentBlocks.jsx), así
  * se ven idénticas. Se rehízo el 9/10/2026 con la estructura de Tapstar; la
