@@ -1225,10 +1225,35 @@ Still pre-launch: most of the dashboard is **UI built ahead of its backend**. Re
 split below before wiring anything — the shell is finished, the data mostly isn't.
 
 - Routing is `react-router-dom` (v7, `BrowserRouter` in `main.jsx`). `src/lib/routes.js` is the single
-  source of truth: `PUBLIC_ROUTES` (`/`, `/iniciar-sesion`, `/registro`), `SECTION_PATHS` (section id →
-  `/panel/...` path), and the `sectionFromPath` / `pathForSection` / `settingsTabPath` helpers. URLs are
-  Spanish and ASCII-only (`/panel/resenas`, not `/panel/reseñas`). `/`, `/iniciar-sesion` and `/registro`
-  render bare (no `AppShell`); everything under `/panel` renders inside it.
+  source of truth: `PUBLIC_ROUTES` (the four landing pages `/`, `/funciones`, `/multiubicaciones`,
+  `/planes`, plus `/iniciar-sesion`, `/registro`…), `SECTION_PATHS` (section id → `/panel/...` path), and
+  the `sectionFromPath` / `pathForSection` / `settingsTabPath` helpers. URLs are Spanish and ASCII-only
+  (`/panel/resenas`, not `/panel/reseñas`). The public routes render bare (no `AppShell`); everything under
+  `/panel` renders inside it.
+- **The public landing is four pages** (rebuilt 14 Oct 2026, MyTapStar as reference): Inicio, Funciones,
+  Multiubicaciones and Planes, children of one layout route (`LandingRoute` in `App.jsx` →
+  `pages/Landing/Landing.jsx`: navbar + `<Outlet />` + footer). Each page has its own hero, mocks and FAQ
+  (first question open). Things that are deliberate:
+  - **It sells the panel, not the hardware** — like mytapstar (panel) vs. tapstar (stands). The expositores
+    are sold on `linkstarapp.com` (`apps/ventas`); here they appear only as a feature of the panel
+    («Seguimiento de expositores» in Funciones), the hero image, and links to the shop.
+  - **The main button follows `effectiveCheckoutMode()`** (`useStartCta()` in `landingModel.js`): «Probar
+    N días gratis» with checkout on, «Empezar gratis» with `VITE_BUSINESS_CHECKOUT=off` — a trial that ends
+    in «Contactar con ventas» would promise what the onboarding can't do. It goes to **`/registro`**, not
+    the login; «Iniciar sesión» goes to the login. Both go to the panel with a session.
+  - **`LandingShot` is the fourth place a mock may render** (after `GoogleGate`, `BusinessLock` and
+    `BusinessPitch`): real panel blocks and `*Mockup.jsx` with invented data (`landingSample.js`), `inert`,
+    scaled into a browser frame, outside any session. Inside it `backdrop-filter`, animations and
+    transitions are forced off (rule 2 of scroll performance). On a phone it draws at `mobileWidth`,
+    because the panel's media queries look at the window, not the frame.
+  - **No company-level numbers** («+N negocios», «#1»): with no customers they would be invented
+    (misleading advertising). The trust strip lists only verifiable facts. Fictitious data lives only
+    inside the mocks. The Vineria Martu testimonial is a real customer who approved it.
+  - `PhotoSlot` marks where a photo is still missing; replace it with an `<img>` when it arrives.
+  - The footer of every page links `/privacidad`: Google checks the home page for it.
+  - `/funciones#…` anchors: React Router doesn't scroll to a hash, so `useScrollToHash()` in
+    `Landing.jsx` does. `FEATURE_LINKS` (`landingModel.js`) drives the navbar dropdown, the Funciones chips
+    and the anchors.
 - Sections wired in `App.jsx` (and in `components/Sidebar/Sidebar.jsx`, which groups them):
   `company`, `devices`, `reviews`, the `gb-*` sections (`gb-metrics`, `gb-profile`, `gb-posts` under
   "Google Business"; `gb-seo` "Análisis SEO" and `gb-seo-map` "Mapa SEO" under their own "SEO Local" group),
@@ -1239,7 +1264,8 @@ split below before wiring anything — the shell is finished, the data mostly is
   the item in `Sidebar.jsx`.
 - **Contact** (Oct 2026): `components/ContactForm` is the ventas contact form (same fields, validation
   and copy) posting to `POST /api/contact` through `lib/contactApi.js`. It renders in two places: the
-  public landing (`#contact`, linked from the navbar and the footer, for people without an account) and
+  public landing (`/planes#contacto`, linked from the footer, the closing band of every page and «Contactar
+  con ventas», for people without an account) and
   `/panel/contacto` (`pages/Contact`), reached from the sidebar (the topbar's "¿Necesitás ayuda?
   Escribinos" link was removed on 11 Oct 2026, with the bell next to it). Inside the panel the form is prefilled from the session and
   appends a `— Enviado desde el panel · Organización: … (id) · Plan: …` line to the message, so a support
@@ -1769,7 +1795,7 @@ plan picker. The only moment to revisit this is right before charging the first 
 `price_ars`, `trial_days`, `checkout_mode` and `features.highlights` are seeded in `0013` and read at
 runtime by the plan picker (`pages/Onboarding/PlanPicker.jsx`), the checkout summary, the landing's
 pricing section and `POST /api/subscriptions/checkout`. A price change is an `update` on that table plus a
-new preapproval amount in Mercado Pago — no deploy. `Landing.jsx` keeps a `PRICING_FALLBACK` array that
+new preapproval amount in Mercado Pago — no deploy. `pages/Landing/landingModel.js` keeps a `PRICING_FALLBACK` array that
 mirrors the seed and is used **only if the query fails**, so the landing never renders an empty pricing
 section; it is not a second source of truth, and it is not what anyone gets charged.
 
@@ -1789,8 +1815,9 @@ up — but it does mean:
 When the rebuilt checkout gets a real catalog table, `lib/catalog.js` is replaced by a query against it and
 this whole duplication goes away — that's the intended endgame, not the current state.
 
-`SALES_CONTACT_URL` (now in `apps/dashboard/src/lib/config.js`, used by the landing *and* by the Enterprise
-card of the plan picker) still points at the Instagram profile from the ventas footer, because that's the
+`SALES_CONTACT_URL` (now in `apps/dashboard/src/lib/config.js`, used by the landing's footer *and* by the
+Enterprise card of the plan picker; the landing's «Contactar con ventas» goes to its own form at
+`/planes#contacto` instead) still points at the Instagram profile from the ventas footer, because that's the
 only real contact channel in the repo. Replace it when there's a sales email or WhatsApp.
 
 ## Deployment

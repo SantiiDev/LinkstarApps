@@ -2,8 +2,10 @@
  * MAQUETA DECORATIVA — no es la pantalla, es el fondo.
  *
  * Se renderiza ÚNICAMENTE como `children` de `GoogleGate`, que la deja borrosa,
- * inerte y detrás de un modal que no se puede cerrar. NO agregar otro
- * importador: fuera de esa puerta es una pantalla inventando datos.
+ * inerte y detrás de un modal que no se puede cerrar, y como ilustración inerte
+ * de la landing pública (pages/Landing, LandingShot, sin sesión). NO agregar
+ * otro importador: adentro del panel, fuera de esa puerta, es una pantalla
+ * inventando datos.
  *
  * Es la pantalla real (GoogleMetricsScreen) dibujada con los mismos bloques
  * (GoogleMetricsBlocks) y números INVENTADOS (googleMetricsSample.js), así lo
